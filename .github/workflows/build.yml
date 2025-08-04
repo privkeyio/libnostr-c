@@ -13,11 +13,11 @@ jobs:
     strategy:
       matrix:
         build_type: [Debug, Release]
-        noscrypt: [OFF, ON]
+        noscrypt: ["OFF", "ON"]
         include:
-          - noscrypt: OFF
+          - noscrypt: "OFF"
             noscrypt_name: "secp256k1"
-          - noscrypt: ON
+          - noscrypt: "ON"
             noscrypt_name: "noscrypt"
     
     steps:
@@ -41,8 +41,10 @@ jobs:
     - name: Build noscrypt (if enabled)
       if: matrix.noscrypt == 'ON'
       run: |
+        echo "Starting noscrypt build for matrix.noscrypt=${{ matrix.noscrypt }}"
         git clone https://github.com/VnUgE/noscrypt.git
         cd noscrypt
+        git tag -l
         git checkout v0.1.4 || git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
         mkdir build && cd build
         echo "Configuring noscrypt..."
@@ -132,11 +134,11 @@ jobs:
     name: "macOS Release (${{ matrix.noscrypt_name }})"
     strategy:
       matrix:
-        noscrypt: [OFF, ON]
+        noscrypt: ["OFF", "ON"]
         include:
-          - noscrypt: OFF
+          - noscrypt: "OFF"
             noscrypt_name: "secp256k1"
-          - noscrypt: ON
+          - noscrypt: "ON"
             noscrypt_name: "noscrypt"
     
     steps:
@@ -164,7 +166,7 @@ jobs:
         mkdir build && cd build
         echo "Configuring noscrypt..."
         export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:$PKG_CONFIG_PATH"
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1"
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1" -DNC_DISABLE_VLA=ON
         echo "Building noscrypt..."
         make -j$(sysctl -n hw.ncpu)
         echo "Installing noscrypt..."
