@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake pkg-config libssl-dev libcjson-dev libsecp256k1-dev libwebsockets-dev valgrind autotools-dev autoconf libtool
+    
+    - name: Create build directory
+      run: mkdir build
+    
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+    
+    - name: Build
+      run: cmake --build build
+    
+    - name: Run tests
+      run: |
+        cd build
+        ctest --output-on-failure
+    
+    - name: Run memory tests
+      run: |
+        cd build
+        valgrind --tool=memcheck --leak-check=full --show-leak-kinds=definite --track-origins=yes --suppressions=../.valgrind-suppressions --error-exitcode=1 ./tests/test_runner
+    
+    - name: Run examples
+      run: |
+        cd build
+        LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH ./examples/basic_event
+        timeout 5 LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH ./examples/relay_client || true
