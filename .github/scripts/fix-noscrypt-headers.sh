@@ -34,6 +34,75 @@ validate_inputs() {
     fi
 }
 
+# Fix OpenSSL macro compatibility by defining missing macros
+fix_openssl_macros() {
+    local vendor_dir="$1"
+    local openssl_version="$2"
+    local major minor
+    IFS='.' read -r major minor patch <<< "$openssl_version"
+    
+    # Only apply fixes for OpenSSL 1.1.x
+    if [[ "$major.$minor" == "1.1" ]]; then
+        log_info "Creating OpenSSL 1.1.x compatibility header..."
+        
+        # Create a global compatibility header that gets included first
+        cat > "$vendor_dir/openssl_compat_fix.h" << 'EOF'
+/*
+ * OpenSSL 1.1.x compatibility fixes
+ * This header defines macros that system OpenSSL 1.1.x headers expect but don't define
+ */
+
+#ifndef OPENSSL_COMPAT_FIX_H
+#define OPENSSL_COMPAT_FIX_H
+
+/* Map newer deprecation macros to older ones for OpenSSL 1.1.x compatibility */
+#ifndef DEPRECATEDIN_1_1_0
+# define DEPRECATEDIN_1_1_0(f) f
+#endif
+
+#ifndef DEPRECATEDIN_1_0_0  
+# define DEPRECATEDIN_1_0_0(f) f
+#endif
+
+#ifndef DEPRECATEDIN_0_9_8
+# define DEPRECATEDIN_0_9_8(f) f
+#endif
+
+/* ASN1 macros that system headers expect */
+#ifndef DECLARE_ASN1_DUP_FUNCTION_name
+# define DECLARE_ASN1_DUP_FUNCTION_name(type, name) \
+    type *name##_dup(const type *a);
+#endif
+
+#ifndef DECLARE_ASN1_FUNCTIONS_name
+# define DECLARE_ASN1_FUNCTIONS_name(type, name) \
+    type *name##_new(void); \
+    void name##_free(type *a); \
+    DECLARE_ASN1_DUP_FUNCTION_name(type, name)
+#endif
+
+#ifndef DECLARE_ASN1_FUNCTIONS
+# define DECLARE_ASN1_FUNCTIONS(type) DECLARE_ASN1_FUNCTIONS_name(type, type)
+#endif
+
+#endif /* OPENSSL_COMPAT_FIX_H */
+EOF
+
+        # Inject this compatibility header into key vendor headers that include system headers
+        local headers_to_fix=("opensslconf.h" "macros.h")
+        for header in "${headers_to_fix[@]}"; do
+            local header_file="$vendor_dir/$header"
+            if [[ -f "$header_file" ]] && ! grep -q "openssl_compat_fix.h" "$header_file"; then
+                log_debug "Injecting compatibility header into $header"
+                # Add include at the very top
+                sed -i.bak '1i\
+#include "openssl_compat_fix.h"
+' "$header_file" 2>/dev/null || true
+            fi
+        done
+    fi
+}
+
 # Generate configuration.h with version-specific settings
 generate_configuration_h() {
     local output_file="$1"
@@ -235,6 +304,9 @@ main() {
     
     log_info "Generating opensslv.h..."
     generate_opensslv_h "$version_file" "$openssl_version"
+    
+    # Fix OpenSSL 1.1.x macro compatibility issues
+    fix_openssl_macros "$openssl_vendor_dir" "$openssl_version"
     
     # Verify headers
     verify_headers "$config_file" "$version_file"
