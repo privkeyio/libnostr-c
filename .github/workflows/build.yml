@@ -51,12 +51,15 @@ jobs:
         git clone https://github.com/VnUgE/noscrypt.git
         cd noscrypt
         git tag -l
-        git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
-        # Fix OpenSSL headers before building
-        if [ -f "../scripts/fix-noscrypt-headers.sh" ]; then
-          chmod +x ../scripts/fix-noscrypt-headers.sh
-          ../scripts/fix-noscrypt-headers.sh .
+        LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "")
+        if [ -n "$LATEST_TAG" ]; then
+          git checkout "$LATEST_TAG"
+          echo "Checked out tag: $LATEST_TAG"
+        else
+          echo "No tags found, using latest commit"
         fi
+        # Fix OpenSSL headers before building  
+        ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
         mkdir build && cd build
         echo "Configuring noscrypt..."
         cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCRYPTO_LIB=openssl
@@ -173,12 +176,15 @@ jobs:
       run: |
         git clone https://github.com/VnUgE/noscrypt.git
         cd noscrypt
-        git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
-        # Fix OpenSSL headers before building
-        if [ -f "../scripts/fix-noscrypt-headers.sh" ]; then
-          chmod +x ../scripts/fix-noscrypt-headers.sh
-          ../scripts/fix-noscrypt-headers.sh .
+        LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "")
+        if [ -n "$LATEST_TAG" ]; then
+          git checkout "$LATEST_TAG"
+          echo "Checked out tag: $LATEST_TAG"
+        else
+          echo "No tags found, using latest commit"
         fi
+        # Fix OpenSSL headers before building  
+        ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
         mkdir build && cd build
         echo "Configuring noscrypt..."
         export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:$PKG_CONFIG_PATH"
