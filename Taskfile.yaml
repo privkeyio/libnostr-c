@@ -1,0 +1,115 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  # Cross-platform commands
+  _RMDIR: '{{ if eq OS "windows" }}powershell rm -Recurse -Force{{ else }}rm -rf{{ end }}'
+  _MKDIR: '{{ if eq OS "windows" }}powershell mkdir -Force{{ else }}mkdir -p{{ end }}'
+  
+  # Build configuration  
+  BUILD_DIR: 'build/{{ OS }}'
+  BUILD_TYPE: '{{ .BUILD_TYPE | default "Release" }}'
+  TEST_STATUS: '{{ .TEST_STATUS | default "ON" }}'
+
+tasks:
+  default:
+    desc: "Build the library for your system"
+    summary: |
+      Builds libnostr-c for your platform using CMake presets.
+      On Linux/macOS uses standard build, on Windows uses MSVC.
+    cmds:
+      - task: '{{ if eq OS "windows" }}build-windows{{ else }}build-unix{{ end }}'
+
+  build-unix:
+    desc: "Build for Unix-like systems (Linux/macOS)"
+    internal: true
+    platforms: [linux, darwin]
+    cmds:
+      - cmd: cmake --preset {{ if eq .BUILD_TYPE "Debug" }}debug{{ else }}release{{ end }}
+      - cmd: cmake --build --preset {{ if eq .BUILD_TYPE "Debug" }}debug{{ else }}release{{ end }}
+
+  build-windows:
+    desc: "Build for Windows using MSVC"
+    internal: true
+    platforms: [windows]
+    cmds:
+      - cmd: cmake --preset {{ if eq .BUILD_TYPE "Debug" }}win-debug{{ else }}win-release{{ end }}
+      - cmd: cmake --build --preset {{ if eq .BUILD_TYPE "Debug" }}win-debug{{ else }}win-release{{ end }}
+
+  build-vcpkg:
+    desc: "Build for Windows with vcpkg dependencies"
+    platforms: [windows]
+    cmds:
+      - cmd: cmake --preset {{ if eq .BUILD_TYPE "Debug" }}win-debug-vcpkg{{ else }}win-release-vcpkg{{ end }}
+      - cmd: cmake --build --preset {{ if eq .BUILD_TYPE "Debug" }}win-debug-vcpkg{{ else }}win-release-vcpkg{{ end }}
+
+  test: 
+    desc: "Build and run tests"
+    cmds:
+      - task: default
+        vars: { BUILD_TYPE: "Debug" }
+      - task: run-tests
+
+  run-tests:
+    desc: "Run the test suite"
+    cmds:
+      - cmd: '{{ if eq OS "windows" }}ctest --preset win-debug{{ else }}ctest --preset debug{{ end }}'
+
+  clean:
+    desc: "Clean build directories"
+    cmds:
+      - cmd: '{{ ._RMDIR }} build/'
+        ignore_error: true
+
+  install:
+    desc: "Install the library system-wide"
+    cmds:
+      - task: default
+      - cmd: '{{ if eq OS "windows" }}cmake --install build/windows --config {{ .BUILD_TYPE }}{{ else }}cmake --install {{ .BUILD_DIR }}{{ end }}'
+
+  examples:
+    desc: "Build and run examples"
+    cmds:
+      - task: default
+      - task: run-examples
+
+  run-examples:
+    desc: "Run example programs"
+    cmds:
+      - cmd: echo "Running basic_event example..."
+      - cmd: '{{ if eq OS "windows" }}build/windows/examples/Release/basic_event.exe{{ else }}LD_LIBRARY_PATH={{ .BUILD_DIR }}:$LD_LIBRARY_PATH {{ .BUILD_DIR }}/examples/basic_event{{ end }}'
+        ignore_error: true
+      - cmd: echo "Running key_management example..."
+      - cmd: '{{ if eq OS "windows" }}build/windows/examples/Release/key_management.exe{{ else }}LD_LIBRARY_PATH={{ .BUILD_DIR }}:$LD_LIBRARY_PATH {{ .BUILD_DIR }}/examples/key_management{{ end }}'
+        ignore_error: true
+
+  # CI tasks
+  ci-test:
+    desc: "CI testing with multiple configurations"
+    cmds:
+      - task: test
+      - task: examples
+      - defer: task clean
+
+  # Development tasks
+  dev:
+    desc: "Development build with file watching"
+    watch: true
+    sources:
+      - "src/**/*"
+      - "include/**/*"
+      - "tests/**/*"
+      - "CMakeLists.txt"
+    cmds:
+      - task: test
+
+  dev-valgrind:
+    desc: "Run tests under valgrind (Linux only)"
+    platforms: [linux]
+    preconditions:
+      - which valgrind
+    cmds:
+      - task: default
+        vars: { BUILD_TYPE: "Debug" }
+      - cmd: valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes {{ .BUILD_DIR }}/tests/test_runner

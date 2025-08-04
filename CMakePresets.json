@@ -1,0 +1,163 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "hidden": false,
+            "binaryDir": "${sourceDir}/build/linux",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "NOSTR_FEATURE_NIP57": true,
+                "NOSTR_FEATURE_NIP13": true,
+                "NOSTR_FEATURE_RELAY": true
+            }
+        },
+        {
+            "name": "release", 
+            "displayName": "Release",
+            "hidden": false,
+            "binaryDir": "${sourceDir}/build/linux",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "NOSTR_FEATURE_NIP57": true,
+                "NOSTR_FEATURE_NIP13": true,
+                "NOSTR_FEATURE_RELAY": true
+            }
+        },
+        {
+            "name": "debug-enhanced",
+            "displayName": "Debug with cJSON",
+            "inherits": "debug",
+            "hidden": false,
+            "cacheVariables": {
+                "NOSTR_FEATURE_JSON_ENHANCED": true
+            }
+        },
+        {
+            "name": "release-enhanced",
+            "displayName": "Release with cJSON",
+            "inherits": ["debug-enhanced", "release"],
+            "hidden": false
+        },
+        {
+            "name": "win-base",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build/windows",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe",
+                "_WIN32_WINNT": "0x0601",
+                "WINVER": "0x0601"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "win-debug",
+            "displayName": "Win Debug",
+            "inherits": ["win-base", "debug"],
+            "hidden": false,
+            "cacheVariables": {
+                "NOSTR_FEATURE_THREADING": false,
+                "NOSTR_FEATURE_JSON_ENHANCED": false
+            }
+        },
+        {
+            "name": "win-release",
+            "displayName": "Win Release",
+            "inherits": ["win-base", "release"],
+            "hidden": false,
+            "cacheVariables": {
+                "NOSTR_FEATURE_THREADING": false,
+                "NOSTR_FEATURE_JSON_ENHANCED": false
+            }
+        },
+        {
+            "name": "win-debug-vcpkg",
+            "displayName": "Win Debug with vcpkg",
+            "inherits": ["win-base", "debug"],
+            "hidden": false,
+            "cacheVariables": {
+                "NOSTR_FEATURE_JSON_ENHANCED": true,
+                "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-windows"
+            }
+        },
+        {
+            "name": "win-release-vcpkg",
+            "displayName": "Win Release with vcpkg",
+            "inherits": ["win-base", "release"],
+            "hidden": false,
+            "cacheVariables": {
+                "NOSTR_FEATURE_THREADING": false,
+                "NOSTR_FEATURE_JSON_ENHANCED": true,
+                "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-windows"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "release", 
+            "configurePreset": "release",
+            "configuration": "Release"
+        },
+        {
+            "name": "win-debug",
+            "configurePreset": "win-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "win-release",  
+            "configurePreset": "win-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "win-debug-vcpkg",
+            "configurePreset": "win-debug-vcpkg", 
+            "configuration": "Debug"
+        },
+        {
+            "name": "win-release-vcpkg",
+            "configurePreset": "win-release-vcpkg",
+            "configuration": "Release"  
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "win-debug",
+            "configurePreset": "win-debug", 
+            "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "win-release",
+            "configurePreset": "win-release", 
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}
