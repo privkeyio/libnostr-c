@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         build_type: [Debug, Release]
-        noscrypt: [OFF]
+        noscrypt: [OFF, ON]
     
     steps:
     - uses: actions/checkout@v3
