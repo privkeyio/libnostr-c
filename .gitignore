@@ -1,0 +1,79 @@
+# CMake build artifacts
+build/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# Build outputs
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# Debug and profiling
+*.dSYM/
+*.su
+*.gch
+*.pch
+core
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Package files
+*.pc
+*-config.cmake
+*-config-version.cmake
+
+# Test outputs
+test_results.xml
+coverage.info
+coverage/
+tests/test_runner
+
+# Test executables
+test_nip44
+test_nip44_simple
+test_nip44_comprehensive
+test_basic
+test_json
+test_noscrypt
+tests/test_nip47
+tests/test_nip59
+
+# Example binaries
+examples/basic_event
+examples/key_management
+examples/publish_note
+examples/subscribe_events
+examples/relay_client
+examples/zap_example
+examples/gift_wrap_demo
+examples/wallet_connect_demo
+
+# Documentation build
+docs/html/
+docs/latex/
+*.log
+
+# External dependencies
+external/
+
+# Performance benchmarking
+performance_baseline.txt
+callgrind.out*

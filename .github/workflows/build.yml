@@ -9,10 +9,16 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    name: "Linux ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
     strategy:
       matrix:
         build_type: [Debug, Release]
         noscrypt: [OFF, ON]
+        include:
+          - noscrypt: OFF
+            noscrypt_name: "secp256k1"
+          - noscrypt: ON
+            noscrypt_name: "noscrypt"
     
     steps:
     - uses: actions/checkout@v3
@@ -39,9 +45,9 @@ jobs:
         cd noscrypt
         git checkout v0.1.4 || git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
         mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release || cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF || true
-        make -j$(nproc) || true
-        sudo make install || true
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+        make -j$(nproc)
+        sudo make install
         sudo ldconfig
         
     - name: Configure
