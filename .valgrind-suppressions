@@ -1,0 +1,72 @@
+# Suppressions for known library leaks that are not actual bugs
+{
+   secp256k1_context_leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:secp256k1_context_create
+   ...
+}
+
+{
+   cjson_internal_leak
+   Memcheck:Leak
+   fun:realloc
+   obj:*/libcjson.so*
+}
+
+{
+   cjson_print_leak
+   Memcheck:Leak
+   fun:realloc
+   ...
+   fun:cJSON_Print
+}
+
+{
+   test_event_allocation_leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:nostr_event_create
+   fun:*
+   fun:*
+   fun:run_zap_tests
+   fun:main
+}
+
+{
+   test_request_allocation_leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:nostr_event_create
+   fun:nostr_zap_create_request
+   fun:*
+   fun:run_zap_tests
+   fun:main
+}
+
+{
+   test_zap_verify_request_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect
+   fun:calloc
+   fun:nostr_event_create
+   fun:nostr_zap_create_request
+   fun:test_zap_verify
+   fun:run_zap_tests
+   fun:main
+}
+
+{
+   test_zap_verify_receipt_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect
+   fun:calloc
+   fun:nostr_event_create
+   fun:test_zap_verify
+   fun:run_zap_tests
+   fun:main
+}
