@@ -38,6 +38,12 @@ jobs:
         sudo make install
         sudo ldconfig
         
+    - name: Debug matrix values
+      run: |
+        echo "matrix.noscrypt=${{ matrix.noscrypt }}"
+        echo "matrix.noscrypt_name=${{ matrix.noscrypt_name }}"
+        echo "Condition result: ${{ matrix.noscrypt == 'ON' }}"
+        
     - name: Build noscrypt (if enabled)
       if: matrix.noscrypt == 'ON'
       run: |
@@ -45,10 +51,10 @@ jobs:
         git clone https://github.com/VnUgE/noscrypt.git
         cd noscrypt
         git tag -l
-        git checkout v0.1.4 || git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
+        git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
         mkdir build && cd build
         echo "Configuring noscrypt..."
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCRYPTO_LIB=openssl
         echo "Building noscrypt..."
         make -j$(nproc)
         echo "Installing noscrypt..."
@@ -162,11 +168,11 @@ jobs:
       run: |
         git clone https://github.com/VnUgE/noscrypt.git
         cd noscrypt
-        git checkout v0.1.4 || git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
+        git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
         mkdir build && cd build
         echo "Configuring noscrypt..."
         export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:$PKG_CONFIG_PATH"
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1" -DNC_DISABLE_VLA=ON
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1" -DNC_DISABLE_VLA=ON -DCRYPTO_LIB=openssl
         echo "Building noscrypt..."
         make -j$(sysctl -n hw.ncpu)
         echo "Installing noscrypt..."
