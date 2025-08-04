@@ -361,6 +361,69 @@ EOF
     log_debug "System OpenSSL compatibility header created at $compat_header"
 }
 
+# Add compiler-level OpenSSL compatibility definitions to CMakeLists.txt
+add_cmake_openssl_compatibility() {
+    local noscrypt_dir="$1"
+    local cmake_file="$noscrypt_dir/CMakeLists.txt"
+    
+    log_info "Adding compiler-level OpenSSL compatibility definitions..."
+    
+    if [[ ! -f "$cmake_file" ]]; then
+        log_error "CMakeLists.txt not found at $cmake_file"
+        return 1
+    fi
+    
+    # Check if compatibility definitions are already added
+    if grep -q "OpenSSL system compatibility" "$cmake_file"; then
+        log_debug "OpenSSL compatibility definitions already present"
+        return 0
+    fi
+    
+    # Find a good place to insert the definitions (after target_compile_definitions)
+    local insert_line
+    insert_line=$(grep -n "target_compile_definitions.*NC_PROJ_DEFINITIONS" "$cmake_file" | tail -1 | cut -d: -f1)
+    
+    if [[ -z "$insert_line" ]]; then
+        log_error "Could not find target_compile_definitions in CMakeLists.txt"
+        return 1
+    fi
+    
+    # Create a backup
+    cp "$cmake_file" "$cmake_file.openssl_compat_backup"
+    
+    # Create the compatibility definitions block
+    local compat_block
+    read -r -d '' compat_block << 'EOF' || true
+
+# OpenSSL system compatibility definitions for missing DEPRECATEDIN_* macros
+if(CRYPTO_LIB STREQUAL "openssl")
+    # Define missing deprecation macros at compiler level to fix system OpenSSL headers
+    target_compile_definitions(${_NC_PROJ_NAME} PRIVATE
+        "DEPRECATEDIN_1_1_0(f)=f"
+        "DEPRECATEDIN_1_0_2(f)=f" 
+        "DEPRECATEDIN_3_0(f)=f"
+    )
+    target_compile_definitions(${_NC_PROJ_NAME}_static PRIVATE
+        "DEPRECATEDIN_1_1_0(f)=f"
+        "DEPRECATEDIN_1_0_2(f)=f"
+        "DEPRECATEDIN_3_0(f)=f"
+    )
+endif()
+EOF
+    
+    # Insert the compatibility block after the target_compile_definitions line
+    {
+        head -n "$insert_line" "$cmake_file"
+        echo "$compat_block"
+        tail -n +$((insert_line + 1)) "$cmake_file"
+    } > "$cmake_file.tmp"
+    
+    # Replace the original file
+    mv "$cmake_file.tmp" "$cmake_file"
+    
+    log_debug "OpenSSL compatibility definitions added to CMakeLists.txt"
+}
+
 main() {
     local noscrypt_dir="${1:-}"
     local openssl_version="${2:-$DEFAULT_OPENSSL_VERSION}"
@@ -388,6 +451,9 @@ main() {
     
     # Create global OpenSSL compatibility for system headers
     create_system_openssl_compat "$noscrypt_dir"
+    
+    # Add compiler-level macro definitions for system OpenSSL compatibility
+    add_cmake_openssl_compatibility "$noscrypt_dir"
     
     # Verify headers
     verify_headers "$config_file" "$version_file"
