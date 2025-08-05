@@ -424,12 +424,14 @@ add_cmake_openssl_compatibility() {
     fi
     
     # Create the compatibility header in the include directory
+    # This header MUST be force-included before any system OpenSSL headers
     log_debug "Creating OpenSSL compatibility header at $compat_header"
     cat > "$compat_header" << 'EOF'
 /*
  * OpenSSL System Compatibility Header
  * Fixes missing DEPRECATEDIN_* macros in system OpenSSL installations
- * This is a production-grade solution that works across all platforms
+ * This header is force-included via CMake compiler options to ensure
+ * macros are defined before any system OpenSSL headers are processed
  */
 
 #ifndef OPENSSL_COMPAT_H
@@ -478,15 +480,14 @@ EOF
         {
             head -n "$include_line" "$cmake_file"
             echo ""
-            echo "# Force include OpenSSL compatibility header for all source files"
-            echo "if(CRYPTO_LIB STREQUAL \"openssl\")"
-            echo "    if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
-            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "    elseif(MSVC)"
-            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "    endif()"
+            echo "# Force include OpenSSL compatibility header for all source files - CRITICAL for macOS CI"
+            echo "# This must be applied unconditionally to fix DEPRECATEDIN_* macro issues"
+            echo "if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
+            echo "    target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "elseif(MSVC)"
+            echo "    target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
             echo "endif()"
             tail -n +$((include_line + 1)) "$cmake_file"
         } > "$cmake_file.tmp"
@@ -506,15 +507,14 @@ EOF
         # Fallback: append the configuration at the end of the file
         if {
             echo ""
-            echo "# Force include OpenSSL compatibility header for all source files"
-            echo "if(CRYPTO_LIB STREQUAL \"openssl\")"
-            echo "    if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
-            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "    elseif(MSVC)"
-            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-            echo "    endif()"
+            echo "# Force include OpenSSL compatibility header for all source files - CRITICAL for macOS CI"
+            echo "# This must be applied unconditionally to fix DEPRECATEDIN_* macro issues"
+            echo "if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
+            echo "    target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "elseif(MSVC)"
+            echo "    target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
             echo "endif()"
         } >> "$cmake_file"; then
             log_debug "Appended compatibility configuration to CMakeLists.txt"
