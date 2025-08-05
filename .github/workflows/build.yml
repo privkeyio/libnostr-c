@@ -60,9 +60,8 @@ jobs:
           fi
           
           # Production-grade OpenSSL compatibility fix
-          # Define missing deprecation macros via environment variables
-          export CPPFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CPPFLAGS"
-          export CFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CFLAGS"
+          # Define missing deprecation macros via CMake definitions
+          export CMAKE_C_FLAGS="-DDEPRECATEDIN_1_1_0\(f\)=f -DDEPRECATEDIN_1_0_2\(f\)=f -DDEPRECATEDIN_1_0_1\(f\)=f -DDEPRECATEDIN_1_0_0\(f\)=f -DDEPRECATEDIN_3_0\(f\)=f -DDEPRECATEDIN_0_9_8\(f\)=f"
           
           mkdir build && cd build
           echo "Configuring noscrypt with OpenSSL compatibility..."
@@ -193,9 +192,8 @@ jobs:
           fi
           
           # Production-grade OpenSSL compatibility fix
-          # Define missing deprecation macros via environment variables
-          export CPPFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CPPFLAGS"
-          export CFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CFLAGS"
+          # Define missing deprecation macros via CMake definitions
+          export CMAKE_C_FLAGS="-DDEPRECATEDIN_1_1_0\(f\)=f -DDEPRECATEDIN_1_0_2\(f\)=f -DDEPRECATEDIN_1_0_1\(f\)=f -DDEPRECATEDIN_1_0_0\(f\)=f -DDEPRECATEDIN_3_0\(f\)=f -DDEPRECATEDIN_0_9_8\(f\)=f"
           
           mkdir build && cd build
           echo "Configuring noscrypt with OpenSSL compatibility..."
