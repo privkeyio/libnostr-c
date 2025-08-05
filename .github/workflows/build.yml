@@ -207,7 +207,7 @@ jobs:
             fi
           done
           
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1;/usr/local;/opt/homebrew;/opt/local" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}" -DCRYPTO_LIB=openssl
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1;/usr/local;/opt/homebrew;/opt/local" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}" -DCRYPTO_LIB=openssl -DCMAKE_EXE_LINKER_FLAGS="-L${SECP256K1_PATH:-/usr/local/lib}" -DCMAKE_SHARED_LINKER_FLAGS="-L${SECP256K1_PATH:-/usr/local/lib}"
           echo "Building noscrypt..."
           make -j$(sysctl -n hw.ncpu)
           echo "Installing noscrypt..."
