@@ -115,4 +115,3 @@ Fixes #123
 - **Documentation**: Check docs/ directory
 
 Thank you for contributing!
-
