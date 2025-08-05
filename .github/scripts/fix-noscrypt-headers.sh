@@ -376,7 +376,7 @@ add_cmake_openssl_compatibility() {
     
     # Check if compatibility is already added
     if grep -q "openssl_compat.h" "$cmake_file"; then
-        log_debug "OpenSSL compatibility already present"
+        log_debug "OpenSSL compatibility already present in CMakeLists.txt"
         return 0
     fi
     
@@ -420,62 +420,69 @@ add_cmake_openssl_compatibility() {
 #endif /* OPENSSL_COMPAT_H */
 EOF
     
-    # Find where platform.h is included (which is included by all source files)
-    local platform_include_line
-    platform_include_line=$(grep -n '#include.*"platform.h"' "$noscrypt_dir/src/noscrypt.c" | head -1 | cut -d: -f1)
+    # Use a simpler, more robust approach: always update CMakeLists.txt to force-include the header
+    log_debug "Adding forced include to CMakeLists.txt"
     
-    if [[ -n "$platform_include_line" ]]; then
-        # Add the compatibility header include before platform.h in each source file
-        for src_file in "$noscrypt_dir/src"/*.c; do
-            if [[ -f "$src_file" ]] && ! grep -q "openssl_compat.h" "$src_file"; then
-                log_debug "Adding compatibility header to $(basename "$src_file")"
-                # Create a temporary file with the include added
-                {
-                    # Add the include at the beginning, after any copyright comments
-                    local first_include_line
-                    first_include_line=$(grep -n "^#include" "$src_file" | head -1 | cut -d: -f1)
-                    if [[ -n "$first_include_line" ]]; then
-                        head -n $((first_include_line - 1)) "$src_file"
-                        echo '#include "openssl_compat.h"  /* OpenSSL compatibility macros */'
-                        tail -n +$first_include_line "$src_file"
-                    else
-                        echo '#include "openssl_compat.h"  /* OpenSSL compatibility macros */'
-                        cat "$src_file"
-                    fi
-                } > "$src_file.tmp"
-                mv "$src_file.tmp" "$src_file"
-            fi
-        done
+    # Find a suitable insertion point - look for target_include_directories
+    local include_line
+    include_line=$(grep -n "target_include_directories.*PRIVATE include" "$cmake_file" | tail -1 | cut -d: -f1)
+    
+    if [[ -n "$include_line" ]]; then
+        # Create backup
+        cp "$cmake_file" "$cmake_file.bak"
+        
+        # Add force include after the last include directories line
+        {
+            head -n "$include_line" "$cmake_file"
+            echo ""
+            echo "# Force include OpenSSL compatibility header for all source files"
+            echo "if(CRYPTO_LIB STREQUAL \"openssl\")"
+            echo "    if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
+            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    elseif(MSVC)"
+            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    endif()"
+            echo "endif()"
+            tail -n +$((include_line + 1)) "$cmake_file"
+        } > "$cmake_file.tmp"
+        
+        if mv "$cmake_file.tmp" "$cmake_file"; then
+            log_debug "CMakeLists.txt updated successfully"
+            rm -f "$cmake_file.bak"
+        else
+            log_error "Failed to update CMakeLists.txt, restoring backup"
+            mv "$cmake_file.bak" "$cmake_file" 2>/dev/null || true
+            rm -f "$cmake_file.tmp"
+            return 1
+        fi
     else
-        # Fallback: Update CMakeLists.txt to force include the header
-        log_debug "Adding forced include to CMakeLists.txt"
+        log_debug "Could not find suitable insertion point in CMakeLists.txt, trying alternative approach"
         
-        # Find where include directories are set
-        local include_line
-        include_line=$(grep -n "target_include_directories.*PRIVATE include" "$cmake_file" | head -1 | cut -d: -f1)
-        
-        if [[ -n "$include_line" ]]; then
-            # Add force include after the include directories
-            {
-                head -n "$include_line" "$cmake_file"
-                echo ""
-                echo "# Force include OpenSSL compatibility header for all source files"
-                echo "if(CRYPTO_LIB STREQUAL \"openssl\")"
-                echo "    if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
-                echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-                echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-                echo "    elseif(MSVC)"
-                echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-                echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
-                echo "    endif()"
-                echo "endif()"
-                tail -n +$((include_line + 1)) "$cmake_file"
-            } > "$cmake_file.tmp"
-            mv "$cmake_file.tmp" "$cmake_file"
+        # Fallback: append the configuration at the end of the file
+        if {
+            echo ""
+            echo "# Force include OpenSSL compatibility header for all source files"
+            echo "if(CRYPTO_LIB STREQUAL \"openssl\")"
+            echo "    if(CMAKE_C_COMPILER_ID MATCHES \"Clang|GNU\")"
+            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE -include \${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    elseif(MSVC)"
+            echo "        target_compile_options(\${_NC_PROJ_NAME} PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "        target_compile_options(\${_NC_PROJ_NAME}_static PRIVATE /FI\${CMAKE_SOURCE_DIR}/include/openssl_compat.h)"
+            echo "    endif()"
+            echo "endif()"
+        } >> "$cmake_file"; then
+            log_debug "Appended compatibility configuration to CMakeLists.txt"
+        else
+            log_error "Failed to append compatibility configuration to CMakeLists.txt"
+            return 1
         fi
     fi
     
     log_debug "OpenSSL compatibility solution implemented successfully"
+    return 0
 }
 
 main() {
@@ -507,14 +514,22 @@ main() {
     create_system_openssl_compat "$noscrypt_dir"
     
     # Add compiler-level macro definitions for system OpenSSL compatibility
-    add_cmake_openssl_compatibility "$noscrypt_dir"
+    if ! add_cmake_openssl_compatibility "$noscrypt_dir"; then
+        log_error "Failed to add OpenSSL compatibility"
+        exit 1
+    fi
     
     # Verify headers
-    verify_headers "$config_file" "$version_file"
+    if ! verify_headers "$config_file" "$version_file"; then
+        log_error "Header verification failed"
+        exit 1
+    fi
     
     log_info "Success! OpenSSL headers generated:"
     log_info "  - $config_file"
     log_info "  - $version_file"
+    
+    return 0
 }
 
 # Execute main function with all arguments
