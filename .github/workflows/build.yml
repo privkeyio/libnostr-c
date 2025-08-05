@@ -59,6 +59,8 @@ jobs:
             echo "No tags found, using latest commit"
           fi
           
+          ../.github/scripts/generate-openssl-headers.sh .
+          
           export CMAKE_C_FLAGS="-DDEPRECATEDIN_1_1_0\(f\)=f -DDEPRECATEDIN_1_0_2\(f\)=f -DDEPRECATEDIN_1_0_1\(f\)=f -DDEPRECATEDIN_1_0_0\(f\)=f -DDEPRECATEDIN_3_0\(f\)=f -DDEPRECATEDIN_0_9_8\(f\)=f"
           
           mkdir build && cd build
@@ -188,6 +190,8 @@ jobs:
           else
             echo "No tags found, using latest commit"
           fi
+          
+          ../.github/scripts/generate-openssl-headers.sh .
           
           export CMAKE_C_FLAGS="-DDEPRECATEDIN_1_1_0\(f\)=f -DDEPRECATEDIN_1_0_2\(f\)=f -DDEPRECATEDIN_1_0_1\(f\)=f -DDEPRECATEDIN_1_0_0\(f\)=f -DDEPRECATEDIN_3_0\(f\)=f -DDEPRECATEDIN_0_9_8\(f\)=f"
           
