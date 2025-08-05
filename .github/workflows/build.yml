@@ -21,7 +21,7 @@ jobs:
             noscrypt_name: "noscrypt"
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install dependencies
         run: |
@@ -59,12 +59,10 @@ jobs:
             echo "No tags found, using latest commit"
           fi
           
-          # Production-grade OpenSSL compatibility fix
-          # Define missing deprecation macros via CMake definitions
           export CMAKE_C_FLAGS="-DDEPRECATEDIN_1_1_0\(f\)=f -DDEPRECATEDIN_1_0_2\(f\)=f -DDEPRECATEDIN_1_0_1\(f\)=f -DDEPRECATEDIN_1_0_0\(f\)=f -DDEPRECATEDIN_3_0\(f\)=f -DDEPRECATEDIN_0_9_8\(f\)=f"
           
           mkdir build && cd build
-          echo "Configuring noscrypt with OpenSSL compatibility..."
+          echo "Configuring noscrypt..."
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/usr/local" -DSECP256K1_LIB_DIR="/usr/local/lib" -DCRYPTO_LIB=openssl
           echo "Building noscrypt..."
           make -j$(nproc)
@@ -102,7 +100,7 @@ jobs:
             with_vcpkg: true
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup MSVC
         uses: microsoft/setup-msbuild@v1.3
@@ -159,7 +157,7 @@ jobs:
             noscrypt_name: "noscrypt"
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         
       - name: Install dependencies
         run: |
@@ -191,12 +189,10 @@ jobs:
             echo "No tags found, using latest commit"
           fi
           
-          # Production-grade OpenSSL compatibility fix
-          # Define missing deprecation macros via CMake definitions
           export CMAKE_C_FLAGS="-DDEPRECATEDIN_1_1_0\(f\)=f -DDEPRECATEDIN_1_0_2\(f\)=f -DDEPRECATEDIN_1_0_1\(f\)=f -DDEPRECATEDIN_1_0_0\(f\)=f -DDEPRECATEDIN_3_0\(f\)=f -DDEPRECATEDIN_0_9_8\(f\)=f"
           
           mkdir build && cd build
-          echo "Configuring noscrypt with OpenSSL compatibility..."
+          echo "Configuring noscrypt..."
           export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
           
           # Production-grade secp256k1 path detection
