@@ -147,9 +147,10 @@ jobs:
         
   build-macos:
     runs-on: macos-latest
-    name: "macOS Release (${{ matrix.noscrypt_name }})"
+    name: "macOS ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
     strategy:
       matrix:
+        build_type: [Debug, Release]
         noscrypt: ["OFF", "ON"]
         include:
           - noscrypt: "OFF"
@@ -231,7 +232,7 @@ jobs:
               break
             fi
           done
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DHAVE_NOSCRYPT=${{ matrix.noscrypt }} -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew;/opt/homebrew/opt/openssl@1.1;/opt/local" -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include;/opt/homebrew/opt/openssl@1.1/include;/opt/local/include" -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib;/opt/homebrew/opt/openssl@1.1/lib;/opt/local/lib" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}"
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DHAVE_NOSCRYPT=${{ matrix.noscrypt }} -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew;/opt/homebrew/opt/openssl@1.1;/opt/local" -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include;/opt/homebrew/opt/openssl@1.1/include;/opt/local/include" -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib;/opt/homebrew/opt/openssl@1.1/lib;/opt/local/lib" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}"
           
       - name: Build
         run: |

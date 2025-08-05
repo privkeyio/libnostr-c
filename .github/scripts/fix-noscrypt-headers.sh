@@ -33,7 +33,15 @@ fix_noscrypt_headers() {
 /* OpenSSL 3.0 EVP_MAC API is not available in 1.1.x, use HMAC instead */
 #define EVP_MAC_CTX         HMAC_CTX
 #define EVP_MAC             void
-#define OSSL_PARAM          void
+
+/* OSSL_PARAM structure for OpenSSL 1.1.x compatibility */
+typedef struct {
+    const char *key;
+    unsigned int data_type;
+    void *data;
+    size_t data_size;
+    size_t return_size;
+} OSSL_PARAM;
 
 /* Map newer functions to older equivalents */
 #define EVP_MAC_CTX_new(mac)        HMAC_CTX_new()
@@ -53,6 +61,17 @@ fix_noscrypt_headers() {
 /* Use older initialization function */
 #define EVP_EncryptInit_ex2(ctx, cipher, key, iv, params) \
     EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv)
+
+/* OSSL_PARAM constructor functions for 1.1.x */
+static inline OSSL_PARAM OSSL_PARAM_construct_utf8_string(const char *key, char *buf, size_t bsize) {
+    OSSL_PARAM param = {key, 4 /* OSSL_PARAM_UTF8_STRING */, buf, bsize, 0};
+    return param;
+}
+
+static inline OSSL_PARAM OSSL_PARAM_construct_end(void) {
+    OSSL_PARAM param = {NULL, 0, NULL, 0, 0};
+    return param;
+}
 
 #endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
