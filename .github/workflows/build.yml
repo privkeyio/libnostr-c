@@ -58,10 +58,14 @@ jobs:
           else
             echo "No tags found, using latest commit"
           fi
-          # Fix OpenSSL headers before building  
-          ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
+          
+          # Production-grade OpenSSL compatibility fix
+          # Define missing deprecation macros via environment variables
+          export CPPFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CPPFLAGS"
+          export CFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CFLAGS"
+          
           mkdir build && cd build
-          echo "Configuring noscrypt..."
+          echo "Configuring noscrypt with OpenSSL compatibility..."
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/usr/local" -DSECP256K1_LIB_DIR="/usr/local/lib" -DCRYPTO_LIB=openssl
           echo "Building noscrypt..."
           make -j$(nproc)
@@ -187,20 +191,26 @@ jobs:
           else
             echo "No tags found, using latest commit"
           fi
-          # Fix OpenSSL headers before building  
-          ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
+          
+          # Production-grade OpenSSL compatibility fix
+          # Define missing deprecation macros via environment variables
+          export CPPFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CPPFLAGS"
+          export CFLAGS="-DDEPRECATEDIN_1_1_0(f)=f -DDEPRECATEDIN_1_0_2(f)=f -DDEPRECATEDIN_1_0_1(f)=f -DDEPRECATEDIN_1_0_0(f)=f -DDEPRECATEDIN_3_0(f)=f -DDEPRECATEDIN_0_9_8(f)=f $CFLAGS"
+          
           mkdir build && cd build
-          echo "Configuring noscrypt..."
+          echo "Configuring noscrypt with OpenSSL compatibility..."
           export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
-          # Try multiple library paths for production-grade compatibility
+          
+          # Production-grade secp256k1 path detection
           SECP_PATHS="/usr/local/lib:/opt/homebrew/lib:/opt/local/lib"
           for path in $(echo $SECP_PATHS | tr ':' ' '); do
             if [ -f "$path/libsecp256k1.dylib" ] || [ -f "$path/libsecp256k1.a" ]; then
               SECP256K1_PATH="$path"
+              echo "Found secp256k1 at: $path"
               break
             fi
           done
-          echo "Using secp256k1 from: ${SECP256K1_PATH:-/usr/local/lib}"
+          
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1;/usr/local;/opt/homebrew;/opt/local" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}" -DCRYPTO_LIB=openssl
           echo "Building noscrypt..."
           make -j$(sysctl -n hw.ncpu)
