@@ -9,55 +9,85 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    name: "Linux ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
     strategy:
       matrix:
         build_type: [Debug, Release]
-        noscrypt: [OFF]
+        noscrypt: ["OFF", "ON"]
+        include:
+          - noscrypt: "OFF"
+            noscrypt_name: "secp256k1"
+          - noscrypt: "ON"
+            noscrypt_name: "noscrypt"
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake build-essential libssl-dev libcjson-dev libwebsockets-dev autotools-dev autoconf libtool
-        
-    - name: Install secp256k1
-      run: |
-        git clone https://github.com/bitcoin-core/secp256k1.git
-        cd secp256k1
-        ./autogen.sh
-        ./configure --enable-module-schnorrsig --enable-module-extrakeys
-        make -j$(nproc)
-        sudo make install
-        sudo ldconfig
-        
-    - name: Build noscrypt (if enabled)
-      if: matrix.noscrypt == 'ON'
-      run: |
-        git clone https://github.com/VnUgE/noscrypt.git
-        cd noscrypt
-        git checkout v0.1.4 || git checkout $(git rev-list --tags --max-count=1) || echo "Using latest commit"
-        mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release || cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF || true
-        make -j$(nproc) || true
-        sudo make install || true
-        sudo ldconfig
-        
-    - name: Configure
-      run: |
-        mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DHAVE_NOSCRYPT=${{ matrix.noscrypt }}
-        
-    - name: Build
-      run: |
-        cd build
-        make -j$(nproc)
-        
-    - name: Test
-      run: |
-        cd build
-        ctest --output-on-failure
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev libcjson-dev libwebsockets-dev autotools-dev autoconf libtool
+          
+      - name: Install secp256k1
+        run: |
+          git clone https://github.com/bitcoin-core/secp256k1.git
+          cd secp256k1
+          ./autogen.sh
+          ./configure --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+          
+      - name: Debug matrix values
+        run: |
+          echo "matrix.noscrypt=${{ matrix.noscrypt }}"
+          echo "matrix.noscrypt_name=${{ matrix.noscrypt_name }}"
+          echo "Condition result: ${{ matrix.noscrypt == 'ON' }}"
+          
+      - name: Build noscrypt (if enabled)
+        if: matrix.noscrypt == 'ON'
+        run: |
+          echo "Starting noscrypt build for matrix.noscrypt=${{ matrix.noscrypt }}"
+          git clone https://github.com/VnUgE/noscrypt.git
+          cd noscrypt
+          git tag -l
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "")
+          if [ -n "$LATEST_TAG" ]; then
+            git checkout "$LATEST_TAG"
+            echo "Checked out tag: $LATEST_TAG"
+          else
+            echo "No tags found, using latest commit"
+          fi
+          
+          chmod +x ../.github/scripts/fix-noscrypt-headers.sh
+          ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
+          
+          mkdir build && cd build
+          echo "Configuring noscrypt..."
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/usr/local" -DSECP256K1_LIB_DIR="/usr/local/lib" -DCRYPTO_LIB=openssl
+          echo "Building noscrypt..."
+          make -j$(nproc)
+          echo "Installing noscrypt..."
+          sudo make install
+          sudo ldconfig
+          echo "Verifying noscrypt installation..."
+          pkg-config --exists noscrypt && echo "noscrypt pkg-config found" || echo "noscrypt pkg-config not found"
+          ls -la /usr/local/include/noscrypt/ || echo "noscrypt headers not found"
+          
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DHAVE_NOSCRYPT=${{ matrix.noscrypt }}
+          
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc)
+          
+      - name: Test
+        run: |
+          cd build
+          ctest --output-on-failure
         
   build-windows:
     runs-on: windows-latest
@@ -71,83 +101,145 @@ jobs:
             with_vcpkg: true
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.3
-    
-    - name: Install vcpkg dependencies
-      if: matrix.with_vcpkg
-      run: |
-        vcpkg install openssl:x64-windows
-        vcpkg install cjson:x64-windows
-        vcpkg install libwebsockets:x64-windows
-        
-    - name: Install secp256k1 (vcpkg)
-      if: matrix.with_vcpkg
-      run: |
-        git clone https://github.com/bitcoin-core/secp256k1.git
-        cd secp256k1
-        mkdir build && cd build
-        cmake .. -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON -DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON -DCMAKE_INSTALL_PREFIX="C:/vcpkg/installed/x64-windows"
-        cmake --build . --config Release
-        cmake --install . --config Release
+      - uses: actions/checkout@v4
+      
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v1.3
+      
+      - name: Install vcpkg dependencies
+        if: matrix.with_vcpkg
+        run: |
+          vcpkg install openssl:x64-windows
+          vcpkg install cjson:x64-windows
+          vcpkg install libwebsockets:x64-windows
+          
+      - name: Install secp256k1 (vcpkg)
+        if: matrix.with_vcpkg
+        run: |
+          git clone https://github.com/bitcoin-core/secp256k1.git
+          cd secp256k1
+          mkdir build && cd build
+          cmake .. -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON -DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON -DCMAKE_INSTALL_PREFIX="C:/vcpkg/installed/x64-windows"
+          cmake --build . --config Release
+          cmake --install . --config Release
 
-    - name: Install secp256k1 (minimal)
-      if: ${{ !matrix.with_vcpkg }}
-      run: |
-        git clone https://github.com/bitcoin-core/secp256k1.git
-        cd secp256k1
-        mkdir build && cd build
-        cmake .. -DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON -DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON -DCMAKE_INSTALL_PREFIX="C:/Program Files/secp256k1"
-        cmake --build . --config Release
-        cmake --install . --config Release
-        
-    - name: Configure using CMake Preset
-      run: |
-        cmake --preset ${{ matrix.preset }} -DSECP256K1_LIB_DIR="C:/Program Files/secp256k1/lib"
-        
-    - name: Build using CMake Preset  
-      run: |
-        cmake --build --preset ${{ matrix.preset }}
-        
-    - name: Test using CMake Preset
-      run: |
-        ctest --preset win-release || echo "Tests completed with warnings"
+      - name: Install secp256k1 (minimal)
+        if: ${{ !matrix.with_vcpkg }}
+        run: |
+          git clone https://github.com/bitcoin-core/secp256k1.git
+          cd secp256k1
+          mkdir build && cd build
+          cmake .. -DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON -DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON -DCMAKE_INSTALL_PREFIX="C:/Program Files/secp256k1"
+          cmake --build . --config Release
+          cmake --install . --config Release
+          
+      - name: Configure using CMake Preset
+        run: |
+          cmake --preset ${{ matrix.preset }} -DSECP256K1_LIB_DIR="C:/Program Files/secp256k1/lib"
+          
+      - name: Build using CMake Preset  
+        run: |
+          cmake --build --preset ${{ matrix.preset }}
+          
+      - name: Test using CMake Preset
+        run: |
+          ctest --preset win-release || echo "Tests completed with warnings"
         
   build-macos:
     runs-on: macos-latest
+    name: "macOS ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+        noscrypt: ["OFF", "ON"]
+        include:
+          - noscrypt: "OFF"
+            noscrypt_name: "secp256k1"
+          - noscrypt: "ON"
+            noscrypt_name: "noscrypt"
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: |
-        brew install cmake openssl cjson libwebsockets autoconf automake libtool
+      - uses: actions/checkout@v4
         
-    - name: Install secp256k1
-      run: |
-        git clone https://github.com/bitcoin-core/secp256k1.git
-        cd secp256k1
-        ./autogen.sh
-        ./configure --enable-module-schnorrsig --enable-module-extrakeys
-        make -j$(sysctl -n hw.ncpu)
-        sudo make install
-        
-    - name: Configure
-      run: |
-        mkdir build && cd build
-        export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-        export LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:$LIBRARY_PATH"
-        export CPATH="/usr/local/include:/opt/homebrew/include:$CPATH"
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew" -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include" -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib"
-        
-    - name: Build
-      run: |
-        cd build
-        make -j$(sysctl -n hw.ncpu)
-        
-    - name: Test
-      run: |
-        cd build
-        ctest --output-on-failure
+      - name: Install dependencies
+        run: |
+          brew install cmake openssl@1.1 cjson libwebsockets autoconf automake libtool
+          
+      - name: Install secp256k1
+        run: |
+          git clone https://github.com/bitcoin-core/secp256k1.git
+          cd secp256k1
+          ./autogen.sh
+          ./configure --enable-module-schnorrsig --enable-module-extrakeys --prefix=/usr/local
+          make -j$(sysctl -n hw.ncpu)
+          sudo make install
+          # Ensure library is discoverable
+          sudo ldconfig 2>/dev/null || true
+          # Create symlink for consistency across different macOS setups
+          sudo ln -sf /usr/local/lib/libsecp256k1.dylib /usr/local/lib/libsecp256k1.dylib || true
+          
+      - name: Build noscrypt (if enabled)
+        if: matrix.noscrypt == 'ON'
+        run: |
+          git clone https://github.com/VnUgE/noscrypt.git
+          cd noscrypt
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "")
+          if [ -n "$LATEST_TAG" ]; then
+            git checkout "$LATEST_TAG"
+            echo "Checked out tag: $LATEST_TAG"
+          else
+            echo "No tags found, using latest commit"
+          fi
+          
+          chmod +x ../.github/scripts/fix-noscrypt-headers.sh
+          ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
+          
+          mkdir build && cd build
+          echo "Configuring noscrypt..."
+          export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+          
+          # Production-grade secp256k1 path detection
+          SECP_PATHS="/usr/local/lib:/opt/homebrew/lib:/opt/local/lib"
+          for path in $(echo $SECP_PATHS | tr ':' ' '); do
+            if [ -f "$path/libsecp256k1.dylib" ] || [ -f "$path/libsecp256k1.a" ]; then
+              SECP256K1_PATH="$path"
+              echo "Found secp256k1 at: $path"
+              break
+            fi
+          done
+          
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/openssl@1.1;/usr/local;/opt/homebrew;/opt/local" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}" -DCRYPTO_LIB=openssl -DCMAKE_EXE_LINKER_FLAGS="-L${SECP256K1_PATH:-/usr/local/lib}" -DCMAKE_SHARED_LINKER_FLAGS="-L${SECP256K1_PATH:-/usr/local/lib}"
+          echo "Building noscrypt..."
+          make -j$(sysctl -n hw.ncpu)
+          echo "Installing noscrypt..."
+          sudo make install
+          echo "Verifying noscrypt installation..."
+          pkg-config --exists noscrypt && echo "noscrypt pkg-config found" || echo "noscrypt pkg-config not found"
+          ls -la /usr/local/include/noscrypt/ || echo "noscrypt headers not found"
+          
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/openssl@1.1/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LIBRARY_PATH="/usr/local/lib:/opt/homebrew/lib:/opt/homebrew/opt/openssl@1.1/lib:$LIBRARY_PATH"
+          export CPATH="/usr/local/include:/opt/homebrew/include:/opt/homebrew/opt/openssl@1.1/include:$CPATH"
+          # Production-grade secp256k1 path detection
+          SECP_PATHS="/usr/local/lib:/opt/homebrew/lib:/opt/local/lib"
+          for path in $(echo $SECP_PATHS | tr ':' ' '); do
+            if [ -f "$path/libsecp256k1.dylib" ] || [ -f "$path/libsecp256k1.a" ]; then
+              SECP256K1_PATH="$path"
+              echo "Found secp256k1 at: $path"
+              break
+            fi
+          done
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DHAVE_NOSCRYPT=${{ matrix.noscrypt }} -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew;/opt/homebrew/opt/openssl@1.1;/opt/local" -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include;/opt/homebrew/opt/openssl@1.1/include;/opt/local/include" -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib;/opt/homebrew/opt/openssl@1.1/lib;/opt/local/lib" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}"
+          
+      - name: Build
+        run: |
+          cd build
+          make -j$(sysctl -n hw.ncpu)
+          
+      - name: Test
+        run: |
+          cd build
+          ctest --output-on-failure
