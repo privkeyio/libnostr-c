@@ -374,7 +374,7 @@ add_cmake_openssl_compatibility() {
     fi
     
     # Check if compatibility definitions are already added
-    if grep -q "OpenSSL system compatibility" "$cmake_file"; then
+    if grep -q "OpenSSL system compatibility" "$cmake_file" || grep -q "DEPRECATEDIN_1_1_0" "$cmake_file"; then
         log_debug "OpenSSL compatibility definitions already present"
         return 0
     fi
@@ -391,22 +391,22 @@ add_cmake_openssl_compatibility() {
     # Create a backup
     cp "$cmake_file" "$cmake_file.openssl_compat_backup"
     
-    # Create the compatibility definitions block
+    # Create the compatibility definitions block using compiler options instead of definitions
     local compat_block
     read -r -d '' compat_block << 'EOF' || true
 
 # OpenSSL system compatibility definitions for missing DEPRECATEDIN_* macros
 if(CRYPTO_LIB STREQUAL "openssl")
-    # Define missing deprecation macros at compiler level to fix system OpenSSL headers
-    target_compile_definitions(${_NC_PROJ_NAME} PRIVATE
-        "DEPRECATEDIN_1_1_0(f)=f"
-        "DEPRECATEDIN_1_0_2(f)=f" 
-        "DEPRECATEDIN_3_0(f)=f"
+    # Define missing deprecation macros at compiler level using -D flags
+    target_compile_options(${_NC_PROJ_NAME} PRIVATE
+        "-DDEPRECATEDIN_1_1_0(f)=f"
+        "-DDEPRECATEDIN_1_0_2(f)=f"
+        "-DDEPRECATEDIN_3_0(f)=f"
     )
-    target_compile_definitions(${_NC_PROJ_NAME}_static PRIVATE
-        "DEPRECATEDIN_1_1_0(f)=f"
-        "DEPRECATEDIN_1_0_2(f)=f"
-        "DEPRECATEDIN_3_0(f)=f"
+    target_compile_options(${_NC_PROJ_NAME}_static PRIVATE
+        "-DDEPRECATEDIN_1_1_0(f)=f"
+        "-DDEPRECATEDIN_1_0_2(f)=f"
+        "-DDEPRECATEDIN_3_0(f)=f"
     )
 endif()
 EOF
