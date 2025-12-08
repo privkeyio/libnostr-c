@@ -474,6 +474,157 @@ Verify a zap receipt against the original request.
 
 **Returns**: `NOSTR_OK` if valid, error code otherwise.
 
+## Relay Protocol (Server-Side)
+
+libnostr-c provides complete relay-side protocol support for building Nostr relay implementations. Include `<nostr_relay_protocol.h>` to access these functions.
+
+### Client Message Parsing
+
+#### nostr_client_msg_parse()
+```c
+nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, nostr_client_msg_t* msg);
+```
+Parse incoming client messages (EVENT, REQ, CLOSE, AUTH).
+
+#### nostr_client_msg_free()
+```c
+void nostr_client_msg_free(nostr_client_msg_t* msg);
+```
+Free parsed client message resources.
+
+### Filter Matching
+
+#### nostr_filter_parse()
+```c
+nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_filter_t* filter);
+```
+Parse a subscription filter from JSON.
+
+#### nostr_filter_matches()
+```c
+bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event);
+```
+Check if an event matches a filter.
+
+#### nostr_filters_match()
+```c
+bool nostr_filters_match(const nostr_filter_t* filters, size_t count, const nostr_event* event);
+```
+Check if an event matches any filter in an array (OR logic).
+
+### Relay Message Serialization
+
+#### nostr_relay_msg_serialize()
+```c
+nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char* buf, size_t buf_size, size_t* out_len);
+```
+Serialize relay messages (EVENT, OK, EOSE, CLOSED, NOTICE, AUTH) to JSON.
+
+#### Convenience Constructors
+```c
+void nostr_relay_msg_event(nostr_relay_msg_t* msg, const char* sub_id, const nostr_event* event);
+void nostr_relay_msg_ok(nostr_relay_msg_t* msg, const char* event_id, bool success, const char* message);
+void nostr_relay_msg_eose(nostr_relay_msg_t* msg, const char* sub_id);
+void nostr_relay_msg_closed(nostr_relay_msg_t* msg, const char* sub_id, const char* message);
+void nostr_relay_msg_notice(nostr_relay_msg_t* msg, const char* message);
+void nostr_relay_msg_auth(nostr_relay_msg_t* msg, const char* challenge);
+```
+
+### Event Validation
+
+#### nostr_event_validate_full()
+```c
+nostr_relay_error_t nostr_event_validate_full(const nostr_event* event, int64_t max_future_seconds, nostr_validation_result_t* result);
+```
+Full event validation: ID verification, signature check, timestamp bounds, expiration.
+
+### Event Deletion (NIP-09)
+
+#### nostr_deletion_parse()
+```c
+nostr_relay_error_t nostr_deletion_parse(const nostr_event* event, nostr_deletion_request_t* request);
+```
+Parse a kind 5 deletion event.
+
+#### nostr_deletion_authorized()
+```c
+bool nostr_deletion_authorized(const nostr_deletion_request_t* request, const nostr_event* target_event);
+```
+Check if deletion is authorized (same pubkey, event ID in list).
+
+#### nostr_deletion_authorized_address()
+```c
+bool nostr_deletion_authorized_address(const nostr_deletion_request_t* request, const nostr_event* target_event);
+```
+Check if deletion is authorized for addressable events (kind 30000-39999).
+
+### Event Expiration (NIP-40)
+
+#### nostr_event_is_expired()
+```c
+bool nostr_event_is_expired(const nostr_event* event, int64_t now);
+```
+Check if event has expired at a given timestamp.
+
+#### nostr_event_is_expired_now()
+```c
+bool nostr_event_is_expired_now(const nostr_event* event);
+```
+Check if event has expired (uses current time).
+
+### Kind Classification
+
+#### nostr_kind_get_type()
+```c
+nostr_kind_type_t nostr_kind_get_type(int32_t kind);
+```
+Classify event kind: REGULAR, REPLACEABLE, EPHEMERAL, or ADDRESSABLE.
+
+```c
+bool nostr_kind_is_regular(int32_t kind);
+bool nostr_kind_is_replaceable(int32_t kind);
+bool nostr_kind_is_ephemeral(int32_t kind);
+bool nostr_kind_is_addressable(int32_t kind);
+```
+
+### Relay Protocol Usage Example
+```c
+#include <nostr_relay_protocol.h>
+
+// Parse incoming client message
+nostr_client_msg_t msg;
+if (nostr_client_msg_parse(json, len, &msg) == NOSTR_RELAY_OK) {
+    switch (msg.type) {
+        case NOSTR_CLIENT_MSG_EVENT:
+            // Validate and store event
+            nostr_validation_result_t result;
+            if (nostr_event_validate_full(msg.data.event.event, 300, &result) == NOSTR_RELAY_OK) {
+                // Check expiration
+                if (!nostr_event_is_expired_now(msg.data.event.event)) {
+                    store_event(msg.data.event.event);
+                }
+            }
+            // Send OK response
+            nostr_relay_msg_t reply;
+            nostr_relay_msg_ok(&reply, event_id, true, "");
+            nostr_relay_msg_serialize(&reply, buf, sizeof(buf), NULL);
+            break;
+
+        case NOSTR_CLIENT_MSG_REQ:
+            // Match events against filters
+            for (size_t i = 0; i < stored_events_count; i++) {
+                if (nostr_filters_match(msg.data.req.filters, msg.data.req.filters_count, stored_events[i])) {
+                    send_event(msg.data.req.subscription_id, stored_events[i]);
+                }
+            }
+            // Send EOSE
+            nostr_relay_msg_eose(&reply, msg.data.req.subscription_id);
+            break;
+    }
+    nostr_client_msg_free(&msg);
+}
+```
+
 ## Bech32 Encoding
 
 ### Event IDs

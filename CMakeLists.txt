@@ -39,6 +39,7 @@ option(NOSTR_FEATURE_NIP44 "Enable NIP-44: Encrypted Payloads v2" OFF)
 option(NOSTR_FEATURE_NIP47 "Enable NIP-47: Nostr Wallet Connect" OFF)
 option(NOSTR_FEATURE_NIP57 "Enable NIP-57: Lightning Zaps" ON)
 option(NOSTR_FEATURE_NIP59 "Enable NIP-59: Gift Wrap" OFF)
+option(NOSTR_FEATURE_RELAY_PROTOCOL "Enable NIP-01 relay-side protocol support" ON)
 
 # Check if JSON_ENHANCED was set by user/preset before defining the option
 # This includes command line, presets, or parent CMake files
@@ -582,6 +583,10 @@ if(NOSTR_FEATURE_HD_KEYS)
     list(APPEND NOSTR_SOURCES src/hd_key.c)
 endif()
 
+if(NOSTR_FEATURE_RELAY_PROTOCOL)
+    list(APPEND NOSTR_SOURCES src/relay_protocol.c)
+endif()
+
 add_library(nostr SHARED ${NOSTR_SOURCES})
 add_library(nostr_static STATIC ${NOSTR_SOURCES})
 
@@ -783,8 +788,6 @@ set_target_properties(nostr_static PROPERTIES
 enable_testing()
 add_subdirectory(tests)
 add_subdirectory(examples)
-# TODO: Fix benchmark feature stubs
-# add_subdirectory(benchmark)
 
 install(TARGETS nostr nostr_static
     EXPORT libnostr-c-targets

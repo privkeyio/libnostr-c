@@ -45,6 +45,16 @@ if(NOSTR_FEATURE_HD_KEYS)
     add_test(NAME hd_integration_tests COMMAND test_hd_integration)
 endif()
 
+if(NOSTR_FEATURE_RELAY_PROTOCOL)
+    add_executable(test_relay_protocol test_relay_protocol.c)
+    target_link_libraries(test_relay_protocol nostr_static)
+    add_test(NAME relay_protocol_tests COMMAND test_relay_protocol)
+
+    add_executable(test_relay_integration test_relay_integration.c)
+    target_link_libraries(test_relay_integration nostr_static)
+    add_test(NAME relay_integration_tests COMMAND test_relay_integration)
+endif()
+
 target_link_libraries(test_runner nostr_static)
 if(UNITY_FOUND)
     target_link_libraries(test_runner ${UNITY_LIBRARIES})
