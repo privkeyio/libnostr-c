@@ -536,6 +536,63 @@ bool nostr_event_is_expired(const nostr_event* event, int64_t now);
 bool nostr_event_is_expired_now(const nostr_event* event);
 
 /* ============================================================================
+ * Event Deletion (NIP-09)
+ * ============================================================================ */
+
+/**
+ * @brief Parsed deletion request from a kind 5 event
+ */
+typedef struct {
+    char** event_ids;           /**< Array of event IDs to delete (hex strings) */
+    size_t event_ids_count;     /**< Number of event IDs */
+    char** addresses;           /**< Array of "a" tag addresses to delete (kind:pubkey:d-tag) */
+    size_t addresses_count;     /**< Number of addresses */
+    char pubkey[65];            /**< Pubkey of the deletion request author (hex) */
+    char* reason;               /**< Optional deletion reason (content field) */
+} nostr_deletion_request_t;
+
+/**
+ * @brief Parse a deletion event (kind 5) into a deletion request
+ * @param event The kind 5 deletion event
+ * @param request Output deletion request structure
+ * @return NOSTR_RELAY_OK on success, error code otherwise
+ * @note Caller must call nostr_deletion_free() when done
+ */
+nostr_relay_error_t nostr_deletion_parse(const nostr_event* event, nostr_deletion_request_t* request);
+
+/**
+ * @brief Check if a deletion request is authorized to delete an event
+ *
+ * Per NIP-09, a deletion is authorized if:
+ * - The deletion event's pubkey matches the target event's pubkey
+ * - The target event's ID is in the deletion request's "e" tags
+ *
+ * @param request The parsed deletion request
+ * @param target_event The event to potentially delete
+ * @return true if authorized to delete, false otherwise
+ */
+bool nostr_deletion_authorized(const nostr_deletion_request_t* request, const nostr_event* target_event);
+
+/**
+ * @brief Check if a deletion request is authorized to delete an addressable event
+ *
+ * Per NIP-09, a deletion is authorized for addressable events if:
+ * - The deletion event's pubkey matches the target event's pubkey
+ * - The target's address (kind:pubkey:d-tag) is in the deletion request's "a" tags
+ *
+ * @param request The parsed deletion request
+ * @param target_event The addressable event to potentially delete
+ * @return true if authorized to delete, false otherwise
+ */
+bool nostr_deletion_authorized_address(const nostr_deletion_request_t* request, const nostr_event* target_event);
+
+/**
+ * @brief Free deletion request internals
+ * @param request Deletion request to free
+ */
+void nostr_deletion_free(nostr_deletion_request_t* request);
+
+/* ============================================================================
  * Error Handling
  * ============================================================================ */
 

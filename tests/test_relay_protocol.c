@@ -901,6 +901,254 @@ void test_event_serialize_canonical_buffer_too_small(void)
 
 #endif
 
+/* ============================================================================
+ * NIP-09 Event Deletion Tests
+ * ============================================================================ */
+
+void test_deletion_parse_basic(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+
+    deletion_event->kind = 5;
+    nostr_event_set_content(deletion_event, "These posts were published by accident");
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    const char* e_tag1[] = {"e", "0000000000000000000000000000000000000000000000000000000000000001"};
+    const char* e_tag2[] = {"e", "0000000000000000000000000000000000000000000000000000000000000002"};
+    nostr_event_add_tag(deletion_event, e_tag1, 2);
+    nostr_event_add_tag(deletion_event, e_tag2, 2);
+
+    nostr_deletion_request_t request;
+    nostr_relay_error_t err = nostr_deletion_parse(deletion_event, &request);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_EQUAL(2, request.event_ids_count);
+    TEST_ASSERT_EQUAL_STRING("0000000000000000000000000000000000000000000000000000000000000001", request.event_ids[0]);
+    TEST_ASSERT_EQUAL_STRING("0000000000000000000000000000000000000000000000000000000000000002", request.event_ids[1]);
+    TEST_ASSERT_NOT_NULL(request.reason);
+    TEST_ASSERT_EQUAL_STRING("These posts were published by accident", request.reason);
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+}
+
+void test_deletion_parse_with_addresses(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    const char* a_tag1[] = {"a", "30023:abababababababababababababababababababababababababababababababababab:my-article"};
+    const char* a_tag2[] = {"a", "30023:abababababababababababababababababababababababababababababababababab:another-article"};
+    nostr_event_add_tag(deletion_event, a_tag1, 2);
+    nostr_event_add_tag(deletion_event, a_tag2, 2);
+
+    nostr_deletion_request_t request;
+    nostr_relay_error_t err = nostr_deletion_parse(deletion_event, &request);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_EQUAL(0, request.event_ids_count);
+    TEST_ASSERT_EQUAL(2, request.addresses_count);
+    TEST_ASSERT_EQUAL_STRING("30023:abababababababababababababababababababababababababababababababababab:my-article", request.addresses[0]);
+    TEST_ASSERT_EQUAL_STRING("30023:abababababababababababababababababababababababababababababababababab:another-article", request.addresses[1]);
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+}
+
+void test_deletion_parse_invalid_kind(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+
+    event->kind = 1;
+
+    nostr_deletion_request_t request;
+    nostr_relay_error_t err = nostr_deletion_parse(event, &request);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_INVALID_KIND, err);
+
+    nostr_event_destroy(event);
+}
+
+void test_deletion_parse_null_params(void)
+{
+    nostr_deletion_request_t request;
+    nostr_event event;
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_MISSING_FIELD, nostr_deletion_parse(NULL, &request));
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_MISSING_FIELD, nostr_deletion_parse(&event, NULL));
+}
+
+void test_deletion_authorized_same_pubkey(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    nostr_event* target_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&target_event));
+    target_event->kind = 1;
+    memset(target_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+    memset(target_event->id, 0x00, NOSTR_ID_SIZE);
+    target_event->id[31] = 0x01;
+
+    const char* e_tag[] = {"e", "0000000000000000000000000000000000000000000000000000000000000001"};
+    nostr_event_add_tag(deletion_event, e_tag, 2);
+
+    nostr_deletion_request_t request;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_deletion_parse(deletion_event, &request));
+
+    TEST_ASSERT_TRUE(nostr_deletion_authorized(&request, target_event));
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+    nostr_event_destroy(target_event);
+}
+
+void test_deletion_unauthorized_different_pubkey(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    nostr_event* target_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&target_event));
+    target_event->kind = 1;
+    memset(target_event->pubkey.data, 0xCD, NOSTR_PUBKEY_SIZE);
+    memset(target_event->id, 0x00, NOSTR_ID_SIZE);
+    target_event->id[31] = 0x01;
+
+    const char* e_tag[] = {"e", "0000000000000000000000000000000000000000000000000000000000000001"};
+    nostr_event_add_tag(deletion_event, e_tag, 2);
+
+    nostr_deletion_request_t request;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_deletion_parse(deletion_event, &request));
+
+    TEST_ASSERT_FALSE(nostr_deletion_authorized(&request, target_event));
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+    nostr_event_destroy(target_event);
+}
+
+void test_deletion_unauthorized_event_not_listed(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    nostr_event* target_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&target_event));
+    target_event->kind = 1;
+    memset(target_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+    memset(target_event->id, 0xFF, NOSTR_ID_SIZE);
+
+    const char* e_tag[] = {"e", "0000000000000000000000000000000000000000000000000000000000000001"};
+    nostr_event_add_tag(deletion_event, e_tag, 2);
+
+    nostr_deletion_request_t request;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_deletion_parse(deletion_event, &request));
+
+    TEST_ASSERT_FALSE(nostr_deletion_authorized(&request, target_event));
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+    nostr_event_destroy(target_event);
+}
+
+void test_deletion_authorized_address(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    nostr_event* target_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&target_event));
+    target_event->kind = 30023;
+    memset(target_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    const char* d_tag[] = {"d", "my-article"};
+    nostr_event_add_tag(target_event, d_tag, 2);
+
+    const char* a_tag[] = {"a", "30023:abababababababababababababababababababababababababababababababababab:my-article"};
+    nostr_event_add_tag(deletion_event, a_tag, 2);
+
+    nostr_deletion_request_t request;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_deletion_parse(deletion_event, &request));
+
+    TEST_ASSERT_TRUE(nostr_deletion_authorized_address(&request, target_event));
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+    nostr_event_destroy(target_event);
+}
+
+void test_deletion_unauthorized_address_different_pubkey(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    nostr_event* target_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&target_event));
+    target_event->kind = 30023;
+    memset(target_event->pubkey.data, 0xCD, NOSTR_PUBKEY_SIZE);
+
+    const char* d_tag[] = {"d", "my-article"};
+    nostr_event_add_tag(target_event, d_tag, 2);
+
+    const char* a_tag[] = {"a", "30023:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd:my-article"};
+    nostr_event_add_tag(deletion_event, a_tag, 2);
+
+    nostr_deletion_request_t request;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_deletion_parse(deletion_event, &request));
+
+    TEST_ASSERT_FALSE(nostr_deletion_authorized_address(&request, target_event));
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+    nostr_event_destroy(target_event);
+}
+
+void test_deletion_unauthorized_address_non_addressable(void)
+{
+    nostr_event* deletion_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&deletion_event));
+    deletion_event->kind = 5;
+    memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    nostr_event* target_event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&target_event));
+    target_event->kind = 1;
+    memset(target_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
+
+    const char* a_tag[] = {"a", "1:abababababababababababababababababababababababababababababababababab:test"};
+    nostr_event_add_tag(deletion_event, a_tag, 2);
+
+    nostr_deletion_request_t request;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_deletion_parse(deletion_event, &request));
+
+    TEST_ASSERT_FALSE(nostr_deletion_authorized_address(&request, target_event));
+
+    nostr_deletion_free(&request);
+    nostr_event_destroy(deletion_event);
+    nostr_event_destroy(target_event);
+}
+
+void test_deletion_free_null(void)
+{
+    nostr_deletion_free(NULL);
+}
+
 void run_relay_protocol_tests(void)
 {
     printf("Running relay protocol tests...\n");
@@ -1035,6 +1283,32 @@ void run_relay_protocol_tests(void)
 #else
     printf("  (JSON-dependent tests skipped - NOSTR_FEATURE_JSON_ENHANCED not enabled)\n");
 #endif
+
+    /* NIP-09 Event Deletion tests (not JSON-dependent) */
+    printf("  Running NIP-09 deletion tests...\n");
+
+    test_deletion_parse_basic();
+    printf("  Success: deletion_parse_basic\n");
+    test_deletion_parse_with_addresses();
+    printf("  Success: deletion_parse_with_addresses\n");
+    test_deletion_parse_invalid_kind();
+    printf("  Success: deletion_parse_invalid_kind\n");
+    test_deletion_parse_null_params();
+    printf("  Success: deletion_parse_null_params\n");
+    test_deletion_authorized_same_pubkey();
+    printf("  Success: deletion_authorized_same_pubkey\n");
+    test_deletion_unauthorized_different_pubkey();
+    printf("  Success: deletion_unauthorized_different_pubkey\n");
+    test_deletion_unauthorized_event_not_listed();
+    printf("  Success: deletion_unauthorized_event_not_listed\n");
+    test_deletion_authorized_address();
+    printf("  Success: deletion_authorized_address\n");
+    test_deletion_unauthorized_address_different_pubkey();
+    printf("  Success: deletion_unauthorized_address_different_pubkey\n");
+    test_deletion_unauthorized_address_non_addressable();
+    printf("  Success: deletion_unauthorized_address_non_addressable\n");
+    test_deletion_free_null();
+    printf("  Success: deletion_free_null\n");
 
     printf("All relay protocol tests passed!\n");
 }

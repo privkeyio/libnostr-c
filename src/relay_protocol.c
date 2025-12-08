@@ -373,14 +373,8 @@ nostr_relay_error_t nostr_event_serialize_canonical(const nostr_event* event, ch
     }
     pubkey_hex[64] = '\0';
 
-    char* content_escaped = escape_json_string_canonical(event->content ? event->content : "");
-    if (!content_escaped) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
     cJSON* serialization = cJSON_CreateArray();
     if (!serialization) {
-        free(content_escaped);
         return NOSTR_RELAY_ERR_MEMORY;
     }
 
@@ -404,7 +398,6 @@ nostr_relay_error_t nostr_event_serialize_canonical(const nostr_event* event, ch
 
     char* json_str = cJSON_PrintUnformatted(serialization);
     cJSON_Delete(serialization);
-    free(content_escaped);
 
     if (!json_str) {
         return NOSTR_RELAY_ERR_MEMORY;
@@ -1309,16 +1302,22 @@ nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char
             cJSON_AddItemToArray(root, cJSON_CreateString("EVENT"));
             cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.event.subscription_id));
 
-            if (msg->data.event.event) {
-                char* event_json = NULL;
-                if (nostr_event_to_json(msg->data.event.event, &event_json) == NOSTR_OK && event_json) {
-                    cJSON* event_obj = cJSON_Parse(event_json);
-                    free(event_json);
-                    if (event_obj) {
-                        cJSON_AddItemToArray(root, event_obj);
-                    }
-                }
+            if (!msg->data.event.event) {
+                cJSON_Delete(root);
+                return NOSTR_RELAY_ERR_MISSING_FIELD;
             }
+            char* event_json = NULL;
+            if (nostr_event_to_json(msg->data.event.event, &event_json) != NOSTR_OK || !event_json) {
+                cJSON_Delete(root);
+                return NOSTR_RELAY_ERR_MEMORY;
+            }
+            cJSON* event_obj = cJSON_Parse(event_json);
+            free(event_json);
+            if (!event_obj) {
+                cJSON_Delete(root);
+                return NOSTR_RELAY_ERR_MEMORY;
+            }
+            cJSON_AddItemToArray(root, event_obj);
             break;
         }
 
@@ -1384,3 +1383,178 @@ nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char
 }
 
 #endif
+
+/* ============================================================================
+ * Event Deletion (NIP-09)
+ * ============================================================================ */
+
+void nostr_deletion_free(nostr_deletion_request_t* request)
+{
+    if (!request) return;
+
+    if (request->event_ids) {
+        for (size_t i = 0; i < request->event_ids_count; i++) {
+            free(request->event_ids[i]);
+        }
+        free(request->event_ids);
+    }
+
+    if (request->addresses) {
+        for (size_t i = 0; i < request->addresses_count; i++) {
+            free(request->addresses[i]);
+        }
+        free(request->addresses);
+    }
+
+    free(request->reason);
+
+    memset(request, 0, sizeof(nostr_deletion_request_t));
+}
+
+nostr_relay_error_t nostr_deletion_parse(const nostr_event* event, nostr_deletion_request_t* request)
+{
+    if (!event || !request) {
+        return NOSTR_RELAY_ERR_MISSING_FIELD;
+    }
+
+    memset(request, 0, sizeof(nostr_deletion_request_t));
+
+    if (event->kind != 5) {
+        return NOSTR_RELAY_ERR_INVALID_KIND;
+    }
+
+    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
+        sprintf(request->pubkey + i * 2, "%02x", event->pubkey.data[i]);
+    }
+    request->pubkey[64] = '\0';
+
+    if (event->content && event->content[0] != '\0') {
+        request->reason = strdup(event->content);
+        if (!request->reason) {
+            nostr_deletion_free(request);
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+    }
+
+    size_t e_count = 0;
+    size_t a_count = 0;
+
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && event->tags[i].values[0]) {
+            if (strcmp(event->tags[i].values[0], "e") == 0) {
+                e_count++;
+            } else if (strcmp(event->tags[i].values[0], "a") == 0) {
+                a_count++;
+            }
+        }
+    }
+
+    if (e_count > 0) {
+        request->event_ids = calloc(e_count, sizeof(char*));
+        if (!request->event_ids) {
+            nostr_deletion_free(request);
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+    }
+
+    if (a_count > 0) {
+        request->addresses = calloc(a_count, sizeof(char*));
+        if (!request->addresses) {
+            nostr_deletion_free(request);
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+    }
+
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && event->tags[i].values[0] && event->tags[i].values[1]) {
+            if (strcmp(event->tags[i].values[0], "e") == 0) {
+                if (nostr_validate_hex64(event->tags[i].values[1])) {
+                    request->event_ids[request->event_ids_count] = strdup(event->tags[i].values[1]);
+                    if (!request->event_ids[request->event_ids_count]) {
+                        nostr_deletion_free(request);
+                        return NOSTR_RELAY_ERR_MEMORY;
+                    }
+                    request->event_ids_count++;
+                }
+            } else if (strcmp(event->tags[i].values[0], "a") == 0) {
+                request->addresses[request->addresses_count] = strdup(event->tags[i].values[1]);
+                if (!request->addresses[request->addresses_count]) {
+                    nostr_deletion_free(request);
+                    return NOSTR_RELAY_ERR_MEMORY;
+                }
+                request->addresses_count++;
+            }
+        }
+    }
+
+    return NOSTR_RELAY_OK;
+}
+
+bool nostr_deletion_authorized(const nostr_deletion_request_t* request, const nostr_event* target_event)
+{
+    if (!request || !target_event) {
+        return false;
+    }
+
+    char target_pubkey[65];
+    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
+        sprintf(target_pubkey + i * 2, "%02x", target_event->pubkey.data[i]);
+    }
+    target_pubkey[64] = '\0';
+
+    if (strcmp(request->pubkey, target_pubkey) != 0) {
+        return false;
+    }
+
+    char target_id[65];
+    id_to_hex(target_event->id, target_id);
+
+    for (size_t i = 0; i < request->event_ids_count; i++) {
+        if (strcmp(request->event_ids[i], target_id) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool nostr_deletion_authorized_address(const nostr_deletion_request_t* request, const nostr_event* target_event)
+{
+    if (!request || !target_event) {
+        return false;
+    }
+
+    if (!nostr_kind_is_addressable(target_event->kind)) {
+        return false;
+    }
+
+    char target_pubkey[65];
+    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
+        sprintf(target_pubkey + i * 2, "%02x", target_event->pubkey.data[i]);
+    }
+    target_pubkey[64] = '\0';
+
+    if (strcmp(request->pubkey, target_pubkey) != 0) {
+        return false;
+    }
+
+    const char* d_tag = nostr_event_get_d_tag(target_event);
+    if (!d_tag) {
+        d_tag = "";
+    }
+
+    char target_address[256];
+    int written = snprintf(target_address, sizeof(target_address), "%d:%s:%s",
+                          target_event->kind, target_pubkey, d_tag);
+    if (written < 0 || (size_t)written >= sizeof(target_address)) {
+        return false;
+    }
+
+    for (size_t i = 0; i < request->addresses_count; i++) {
+        if (strcmp(request->addresses[i], target_address) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
