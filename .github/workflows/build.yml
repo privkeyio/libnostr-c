@@ -5,9 +5,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
 
 jobs:
   build-linux:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     name: "Linux ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
     strategy:
@@ -90,6 +92,7 @@ jobs:
           ctest --output-on-failure
         
   build-windows:
+    if: github.event.pull_request.draft == false
     runs-on: windows-latest
     strategy:
       matrix:
@@ -146,6 +149,7 @@ jobs:
           ctest --preset win-release || echo "Tests completed with warnings"
         
   build-macos:
+    if: github.event.pull_request.draft == false
     runs-on: macos-latest
     name: "macOS ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
     strategy:
