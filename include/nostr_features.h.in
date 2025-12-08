@@ -44,6 +44,7 @@ extern "C" {
  * ============================================================================= */
 
 #cmakedefine NOSTR_FEATURE_RELAY
+#cmakedefine NOSTR_FEATURE_RELAY_PROTOCOL
 #cmakedefine NOSTR_FEATURE_HD_KEYS
 #cmakedefine NOSTR_FEATURE_JSON_ENHANCED
 #cmakedefine NOSTR_FEATURE_THREADING
@@ -93,6 +94,12 @@ int nostr_feature_hd_keys_available(void);
  * @return 1 if enhanced JSON features are available, 0 otherwise
  */
 int nostr_feature_json_enhanced_available(void);
+
+/**
+ * @brief Check if relay protocol (NIP-01 relay-side) functionality is available
+ * @return 1 if relay protocol features are available, 0 otherwise
+ */
+int nostr_feature_relay_protocol_available(void);
 
 /**
  * @brief Get a string listing all enabled features

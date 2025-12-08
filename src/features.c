@@ -64,6 +64,15 @@ int nostr_feature_json_enhanced_available(void)
 #endif
 }
 
+int nostr_feature_relay_protocol_available(void)
+{
+#ifdef NOSTR_FEATURE_RELAY_PROTOCOL
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 const char* nostr_feature_list_enabled(void)
 {
     static char feature_list[512] = "std,events,keys";
@@ -97,6 +106,9 @@ const char* nostr_feature_list_enabled(void)
 #endif
 #ifdef NOSTR_FEATURE_RELAY
         strcat(feature_list, ",relay");
+#endif
+#ifdef NOSTR_FEATURE_RELAY_PROTOCOL
+        strcat(feature_list, ",relay-protocol");
 #endif
 #ifdef NOSTR_FEATURE_HD_KEYS
         strcat(feature_list, ",hd-keys");
