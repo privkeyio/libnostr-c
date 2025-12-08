@@ -6,18 +6,24 @@
 *A lightweight, portable C library for the Nostr protocol with native Lightning Network integration*
 
 ## What is libnostr-c?
-A high-performance C implementation of the Nostr protocol built for efficiency and minimal dependencies. libnostr-c provides core event management, modern NIP-44 encryption powered by noscrypt, Lightning zaps, and WebSocket relay communication. Designed for embedded systems and Bitcoin/Lightning integrations with a focus on security and portability.
+A high-performance C implementation of the Nostr protocol built for efficiency and minimal dependencies. libnostr-c provides core event management, modern NIP-44 encryption powered by noscrypt, Lightning zaps, WebSocket relay communication, and complete relay-side protocol support. Designed for both client applications and relay implementations, with a focus on security, portability, and embedded systems.
 
 ## API Example
 ```c
+// Client-side
 nostr_init();
 nostr_keypair_generate();
 nostr_event_create();
 nostr_event_sign();
 nostr_nip44_encrypt();
-nostr_nip44_decrypt();
 nostr_relay_connect();
-... extended functions
+
+// Relay-side (for relay implementations)
+nostr_client_msg_parse();
+nostr_filter_matches();
+nostr_event_validate_full();
+nostr_deletion_authorized();
+nostr_relay_msg_serialize();
 ```
 
 ## Motivation
@@ -62,7 +68,8 @@ Automated builds and releases are available through GitHub Actions CI/CD.
 #### Features
 libnostr-c supports modular compilation - build only what you need:
 - Core NIPs (01, 02, 13, 19, 57) enabled by default
-- Optional NIPs (04, 17, 44, 47, 59) via feature flags
+- Optional NIPs (04, 09, 17, 40, 44, 47, 59) via feature flags
+- Relay protocol support for building relay implementations
 - Modern noscrypt backend provides NIP-44 encryption
 - Fallback to secp256k1 for basic operations
 

@@ -40,6 +40,7 @@ cmake -DNOSTR_FEATURE_ALL_NIPS=ON .
 
 ### Optional Enhancements
 - `NOSTR_FEATURE_RELAY` - Relay communication (ON by default, requires libwebsockets)
+- `NOSTR_FEATURE_RELAY_PROTOCOL` - Relay-side protocol support (ON by default, requires cJSON)
 - `NOSTR_FEATURE_HD_KEYS` - HD key derivation (requires noscrypt)
 - `NOSTR_FEATURE_JSON_ENHANCED` - Enhanced JSON handling (ON by default, requires cJSON)
 - `NOSTR_FEATURE_THREADING` - Multi-threaded operations (ON by default)
@@ -57,6 +58,7 @@ cmake -DNOSTR_FEATURE_ALL_NIPS=ON .
 |---------|----------------------|
 | Core | OpenSSL, secp256k1 OR noscrypt |
 | Relay | libwebsockets |
+| Relay Protocol | cJSON |
 | JSON Enhanced | cJSON |
 | NIP-04/17/44/47/59 | noscrypt |
 | HD Keys | noscrypt |
