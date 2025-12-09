@@ -242,8 +242,8 @@ static char* serialize_for_id(const nostr_event* event)
 {
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
     char pubkey_hex[65];
-    char* content_escaped = escape_json_string(event->content ? event->content : "");
-    
+    const char* content = event->content ? event->content : "";
+
     for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
         sprintf(pubkey_hex + i * 2, "%02x", event->pubkey.data[i]);
     }
@@ -265,14 +265,12 @@ static char* serialize_for_id(const nostr_event* event)
         cJSON_AddItemToArray(tags_array, tag_array);
     }
     cJSON_AddItemToArray(serialization, tags_array);
-    
-    cJSON_AddItemToArray(serialization, cJSON_CreateString(content_escaped));
+    cJSON_AddItemToArray(serialization, cJSON_CreateString(content));
 
     char* result = cJSON_PrintUnformatted(serialization);
-    
+
     cJSON_Delete(serialization);
-    free(content_escaped);
-    
+
     return result;
 #else
     char pubkey_hex[65];
