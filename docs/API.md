@@ -587,6 +587,134 @@ bool nostr_kind_is_ephemeral(int32_t kind);
 bool nostr_kind_is_addressable(int32_t kind);
 ```
 
+### NIP-11 Relay Information Document
+
+#### nostr_relay_info_t
+```c
+typedef struct {
+    const char* name;              // relay name
+    const char* description;       // relay description
+    const char* banner;            // banner image URL
+    const char* icon;              // icon image URL
+    const char* pubkey;            // admin pubkey hex
+    const char* self_pubkey;       // relay's own pubkey
+    const char* contact;           // admin contact
+    int32_t* supported_nips;       // array of NIP numbers
+    size_t supported_nips_count;
+    const char* software;          // software URL
+    const char* version;           // version string
+    const char* privacy_policy;    // privacy policy URL
+    const char* terms_of_service;  // terms of service URL
+    nostr_relay_limitation_t limitation;
+    nostr_relay_retention_t* retention;
+    size_t retention_count;
+    const char** relay_countries;
+    size_t relay_countries_count;
+    const char** language_tags;
+    size_t language_tags_count;
+    const char** tags;
+    size_t tags_count;
+    const char* posting_policy;
+    const char* payments_url;
+    nostr_relay_fees_t fees;
+} nostr_relay_info_t;
+```
+
+#### nostr_relay_limitation_t
+```c
+typedef struct {
+    int32_t max_message_length;
+    int32_t max_subscriptions;
+    int32_t max_filters;
+    int32_t max_limit;
+    int32_t max_subid_length;
+    int32_t max_event_tags;
+    int32_t max_content_length;
+    int32_t min_pow_difficulty;
+    bool auth_required;
+    bool payment_required;
+    bool restricted_writes;
+    int64_t created_at_lower_limit;
+    int64_t created_at_upper_limit;
+    int32_t default_limit;
+} nostr_relay_limitation_t;
+```
+
+#### nostr_relay_info_init()
+```c
+void nostr_relay_info_init(nostr_relay_info_t* info);
+```
+Initialize relay info struct with sensible defaults.
+
+#### nostr_relay_limitation_init()
+```c
+void nostr_relay_limitation_init(nostr_relay_limitation_t* limitation);
+```
+Initialize limitation struct with sensible defaults.
+
+#### nostr_relay_info_serialize()
+```c
+nostr_relay_error_t nostr_relay_info_serialize(const nostr_relay_info_t* info,
+                                               char* buf, size_t buf_size, size_t* out_len);
+```
+Serialize relay info to JSON for NIP-11 HTTP response.
+
+#### nostr_relay_info_add_nip()
+```c
+nostr_relay_error_t nostr_relay_info_add_nip(nostr_relay_info_t* info, int32_t nip);
+```
+Add a single NIP to supported NIPs list.
+
+#### nostr_relay_info_free()
+```c
+void nostr_relay_info_free(nostr_relay_info_t* info);
+```
+Free relay info resources.
+
+### Tag Iteration (for Indexing)
+
+#### nostr_tag_iterator_t
+```c
+typedef struct {
+    const nostr_event* event;
+    size_t current_index;
+} nostr_tag_iterator_t;
+```
+
+#### nostr_tag_iterator_init()
+```c
+void nostr_tag_iterator_init(nostr_tag_iterator_t* iter, const nostr_event* event);
+```
+Initialize tag iterator for an event.
+
+#### nostr_tag_iterator_next()
+```c
+const char** nostr_tag_iterator_next(nostr_tag_iterator_t* iter, size_t* tag_len);
+```
+Get next tag as raw array. Returns NULL when no more tags.
+
+#### nostr_tag_iterator_next_info()
+```c
+bool nostr_tag_iterator_next_info(nostr_tag_iterator_t* iter, nostr_tag_info_t* tag);
+```
+Get next tag as structured info with name and values separated.
+
+#### nostr_tag_is_indexable()
+```c
+bool nostr_tag_is_indexable(const char* tag_name);
+```
+Check if tag name is a single letter (indexable per NIP-01).
+
+### Filter Tag Accessors (for Query Planning)
+
+```c
+const char** nostr_filter_get_e_tags(const nostr_filter_t* filter, size_t* count);
+const char** nostr_filter_get_p_tags(const nostr_filter_t* filter, size_t* count);
+const char** nostr_filter_get_tag_values(const nostr_filter_t* filter, char tag_name, size_t* count);
+bool nostr_filter_has_tag_filters(const nostr_filter_t* filter);
+```
+Access filter tag arrays for query planning and optimization.
+
 ### Relay Protocol Usage Example
 ```c
 #include <nostr_relay_protocol.h>
@@ -623,6 +751,44 @@ if (nostr_client_msg_parse(json, len, &msg) == NOSTR_RELAY_OK) {
     }
     nostr_client_msg_free(&msg);
 }
+```
+
+### NIP-11 Relay Information Example
+```c
+#include <nostr_relay_protocol.h>
+
+// Initialize relay info
+nostr_relay_info_t info;
+nostr_relay_info_init(&info);
+
+// Set basic info
+info.name = "My Relay";
+info.description = "A personal nostr relay";
+info.pubkey = "abc123...";  // admin pubkey
+info.contact = "admin@example.com";
+info.software = "https://github.com/user/my-relay";
+info.version = "1.0.0";
+
+// Add supported NIPs
+nostr_relay_info_add_nip(&info, 1);
+nostr_relay_info_add_nip(&info, 9);
+nostr_relay_info_add_nip(&info, 11);
+
+// Configure limitations
+info.limitation.max_message_length = 128 * 1024;
+info.limitation.max_subscriptions = 20;
+info.limitation.auth_required = false;
+info.limitation.payment_required = false;
+
+// Serialize for HTTP response (Accept: application/nostr+json)
+char buf[8192];
+size_t len;
+if (nostr_relay_info_serialize(&info, buf, sizeof(buf), &len) == NOSTR_RELAY_OK) {
+    // Send buf as HTTP response with Content-Type: application/nostr+json
+}
+
+// Cleanup (only needed if using nostr_relay_info_add_nip)
+nostr_relay_info_free(&info);
 ```
 
 ## Bech32 Encoding

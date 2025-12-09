@@ -31,8 +31,11 @@ cmake -DNOSTR_FEATURE_ALL_NIPS=ON .
 
 ### NIP Features (Optional)
 - `NOSTR_FEATURE_NIP04` - Legacy Encrypted Direct Messages (deprecated, requires noscrypt)
+- `NOSTR_FEATURE_NIP09` - Event Deletion (ON by default with relay protocol)
+- `NOSTR_FEATURE_NIP11` - Relay Information Document (ON by default with relay protocol)
 - `NOSTR_FEATURE_NIP13` - Proof of Work (ON by default)
 - `NOSTR_FEATURE_NIP17` - Private Direct Messages (requires noscrypt)
+- `NOSTR_FEATURE_NIP40` - Expiration Timestamp (ON by default with relay protocol)
 - `NOSTR_FEATURE_NIP44` - Encrypted Payloads v2 (requires noscrypt)
 - `NOSTR_FEATURE_NIP47` - Nostr Wallet Connect (requires noscrypt)
 - `NOSTR_FEATURE_NIP57` - Lightning Zaps (ON by default)

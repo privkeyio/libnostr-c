@@ -24,6 +24,7 @@ nostr_filter_matches();
 nostr_event_validate_full();
 nostr_deletion_authorized();
 nostr_relay_msg_serialize();
+nostr_relay_info_serialize();
 ```
 
 ## Motivation
@@ -68,7 +69,8 @@ Automated builds and releases are available through GitHub Actions CI/CD.
 #### Features
 libnostr-c supports modular compilation - build only what you need:
 - Core NIPs (01, 02, 13, 19, 57) enabled by default
-- Optional NIPs (04, 09, 17, 40, 44, 47, 59) via feature flags
+- Optional NIPs (04, 09, 11, 17, 40, 44, 47, 59) via feature flags
+- NIP-11 relay information document for serving relay metadata
 - Relay protocol support for building relay implementations
 - Modern noscrypt backend provides NIP-44 encryption
 - Fallback to secp256k1 for basic operations
