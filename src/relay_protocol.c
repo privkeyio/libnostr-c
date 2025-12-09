@@ -2095,3 +2095,387 @@ bool nostr_filter_has_tag_filters(const nostr_filter_t* filter)
             filter->p_tags_count > 0 ||
             filter->generic_tags_count > 0);
 }
+
+/* ============================================================================
+ * Filter Accessor Functions
+ * ============================================================================ */
+
+const char** nostr_filter_get_ids(const nostr_filter_t* filter, size_t* out_count)
+{
+    if (!filter) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    if (out_count) *out_count = filter->ids_count;
+    return (const char**)filter->ids;
+}
+
+const char** nostr_filter_get_authors(const nostr_filter_t* filter, size_t* out_count)
+{
+    if (!filter) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    if (out_count) *out_count = filter->authors_count;
+    return (const char**)filter->authors;
+}
+
+const int32_t* nostr_filter_get_kinds(const nostr_filter_t* filter, size_t* out_count)
+{
+    if (!filter) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    if (out_count) *out_count = filter->kinds_count;
+    return filter->kinds;
+}
+
+int64_t nostr_filter_get_since(const nostr_filter_t* filter)
+{
+    if (!filter) return 0;
+    return filter->since;
+}
+
+int64_t nostr_filter_get_until(const nostr_filter_t* filter)
+{
+    if (!filter) return 0;
+    return filter->until;
+}
+
+int32_t nostr_filter_get_limit(const nostr_filter_t* filter)
+{
+    if (!filter) return 0;
+    return filter->limit;
+}
+
+/* ============================================================================
+ * Client Message Accessor Functions
+ * ============================================================================ */
+
+nostr_client_msg_type_t nostr_client_msg_get_type(const nostr_client_msg_t* msg)
+{
+    if (!msg) return NOSTR_CLIENT_MSG_UNKNOWN;
+    return msg->type;
+}
+
+const nostr_event* nostr_client_msg_get_event(const nostr_client_msg_t* msg)
+{
+    if (!msg) return NULL;
+
+    switch (msg->type) {
+        case NOSTR_CLIENT_MSG_EVENT:
+            return msg->data.event.event;
+        case NOSTR_CLIENT_MSG_AUTH:
+            return msg->data.auth.event;
+        default:
+            return NULL;
+    }
+}
+
+const char* nostr_client_msg_get_subscription_id(const nostr_client_msg_t* msg)
+{
+    if (!msg) return NULL;
+
+    switch (msg->type) {
+        case NOSTR_CLIENT_MSG_REQ:
+            return msg->data.req.subscription_id;
+        case NOSTR_CLIENT_MSG_CLOSE:
+            return msg->data.close.subscription_id;
+        default:
+            return NULL;
+    }
+}
+
+const nostr_filter_t* nostr_client_msg_get_filters(const nostr_client_msg_t* msg, size_t* out_count)
+{
+    if (!msg || msg->type != NOSTR_CLIENT_MSG_REQ) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+    if (out_count) *out_count = msg->data.req.filters_count;
+    return msg->data.req.filters;
+}
+
+/* ============================================================================
+ * Event Accessor Functions
+ * ============================================================================ */
+
+const uint8_t* nostr_event_get_id(const nostr_event* event)
+{
+    if (!event) return NULL;
+    return event->id;
+}
+
+const uint8_t* nostr_event_get_pubkey(const nostr_event* event)
+{
+    if (!event) return NULL;
+    return event->pubkey.data;
+}
+
+void nostr_event_get_id_hex(const nostr_event* event, char* out)
+{
+    if (!event || !out) return;
+    for (int i = 0; i < NOSTR_ID_SIZE; i++) {
+        sprintf(out + i * 2, "%02x", event->id[i]);
+    }
+    out[64] = '\0';
+}
+
+void nostr_event_get_pubkey_hex(const nostr_event* event, char* out)
+{
+    if (!event || !out) return;
+    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
+        sprintf(out + i * 2, "%02x", event->pubkey.data[i]);
+    }
+    out[64] = '\0';
+}
+
+size_t nostr_event_get_tag_count(const nostr_event* event)
+{
+    if (!event) return 0;
+    return event->tags_count;
+}
+
+const nostr_tag* nostr_event_get_tag(const nostr_event* event, size_t index)
+{
+    if (!event || !event->tags || index >= event->tags_count) {
+        return NULL;
+    }
+    return &event->tags[index];
+}
+
+const char* nostr_tag_get_name(const nostr_tag* tag)
+{
+    if (!tag || tag->count == 0 || !tag->values) {
+        return NULL;
+    }
+    return tag->values[0];
+}
+
+size_t nostr_tag_get_value_count(const nostr_tag* tag)
+{
+    if (!tag) return 0;
+    return tag->count;
+}
+
+const char* nostr_tag_get_value(const nostr_tag* tag, size_t index)
+{
+    if (!tag || !tag->values || index >= tag->count) {
+        return NULL;
+    }
+    return tag->values[index];
+}
+
+const nostr_tag* nostr_event_find_tag(const nostr_event* event, const char* tag_name)
+{
+    if (!event || !tag_name || !event->tags) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 1 &&
+            event->tags[i].values[0] &&
+            strcmp(event->tags[i].values[0], tag_name) == 0) {
+            return &event->tags[i];
+        }
+    }
+    return NULL;
+}
+
+bool nostr_event_is_deletion(const nostr_event* event)
+{
+    if (!event) return false;
+    return event->kind == 5;
+}
+
+/* ============================================================================
+ * Binary Tag Extractors
+ * ============================================================================ */
+
+static nostr_relay_error_t hex_string_to_bytes(const char* hex, uint8_t* out, size_t out_size)
+{
+    if (!hex || !out) return NOSTR_RELAY_ERR_INVALID_ID;
+
+    size_t hex_len = strlen(hex);
+    if (hex_len != out_size * 2) return NOSTR_RELAY_ERR_INVALID_ID;
+
+    for (size_t i = 0; i < out_size; i++) {
+        unsigned int byte;
+        if (sscanf(hex + i * 2, "%2x", &byte) != 1) {
+            return NOSTR_RELAY_ERR_INVALID_ID;
+        }
+        out[i] = (uint8_t)byte;
+    }
+    return NOSTR_RELAY_OK;
+}
+
+uint8_t (*nostr_event_get_e_tags_binary(const nostr_event* event, size_t* out_count))[32]
+{
+    if (!event || !out_count) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+
+    // Count valid e-tags
+    size_t count = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 &&
+            event->tags[i].values[0] &&
+            strcmp(event->tags[i].values[0], "e") == 0 &&
+            event->tags[i].values[1] &&
+            nostr_validate_hex64(event->tags[i].values[1])) {
+            count++;
+        }
+    }
+
+    if (count == 0) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    // Allocate result array
+    uint8_t (*result)[32] = malloc(count * 32);
+    if (!result) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    // Convert hex strings to binary
+    size_t idx = 0;
+    for (size_t i = 0; i < event->tags_count && idx < count; i++) {
+        if (event->tags[i].count >= 2 &&
+            event->tags[i].values[0] &&
+            strcmp(event->tags[i].values[0], "e") == 0 &&
+            event->tags[i].values[1] &&
+            nostr_validate_hex64(event->tags[i].values[1])) {
+            if (hex_string_to_bytes(event->tags[i].values[1], result[idx], 32) == NOSTR_RELAY_OK) {
+                idx++;
+            }
+        }
+    }
+
+    *out_count = idx;
+    return result;
+}
+
+uint8_t (*nostr_event_get_p_tags_binary(const nostr_event* event, size_t* out_count))[32]
+{
+    if (!event || !out_count) {
+        if (out_count) *out_count = 0;
+        return NULL;
+    }
+
+    // Count valid p-tags
+    size_t count = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 &&
+            event->tags[i].values[0] &&
+            strcmp(event->tags[i].values[0], "p") == 0 &&
+            event->tags[i].values[1] &&
+            nostr_validate_hex64(event->tags[i].values[1])) {
+            count++;
+        }
+    }
+
+    if (count == 0) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    // Allocate result array
+    uint8_t (*result)[32] = malloc(count * 32);
+    if (!result) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    // Convert hex strings to binary
+    size_t idx = 0;
+    for (size_t i = 0; i < event->tags_count && idx < count; i++) {
+        if (event->tags[i].count >= 2 &&
+            event->tags[i].values[0] &&
+            strcmp(event->tags[i].values[0], "p") == 0 &&
+            event->tags[i].values[1] &&
+            nostr_validate_hex64(event->tags[i].values[1])) {
+            if (hex_string_to_bytes(event->tags[i].values[1], result[idx], 32) == NOSTR_RELAY_OK) {
+                idx++;
+            }
+        }
+    }
+
+    *out_count = idx;
+    return result;
+}
+
+/* ============================================================================
+ * Utility Functions
+ * ============================================================================ */
+
+nostr_relay_error_t nostr_hex_to_bytes(const char* hex, size_t hex_len, uint8_t* out, size_t out_size)
+{
+    if (!hex || !out) {
+        return NOSTR_RELAY_ERR_INVALID_ID;
+    }
+
+    if (hex_len % 2 != 0) {
+        return NOSTR_RELAY_ERR_INVALID_ID;
+    }
+
+    size_t bytes_needed = hex_len / 2;
+    if (bytes_needed > out_size) {
+        return NOSTR_RELAY_ERR_BUFFER_TOO_SMALL;
+    }
+
+    for (size_t i = 0; i < bytes_needed; i++) {
+        char c1 = hex[i * 2];
+        char c2 = hex[i * 2 + 1];
+
+        unsigned int val1, val2;
+
+        if (c1 >= '0' && c1 <= '9') val1 = c1 - '0';
+        else if (c1 >= 'a' && c1 <= 'f') val1 = c1 - 'a' + 10;
+        else if (c1 >= 'A' && c1 <= 'F') val1 = c1 - 'A' + 10;
+        else return NOSTR_RELAY_ERR_INVALID_ID;
+
+        if (c2 >= '0' && c2 <= '9') val2 = c2 - '0';
+        else if (c2 >= 'a' && c2 <= 'f') val2 = c2 - 'a' + 10;
+        else if (c2 >= 'A' && c2 <= 'F') val2 = c2 - 'A' + 10;
+        else return NOSTR_RELAY_ERR_INVALID_ID;
+
+        out[i] = (uint8_t)((val1 << 4) | val2);
+    }
+
+    return NOSTR_RELAY_OK;
+}
+
+void nostr_bytes_to_hex(const uint8_t* bytes, size_t bytes_len, char* out)
+{
+    if (!bytes || !out) return;
+
+    static const char hex_chars[] = "0123456789abcdef";
+    for (size_t i = 0; i < bytes_len; i++) {
+        out[i * 2] = hex_chars[(bytes[i] >> 4) & 0x0f];
+        out[i * 2 + 1] = hex_chars[bytes[i] & 0x0f];
+    }
+    out[bytes_len * 2] = '\0';
+}
+
+void nostr_free(void* ptr)
+{
+    free(ptr);
+}
+
+void nostr_free_strings(char** strings, size_t count)
+{
+    if (!strings) return;
+
+    for (size_t i = 0; i < count; i++) {
+        free(strings[i]);
+    }
+    free(strings);
+}
+
+const char* nostr_version(void)
+{
+    return "0.1.1";
+}
