@@ -754,6 +754,229 @@ const char** nostr_filter_get_tag_values(const nostr_filter_t* filter,
 
 bool nostr_filter_has_tag_filters(const nostr_filter_t* filter);
 
+/* ============================================================================
+ * Filter Accessor Functions
+ * ============================================================================ */
+
+/**
+ * @brief Get IDs filter array (hex strings)
+ * @param filter Filter to query
+ * @param out_count Output: number of IDs
+ * @return Pointer to IDs array, or NULL if not specified
+ */
+const char** nostr_filter_get_ids(const nostr_filter_t* filter, size_t* out_count);
+
+/**
+ * @brief Get authors filter array (hex strings)
+ * @param filter Filter to query
+ * @param out_count Output: number of authors
+ * @return Pointer to authors array, or NULL if not specified
+ */
+const char** nostr_filter_get_authors(const nostr_filter_t* filter, size_t* out_count);
+
+/**
+ * @brief Get kinds filter array
+ * @param filter Filter to query
+ * @param out_count Output: number of kinds
+ * @return Pointer to kinds array, or NULL if not specified
+ */
+const int32_t* nostr_filter_get_kinds(const nostr_filter_t* filter, size_t* out_count);
+
+/**
+ * @brief Get since timestamp
+ * @param filter Filter to query
+ * @return Since timestamp (0 if not specified)
+ */
+int64_t nostr_filter_get_since(const nostr_filter_t* filter);
+
+/**
+ * @brief Get until timestamp
+ * @param filter Filter to query
+ * @return Until timestamp (0 if not specified)
+ */
+int64_t nostr_filter_get_until(const nostr_filter_t* filter);
+
+/**
+ * @brief Get limit
+ * @param filter Filter to query
+ * @return Limit (0 if not specified)
+ */
+int32_t nostr_filter_get_limit(const nostr_filter_t* filter);
+
+/* ============================================================================
+ * Client Message Accessor Functions
+ * ============================================================================ */
+
+/**
+ * @brief Get client message type
+ * @param msg Message to query
+ * @return Message type
+ */
+nostr_client_msg_type_t nostr_client_msg_get_type(const nostr_client_msg_t* msg);
+
+/**
+ * @brief Get event from EVENT or AUTH message
+ * @param msg Message to query
+ * @return Pointer to event (valid until msg freed), or NULL
+ */
+const nostr_event* nostr_client_msg_get_event(const nostr_client_msg_t* msg);
+
+/**
+ * @brief Get subscription ID from REQ or CLOSE message
+ * @param msg Message to query
+ * @return Pointer to subscription ID string, or NULL
+ */
+const char* nostr_client_msg_get_subscription_id(const nostr_client_msg_t* msg);
+
+/**
+ * @brief Get filters from REQ message
+ * @param msg Message to query
+ * @param out_count Output: number of filters
+ * @return Pointer to filters array, or NULL
+ */
+const nostr_filter_t* nostr_client_msg_get_filters(const nostr_client_msg_t* msg, size_t* out_count);
+
+/* ============================================================================
+ * Event Accessor Functions
+ * ============================================================================ */
+
+/**
+ * @brief Get binary event ID (32 bytes)
+ * @param event Event to query
+ * @return Pointer to 32-byte ID array
+ */
+const uint8_t* nostr_event_get_id(const nostr_event* event);
+
+/**
+ * @brief Get binary pubkey (32 bytes)
+ * @param event Event to query
+ * @return Pointer to 32-byte pubkey array
+ */
+const uint8_t* nostr_event_get_pubkey(const nostr_event* event);
+
+/**
+ * @brief Get event ID as hex string
+ * @param event Event to query
+ * @param out Buffer of at least 65 bytes
+ */
+void nostr_event_get_id_hex(const nostr_event* event, char* out);
+
+/**
+ * @brief Get pubkey as hex string
+ * @param event Event to query
+ * @param out Buffer of at least 65 bytes
+ */
+void nostr_event_get_pubkey_hex(const nostr_event* event, char* out);
+
+/**
+ * @brief Get number of tags
+ * @param event Event to query
+ * @return Number of tags
+ */
+size_t nostr_event_get_tag_count(const nostr_event* event);
+
+/**
+ * @brief Get tag at index
+ * @param event Event to query
+ * @param index Tag index
+ * @return Pointer to tag, or NULL if out of bounds
+ */
+const nostr_tag* nostr_event_get_tag(const nostr_event* event, size_t index);
+
+/**
+ * @brief Get tag name (first element)
+ * @param tag Tag to query
+ * @return Tag name string, or NULL
+ */
+const char* nostr_tag_get_name(const nostr_tag* tag);
+
+/**
+ * @brief Get number of values in tag (including name)
+ * @param tag Tag to query
+ * @return Number of values
+ */
+size_t nostr_tag_get_value_count(const nostr_tag* tag);
+
+/**
+ * @brief Get tag value at index
+ * @param tag Tag to query
+ * @param index Value index (0 = name, 1+ = values)
+ * @return Value string, or NULL if out of bounds
+ */
+const char* nostr_tag_get_value(const nostr_tag* tag, size_t index);
+
+/**
+ * @brief Find first tag with given name
+ * @param event Event to search
+ * @param tag_name Tag name to find
+ * @return Pointer to tag, or NULL if not found
+ */
+const nostr_tag* nostr_event_find_tag(const nostr_event* event, const char* tag_name);
+
+/**
+ * @brief Check if event is a deletion request (kind 5)
+ * @param event Event to check
+ * @return true if kind 5, false otherwise
+ */
+bool nostr_event_is_deletion(const nostr_event* event);
+
+/**
+ * @brief Get all e-tag values as binary IDs
+ * @param event Event to query
+ * @param out_count Output: number of IDs found
+ * @return Newly allocated array of 32-byte IDs, caller must free with nostr_free()
+ */
+uint8_t (*nostr_event_get_e_tags_binary(const nostr_event* event, size_t* out_count))[32];
+
+/**
+ * @brief Get all p-tag values as binary pubkeys
+ * @param event Event to query
+ * @param out_count Output: number of pubkeys found
+ * @return Newly allocated array of 32-byte pubkeys, caller must free with nostr_free()
+ */
+uint8_t (*nostr_event_get_p_tags_binary(const nostr_event* event, size_t* out_count))[32];
+
+/* ============================================================================
+ * Utility Functions
+ * ============================================================================ */
+
+/**
+ * @brief Convert hex string to bytes
+ * @param hex Input hex string
+ * @param hex_len Length of hex string
+ * @param out Output byte buffer
+ * @param out_size Size of output buffer
+ * @return NOSTR_RELAY_OK on success, error code otherwise
+ */
+nostr_relay_error_t nostr_hex_to_bytes(const char* hex, size_t hex_len, uint8_t* out, size_t out_size);
+
+/**
+ * @brief Convert bytes to hex string
+ * @param bytes Input bytes
+ * @param bytes_len Number of bytes
+ * @param out Output hex string buffer (must be at least bytes_len * 2 + 1)
+ */
+void nostr_bytes_to_hex(const uint8_t* bytes, size_t bytes_len, char* out);
+
+/**
+ * @brief Free memory allocated by libnostr-c relay functions
+ * @param ptr Pointer to free
+ */
+void nostr_free(void* ptr);
+
+/**
+ * @brief Free string array allocated by libnostr-c
+ * @param strings Array of strings
+ * @param count Number of strings
+ */
+void nostr_free_strings(char** strings, size_t count);
+
+/**
+ * @brief Get library version string
+ * @return Version string (e.g., "0.1.1")
+ */
+const char* nostr_version(void);
+
 #ifdef __cplusplus
 }
 #endif
