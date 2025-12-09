@@ -613,6 +613,147 @@ const char* nostr_relay_error_string(nostr_relay_error_t error);
  */
 size_t nostr_validation_error_format(const nostr_validation_result_t* result, char* buf, size_t buf_size);
 
+/* ============================================================================
+ * NIP-11 Relay Information Document
+ * ============================================================================ */
+
+#define NOSTR_DEFAULT_MAX_MESSAGE_LENGTH    (128 * 1024)
+#define NOSTR_DEFAULT_MAX_SUBSCRIPTIONS     20
+#define NOSTR_DEFAULT_MAX_FILTERS           10
+#define NOSTR_DEFAULT_MAX_LIMIT             5000
+#define NOSTR_DEFAULT_MAX_SUBID_LENGTH      64
+#define NOSTR_DEFAULT_MAX_EVENT_TAGS        2000
+#define NOSTR_DEFAULT_MAX_CONTENT_LENGTH    (64 * 1024)
+#define NOSTR_DEFAULT_DEFAULT_LIMIT         500
+
+typedef struct {
+    int32_t max_message_length;
+    int32_t max_subscriptions;
+    int32_t max_filters;
+    int32_t max_limit;
+    int32_t max_subid_length;
+    int32_t max_event_tags;
+    int32_t max_content_length;
+    int32_t min_pow_difficulty;
+    bool auth_required;
+    bool payment_required;
+    bool restricted_writes;
+    int64_t created_at_lower_limit;
+    int64_t created_at_upper_limit;
+    int32_t default_limit;
+} nostr_relay_limitation_t;
+
+typedef struct {
+    int32_t* kinds;
+    size_t kinds_count;
+    int64_t time;
+    int32_t count;
+} nostr_relay_retention_t;
+
+typedef struct {
+    uint64_t amount;
+    const char* unit;
+    uint32_t period;
+    int32_t* kinds;
+    size_t kinds_count;
+} nostr_relay_fee_t;
+
+typedef struct {
+    nostr_relay_fee_t* admission;
+    size_t admission_count;
+    nostr_relay_fee_t* subscription;
+    size_t subscription_count;
+    nostr_relay_fee_t* publication;
+    size_t publication_count;
+} nostr_relay_fees_t;
+
+typedef struct {
+    const char* name;
+    const char* description;
+    const char* banner;
+    const char* icon;
+    const char* pubkey;
+    const char* self_pubkey;
+    const char* contact;
+    int32_t* supported_nips;
+    size_t supported_nips_count;
+    const char* software;
+    const char* version;
+    const char* privacy_policy;
+    const char* terms_of_service;
+    nostr_relay_limitation_t limitation;
+    nostr_relay_retention_t* retention;
+    size_t retention_count;
+    const char** relay_countries;
+    size_t relay_countries_count;
+    const char** language_tags;
+    size_t language_tags_count;
+    const char** tags;
+    size_t tags_count;
+    const char* posting_policy;
+    const char* payments_url;
+    nostr_relay_fees_t fees;
+} nostr_relay_info_t;
+
+void nostr_relay_info_init(nostr_relay_info_t* info);
+
+void nostr_relay_limitation_init(nostr_relay_limitation_t* limitation);
+
+nostr_relay_error_t nostr_relay_info_serialize(const nostr_relay_info_t* info,
+                                               char* buf,
+                                               size_t buf_size,
+                                               size_t* out_len);
+
+nostr_relay_error_t nostr_relay_limitation_serialize(const nostr_relay_limitation_t* limitation,
+                                                     char* buf,
+                                                     size_t buf_size,
+                                                     size_t* out_len);
+
+nostr_relay_error_t nostr_relay_info_set_nips(nostr_relay_info_t* info,
+                                              int32_t* nips,
+                                              size_t count);
+
+nostr_relay_error_t nostr_relay_info_add_nip(nostr_relay_info_t* info, int32_t nip);
+
+void nostr_relay_info_free(nostr_relay_info_t* info);
+
+/* ============================================================================
+ * Tag Iteration for Indexing
+ * ============================================================================ */
+
+typedef struct {
+    const nostr_event* event;
+    size_t current_index;
+} nostr_tag_iterator_t;
+
+typedef struct {
+    const char* name;
+    const char** values;
+    size_t values_count;
+} nostr_tag_info_t;
+
+void nostr_tag_iterator_init(nostr_tag_iterator_t* iter, const nostr_event* event);
+
+const char** nostr_tag_iterator_next(nostr_tag_iterator_t* iter, size_t* tag_len);
+
+bool nostr_tag_iterator_next_info(nostr_tag_iterator_t* iter, nostr_tag_info_t* tag);
+
+bool nostr_tag_is_indexable(const char* tag_name);
+
+/* ============================================================================
+ * Filter Tag Accessors for Query Planning
+ * ============================================================================ */
+
+const char** nostr_filter_get_e_tags(const nostr_filter_t* filter, size_t* count);
+
+const char** nostr_filter_get_p_tags(const nostr_filter_t* filter, size_t* count);
+
+const char** nostr_filter_get_tag_values(const nostr_filter_t* filter,
+                                         char tag_name,
+                                         size_t* count);
+
+bool nostr_filter_has_tag_filters(const nostr_filter_t* filter);
+
 #ifdef __cplusplus
 }
 #endif
