@@ -1,3 +1,7 @@
+# Zig build artifacts
+.zig-cache/
+zig-out/
+
 # CMake build artifacts
 build/
 CMakeCache.txt

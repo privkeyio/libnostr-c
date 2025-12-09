@@ -1,0 +1,11 @@
+.{
+    .name = .libnostr,
+    .version = "0.1.1",
+    .fingerprint = 0x5fdc996820f59181,
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "include",
+    },
+}

@@ -1,0 +1,60 @@
+#ifndef NOSTR_FEATURES_H
+#define NOSTR_FEATURES_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef NOSTR_FEATURE_STD
+#define NOSTR_FEATURE_STD 1
+#endif
+#ifndef NOSTR_FEATURE_EVENTS
+#define NOSTR_FEATURE_EVENTS 1
+#endif
+#ifndef NOSTR_FEATURE_KEYS
+#define NOSTR_FEATURE_KEYS 1
+#endif
+#ifndef NOSTR_FEATURE_ENCODING
+#define NOSTR_FEATURE_ENCODING 1
+#endif
+#ifndef NOSTR_FEATURE_NIP13
+#define NOSTR_FEATURE_NIP13
+#endif
+#ifndef NOSTR_FEATURE_NIP57
+#define NOSTR_FEATURE_NIP57
+#endif
+#ifndef NOSTR_FEATURE_RELAY_PROTOCOL
+#define NOSTR_FEATURE_RELAY_PROTOCOL
+#endif
+#ifndef NOSTR_FEATURE_JSON_ENHANCED
+#define NOSTR_FEATURE_JSON_ENHANCED
+#endif
+#ifndef NOSTR_FEATURE_THREADING
+#define NOSTR_FEATURE_THREADING
+#endif
+#ifndef NOSTR_FEATURE_CRYPTO_SECP256K1
+#define NOSTR_FEATURE_CRYPTO_SECP256K1
+#endif
+#ifndef HAVE_SECP256K1
+#define HAVE_SECP256K1
+#endif
+#ifndef HAVE_CJSON
+#define HAVE_CJSON
+#endif
+#ifndef HAVE_SCHNORRSIG_SIGN32
+#define HAVE_SCHNORRSIG_SIGN32
+#endif
+
+int nostr_feature_nip_supported(int nip_number);
+int nostr_feature_relay_available(void);
+int nostr_feature_hd_keys_available(void);
+int nostr_feature_json_enhanced_available(void);
+int nostr_feature_relay_protocol_available(void);
+const char* nostr_feature_list_enabled(void);
+const char* nostr_feature_crypto_backend_info(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
