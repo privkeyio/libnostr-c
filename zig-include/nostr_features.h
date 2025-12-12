@@ -26,9 +26,6 @@ extern "C" {
 #ifndef NOSTR_FEATURE_RELAY_PROTOCOL
 #define NOSTR_FEATURE_RELAY_PROTOCOL
 #endif
-#ifndef NOSTR_FEATURE_JSON_ENHANCED
-#define NOSTR_FEATURE_JSON_ENHANCED
-#endif
 #ifndef NOSTR_FEATURE_THREADING
 #define NOSTR_FEATURE_THREADING
 #endif
@@ -38,12 +35,13 @@ extern "C" {
 #ifndef HAVE_SECP256K1
 #define HAVE_SECP256K1
 #endif
-#ifndef HAVE_CJSON
-#define HAVE_CJSON
-#endif
 #ifndef HAVE_SCHNORRSIG_SIGN32
 #define HAVE_SCHNORRSIG_SIGN32
 #endif
+
+/* cJSON support - only define if actually available */
+/* #define NOSTR_FEATURE_JSON_ENHANCED */
+/* #define HAVE_CJSON */
 
 int nostr_feature_nip_supported(int nip_number);
 int nostr_feature_relay_available(void);

@@ -32,6 +32,7 @@ pub fn build(b: *std.Build) void {
     });
 
     mod.addIncludePath(b.path("include"));
+    mod.addIncludePath(b.path("zig-include"));
     mod.linkSystemLibrary("crypto", .{});
     mod.linkSystemLibrary("cjson", .{});
     mod.linkSystemLibrary("secp256k1", .{});
