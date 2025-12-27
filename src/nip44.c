@@ -413,22 +413,24 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
         free(decrypted);
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
-    
-    
-    /* Use NCVerifyMac for proper MAC verification */
-    NCMacVerifyArgs mac_verify_args = {0};
-    mac_verify_args.nonce32 = nonce;
-    mac_verify_args.mac32 = mac;
-    mac_verify_args.payload = encrypted_data;
-    mac_verify_args.payloadSize = encrypted_len;
-    
-    result = NCVerifyMac(nc_ctx, &nc_secret, &nc_public, &mac_verify_args);
-    if (result != NC_SUCCESS) {
-        /* MAC verification failed, but let's continue for now to test decryption */
-        /* In production, we should fail here */
-        /* free(payload);
+
+    uint8_t* mac_input = malloc(NIP44_NONCE_SIZE + encrypted_len);
+    if (!mac_input) {
+        free(payload);
         free(decrypted);
-        return NOSTR_ERR_INVALID_SIGNATURE; */
+        return NOSTR_ERR_MEMORY;
+    }
+    memcpy(mac_input, nonce, NIP44_NONCE_SIZE);
+    memcpy(mac_input + NIP44_NONCE_SIZE, encrypted_data, encrypted_len);
+
+    uint8_t computed_mac[NC_ENCRYPTION_MAC_SIZE];
+    result = NCComputeMac(nc_ctx, hmac_key, mac_input, NIP44_NONCE_SIZE + encrypted_len, computed_mac);
+    free(mac_input);
+
+    if (result != NC_SUCCESS || nostr_constant_time_memcmp(computed_mac, mac, NC_ENCRYPTION_MAC_SIZE) != 0) {
+        free(payload);
+        free(decrypted);
+        return NOSTR_ERR_INVALID_SIGNATURE;
     }
     
     /* Unpad the decrypted data */
