@@ -17,8 +17,17 @@
 #include <secp256k1_extrakeys.h>
 #include <secp256k1_ecdh.h>
 #endif
+#ifdef HAVE_MBEDTLS
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/sha256.h>
+#ifdef ESP_PLATFORM
+#include <esp_random.h>
+#endif
+#else
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#endif
 
 #ifdef HAVE_NOSCRYPT
 NCContext* nc_ctx = NULL;
@@ -27,10 +36,11 @@ NCContext* nc_ctx = NULL;
 secp256k1_context* secp256k1_ctx = NULL;
 #endif
 static int ctx_initialized = 0;
+
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 static CRITICAL_SECTION ctx_init_lock;
-static int ctx_init_lock_initialized = 0;
+static volatile int ctx_init_lock_initialized = 0;
 #else
 static pthread_mutex_t ctx_init_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
@@ -60,6 +70,40 @@ static void unlock_ctx_init(void) {
 #endif
 }
 
+#ifdef HAVE_MBEDTLS
+#ifndef ESP_PLATFORM
+static mbedtls_entropy_context rng_entropy;
+static mbedtls_ctr_drbg_context rng_ctr_drbg;
+static volatile int rng_initialized = 0;
+#endif
+#endif
+
+static int nostr_random_bytes(uint8_t *buf, size_t len) {
+#ifdef HAVE_MBEDTLS
+#ifdef ESP_PLATFORM
+    esp_fill_random(buf, len);
+    return 1;
+#else
+    if (!rng_initialized) {
+        lock_ctx_init();
+        if (!rng_initialized) {
+            mbedtls_entropy_init(&rng_entropy);
+            mbedtls_ctr_drbg_init(&rng_ctr_drbg);
+            if (mbedtls_ctr_drbg_seed(&rng_ctr_drbg, mbedtls_entropy_func, &rng_entropy, NULL, 0) != 0) {
+                unlock_ctx_init();
+                return 0;
+            }
+            rng_initialized = 1;
+        }
+        unlock_ctx_init();
+    }
+    return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
+#endif
+#else
+    return RAND_bytes(buf, len);
+#endif
+}
+
 nostr_error_t nostr_init(void)
 {
     lock_ctx_init();
@@ -79,7 +123,7 @@ nostr_error_t nostr_init(void)
     
     // Generate entropy for initialization
     uint8_t entropy[NC_CONTEXT_ENTROPY_SIZE];
-    if (RAND_bytes(entropy, NC_CONTEXT_ENTROPY_SIZE) != 1) {
+    if (nostr_random_bytes(entropy, NC_CONTEXT_ENTROPY_SIZE) != 1) {
         unlock_ctx_init();
         return NOSTR_ERR_MEMORY;
     }
@@ -147,7 +191,7 @@ nostr_error_t nostr_key_generate(nostr_privkey* privkey, nostr_key* pubkey)
     NCPublicKey nc_public;
     
     while (attempts < 128) {
-        if (RAND_bytes(nc_secret.key, NC_SEC_KEY_SIZE) != 1) {
+        if (nostr_random_bytes(nc_secret.key, NC_SEC_KEY_SIZE) != 1) {
             return NOSTR_ERR_MEMORY;
         }
 
@@ -179,7 +223,7 @@ nostr_error_t nostr_key_generate(nostr_privkey* privkey, nostr_key* pubkey)
     // Generate secure random private key
     int attempts = 0;
     while (attempts < 128) {
-        if (RAND_bytes(privkey->data, NOSTR_PRIVKEY_SIZE) != 1) {
+        if (nostr_random_bytes(privkey->data, NOSTR_PRIVKEY_SIZE) != 1) {
             return NOSTR_ERR_MEMORY;
         }
 

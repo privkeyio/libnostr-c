@@ -1,0 +1,14 @@
+version: "0.1.1"
+description: "Lightweight C library for the Nostr protocol"
+url: "https://github.com/privkeyio/libnostr-c"
+repository: "https://github.com/privkeyio/libnostr-c.git"
+license: "MIT"
+targets:
+  - esp32
+  - esp32s2
+  - esp32s3
+  - esp32c3
+  - esp32c6
+dependencies:
+  idf:
+    version: ">=5.0"

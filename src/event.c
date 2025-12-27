@@ -4,8 +4,17 @@
 #include <stdio.h>
 #include <time.h>
 #include <inttypes.h>
+#ifdef HAVE_MBEDTLS
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/sha256.h>
+#ifdef ESP_PLATFORM
+#include <esp_random.h>
+#endif
+#else
 #include <openssl/sha.h>
 #include <openssl/rand.h>
+#endif
 #ifdef HAVE_NOSCRYPT
 #include <noscrypt/noscrypt.h>
 #endif
@@ -26,6 +35,38 @@ extern NCContext* nc_ctx;
 extern secp256k1_context* secp256k1_ctx;
 #endif
 extern nostr_error_t nostr_init(void);
+
+static int event_random_bytes(uint8_t *buf, size_t len) {
+#ifdef HAVE_MBEDTLS
+#ifdef ESP_PLATFORM
+    esp_fill_random(buf, len);
+    return 1;
+#else
+    static mbedtls_entropy_context entropy;
+    static mbedtls_ctr_drbg_context ctr_drbg;
+    static int rng_initialized = 0;
+    if (!rng_initialized) {
+        mbedtls_entropy_init(&entropy);
+        mbedtls_ctr_drbg_init(&ctr_drbg);
+        if (mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0) != 0) {
+            return 0;
+        }
+        rng_initialized = 1;
+    }
+    return mbedtls_ctr_drbg_random(&ctr_drbg, buf, len) == 0 ? 1 : 0;
+#endif
+#else
+    return RAND_bytes(buf, len);
+#endif
+}
+
+static void event_sha256(const uint8_t *data, size_t len, uint8_t *hash) {
+#ifdef HAVE_MBEDTLS
+    mbedtls_sha256(data, len, hash, 0);
+#else
+    SHA256(data, len, hash);
+#endif
+}
 
 static nostr_error_t tag_arena_create(nostr_tag_arena** arena, size_t initial_capacity)
 {
@@ -325,8 +366,8 @@ nostr_error_t nostr_event_compute_id(nostr_event* event)
         return NOSTR_ERR_MEMORY;
     }
 
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)serialized, strlen(serialized), hash);
+    unsigned char hash[32];
+    event_sha256((unsigned char*)serialized, strlen(serialized), hash);
     memcpy(event->id, hash, NOSTR_ID_SIZE);
 
     free(serialized);
@@ -567,7 +608,7 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
     // Sign the event ID using noscrypt
     // Generate secure random for signature
     uint8_t random32[32];
-    if (RAND_bytes(random32, 32) != 1) {
+    if (event_random_bytes(random32, 32) != 1) {
         memset(&nc_secret, 0, sizeof(nc_secret));
         return NOSTR_ERR_MEMORY;
     }
@@ -613,7 +654,7 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
 
     // Generate auxiliary randomness for BIP-340
     unsigned char aux_rand[32];
-    if (RAND_bytes(aux_rand, 32) != 1) {
+    if (event_random_bytes(aux_rand, 32) != 1) {
         return NOSTR_ERR_MEMORY;
     }
 
