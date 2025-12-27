@@ -76,7 +76,7 @@ libnostr-c supports modular compilation - build only what you need:
 - Fallback to secp256k1 for basic operations
 
 ## License
-The software in this repository is licensed under the GNU LGPL version 2.1 (or any later version). See the [LICENSE](LICENSE) file for details.
+The software in this repository is licensed under MIT. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 This project is powered by [noscrypt](https://github.com/VnUgE/noscrypt) for high-performance cryptographic operations and NIP-44 encryption.
