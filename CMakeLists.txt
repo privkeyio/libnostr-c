@@ -1,4 +1,56 @@
 cmake_minimum_required(VERSION 3.16)
+
+if(ESP_PLATFORM)
+    set(NOSTR_ESP_SOURCES
+        "src/event.c"
+        "src/key.c"
+        "src/utils.c"
+        "src/config.c"
+        "src/features.c"
+        "src/bech32.c"
+        "src/nip44.c"
+    )
+
+    set(NOSTR_ESP_REQUIRES mbedtls noscrypt)
+    set(NOSTR_ESP_PRIV_REQUIRES esp_system)
+
+    if(CONFIG_NOSTR_JSON_SUPPORT)
+        list(APPEND NOSTR_ESP_REQUIRES json)
+    endif()
+
+    idf_component_register(
+        SRCS ${NOSTR_ESP_SOURCES}
+        INCLUDE_DIRS "include" "${CMAKE_CURRENT_BINARY_DIR}/include"
+        REQUIRES ${NOSTR_ESP_REQUIRES}
+        PRIV_REQUIRES ${NOSTR_ESP_PRIV_REQUIRES}
+    )
+
+    set(HAVE_MBEDTLS 1)
+    set(NOSTR_FEATURE_ENCODING 1)
+    set(NOSTR_FEATURE_THREADING 0)
+    set(NOSTR_FEATURE_NIP13 0)
+    set(NOSTR_FEATURE_NIP57 0)
+    set(NOSTR_FEATURE_RELAY 0)
+    set(NOSTR_FEATURE_RELAY_PROTOCOL 0)
+    set(NOSTR_FEATURE_HD_KEYS 0)
+    set(NOSTR_FEATURE_JSON_ENHANCED 0)
+
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC
+        HAVE_MBEDTLS=1
+        HAVE_NOSCRYPT=1
+        NOSTR_FEATURE_ENCODING=1
+        NOSTR_FEATURE_THREADING=0
+    )
+
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/nostr_features.h.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/include/nostr_features.h"
+        @ONLY
+    )
+
+    return()
+endif()
+
 project(libnostr-c VERSION 0.1.1 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)

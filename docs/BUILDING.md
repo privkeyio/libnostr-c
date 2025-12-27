@@ -122,6 +122,54 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=C:\path\to\vcpkg\scripts\buildsystems\vcpkg.cmak
 cmake --build . --config Release
 ```
 
+### ESP32 Build (ESP-IDF)
+
+libnostr-c can be used as an ESP-IDF component for ESP32, ESP32-S2, ESP32-S3, ESP32-C3, and ESP32-C6.
+
+#### As a Component
+
+Add libnostr-c to your project's `components/` directory:
+
+```bash
+cd your_esp_project/components
+git clone https://github.com/privkeyio/libnostr-c.git
+```
+
+Or add as a git submodule:
+
+```bash
+git submodule add https://github.com/privkeyio/libnostr-c.git components/libnostr-c
+```
+
+#### Build
+
+```bash
+idf.py set-target esp32s3
+idf.py build
+```
+
+#### ESP32 Features
+
+The ESP32 build includes:
+- Core event creation and parsing
+- Key generation and management (using mbedTLS)
+- Bech32 encoding/decoding
+- NIP-44 encryption (requires noscrypt component)
+
+Features disabled on ESP32:
+- Threading (single-threaded only)
+- Relay WebSocket communication (use ESP-IDF's native websocket client)
+- NIP-57 Lightning Zaps
+
+#### NIP-44 on ESP32
+
+For NIP-44 encryption support, add noscrypt as a component:
+
+```bash
+cd components
+git clone https://github.com/VnUgE/noscrypt.git
+```
+
 ## Troubleshooting
 
 ### Missing Dependencies
