@@ -5,10 +5,34 @@
 
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
 #include <noscrypt/noscrypt.h>
+
+#ifdef HAVE_MBEDTLS
+#include <mbedtls/base64.h>
+#include <mbedtls/cipher.h>
+#ifdef ESP_PLATFORM
+#include <esp_random.h>
+#define RAND_bytes(buf, len) (esp_fill_random(buf, len), 1)
+#else
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
+static int RAND_bytes(uint8_t* buf, size_t len) {
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    int ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0);
+    if (ret == 0) ret = mbedtls_ctr_drbg_random(&ctr_drbg, buf, len);
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+    return ret == 0 ? 1 : 0;
+}
+#endif
+#else
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/aes.h>
 #include <openssl/buffer.h>
+#endif
 
 extern NCContext* nc_ctx;
 extern nostr_error_t nostr_init(void);
@@ -120,30 +144,70 @@ static int unpad_plaintext(const uint8_t* padded, size_t padded_len,
     return 0;
 }
 
+#ifdef HAVE_MBEDTLS
+static int base64_encode(const uint8_t* input, size_t input_len, char** output)
+{
+    size_t olen = 0;
+    mbedtls_base64_encode(NULL, 0, &olen, input, input_len);
+
+    *output = malloc(olen + 1);
+    if (!*output) {
+        return -1;
+    }
+
+    if (mbedtls_base64_encode((unsigned char*)*output, olen + 1, &olen, input, input_len) != 0) {
+        free(*output);
+        return -1;
+    }
+
+    (*output)[olen] = '\0';
+    return 0;
+}
+
+static int base64_decode(const char* input, uint8_t** output, size_t* output_len)
+{
+    size_t input_len = strlen(input);
+    size_t olen = 0;
+
+    mbedtls_base64_decode(NULL, 0, &olen, (const unsigned char*)input, input_len);
+
+    *output = malloc(olen);
+    if (!*output) {
+        return -1;
+    }
+
+    if (mbedtls_base64_decode(*output, olen, output_len, (const unsigned char*)input, input_len) != 0) {
+        free(*output);
+        return -1;
+    }
+
+    return 0;
+}
+#else
 static int base64_encode(const uint8_t* input, size_t input_len, char** output)
 {
     BIO* bmem = NULL;
     BIO* b64 = NULL;
     BUF_MEM* bptr = NULL;
-    
+
     b64 = BIO_new(BIO_f_base64());
     bmem = BIO_new(BIO_s_mem());
     b64 = BIO_push(b64, bmem);
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-    
+
     BIO_write(b64, input, input_len);
     BIO_flush(b64);
     BIO_get_mem_ptr(b64, &bptr);
-    
+
     *output = malloc(bptr->length + 1);
     if (!*output) {
         BIO_free_all(b64);
         return -1;
     }
-    
+
     memcpy(*output, bptr->data, bptr->length);
     (*output)[bptr->length] = '\0';
-    
+
     BIO_free_all(b64);
     return 0;
 }
@@ -153,27 +217,28 @@ static int base64_decode(const char* input, uint8_t** output, size_t* output_len
     BIO* b64 = NULL;
     BIO* bmem = NULL;
     size_t input_len = strlen(input);
-    
+
     *output = malloc(input_len);
     if (!*output) {
         return -1;
     }
-    
+
     bmem = BIO_new_mem_buf(input, input_len);
     b64 = BIO_new(BIO_f_base64());
     bmem = BIO_push(b64, bmem);
     BIO_set_flags(bmem, BIO_FLAGS_BASE64_NO_NL);
-    
+
     *output_len = BIO_read(bmem, *output, input_len);
     BIO_free_all(bmem);
-    
+
     if (*output_len <= 0) {
         free(*output);
         return -1;
     }
-    
+
     return 0;
 }
+#endif
 
 nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, 
                                   const char* plaintext, size_t plaintext_len, char** ciphertext)
@@ -458,7 +523,22 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     return NOSTR_OK;
 }
 
-nostr_error_t nostr_nip04_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, 
+#ifdef HAVE_MBEDTLS
+nostr_error_t nostr_nip04_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey,
+                                  const char* plaintext, char** ciphertext)
+{
+    (void)sender_privkey; (void)recipient_pubkey; (void)plaintext; (void)ciphertext;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_nip04_decrypt(const nostr_privkey* recipient_privkey, const nostr_key* sender_pubkey,
+                                  const char* ciphertext, char** plaintext)
+{
+    (void)recipient_privkey; (void)sender_pubkey; (void)ciphertext; (void)plaintext;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+#else
+nostr_error_t nostr_nip04_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey,
                                   const char* plaintext, char** ciphertext)
 {
     uint8_t shared_secret[32];
@@ -470,179 +550,86 @@ nostr_error_t nostr_nip04_encrypt(const nostr_privkey* sender_privkey, const nos
     char* content_base64 = NULL;
     size_t result_len;
     nostr_error_t result = NOSTR_OK;
-    
+
     if (!sender_privkey || !recipient_pubkey || !plaintext || !ciphertext) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     if (nostr_key_ecdh(sender_privkey, recipient_pubkey, shared_secret) != NOSTR_OK) {
         return NOSTR_ERR_INVALID_KEY;
     }
-    
+
     if (RAND_bytes(iv, 16) != 1) {
         result = NOSTR_ERR_MEMORY;
         goto cleanup;
     }
-    
+
     ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
         result = NOSTR_ERR_MEMORY;
         goto cleanup;
     }
-    
+
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, shared_secret, iv) != 1) {
         result = NOSTR_ERR_INVALID_PARAM;
         goto cleanup;
     }
-    
+
     size_t plaintext_len = strlen(plaintext);
     encrypted = malloc(plaintext_len + AES_BLOCK_SIZE);
     if (!encrypted) {
         result = NOSTR_ERR_MEMORY;
         goto cleanup;
     }
-    
+
     if (EVP_EncryptUpdate(ctx, encrypted, &encrypted_len, (const uint8_t*)plaintext, plaintext_len) != 1) {
         result = NOSTR_ERR_INVALID_PARAM;
         goto cleanup;
     }
-    
+
     if (EVP_EncryptFinal_ex(ctx, encrypted + encrypted_len, &final_len) != 1) {
         result = NOSTR_ERR_INVALID_PARAM;
         goto cleanup;
     }
-    
+
     encrypted_len += final_len;
-    
+
     if (base64_encode(encrypted, encrypted_len, &content_base64) != 0) {
         result = NOSTR_ERR_MEMORY;
         goto cleanup;
     }
-    
+
     if (base64_encode(iv, 16, &iv_base64) != 0) {
         result = NOSTR_ERR_MEMORY;
         goto cleanup;
     }
-    
+
     result_len = strlen(content_base64) + strlen(iv_base64) + 5;
     *ciphertext = malloc(result_len);
     if (!*ciphertext) {
         result = NOSTR_ERR_MEMORY;
         goto cleanup;
     }
-    
+
     snprintf(*ciphertext, result_len, "%s?iv=%s", content_base64, iv_base64);
-    
+
 cleanup:
     secure_wipe(shared_secret, sizeof(shared_secret));
     if (ctx) EVP_CIPHER_CTX_free(ctx);
     if (encrypted) free(encrypted);
     if (content_base64) free(content_base64);
     if (iv_base64) free(iv_base64);
-    
+
     return result;
 }
 
 nostr_error_t nostr_nip04_decrypt(const nostr_privkey* recipient_privkey, const nostr_key* sender_pubkey,
                                   const char* ciphertext, char** plaintext)
 {
-    uint8_t shared_secret[32];
-    char* content_part = NULL;
-    char* iv_part = NULL;
-    uint8_t* encrypted_data = NULL;
-    size_t encrypted_len;
-    uint8_t* iv_data = NULL;
-    size_t iv_len;
-    EVP_CIPHER_CTX* ctx = NULL;
-    uint8_t* decrypted = NULL;
-    int decrypted_len = 0, final_len = 0;
-    nostr_error_t result = NOSTR_OK;
-    
-    if (!recipient_privkey || !sender_pubkey || !ciphertext || !plaintext) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
-    char* input_copy = strdup(ciphertext);
-    if (!input_copy) {
-        return NOSTR_ERR_MEMORY;
-    }
-    
-    char* iv_marker = strstr(input_copy, "?iv=");
-    if (!iv_marker) {
-        free(input_copy);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
-    *iv_marker = '\0';
-    content_part = input_copy;
-    iv_part = iv_marker + 4;
-    
-    if (base64_decode(content_part, &encrypted_data, &encrypted_len) != 0) {
-        result = NOSTR_ERR_INVALID_PARAM;
-        goto cleanup;
-    }
-    
-    if (base64_decode(iv_part, &iv_data, &iv_len) != 0 || iv_len != 16) {
-        result = NOSTR_ERR_INVALID_PARAM;
-        goto cleanup;
-    }
-    
-    if (nostr_key_ecdh(recipient_privkey, sender_pubkey, shared_secret) != NOSTR_OK) {
-        result = NOSTR_ERR_INVALID_KEY;
-        goto cleanup;
-    }
-    
-    ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) {
-        result = NOSTR_ERR_MEMORY;
-        goto cleanup;
-    }
-    
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, shared_secret, iv_data) != 1) {
-        result = NOSTR_ERR_INVALID_PARAM;
-        goto cleanup;
-    }
-    
-    decrypted = malloc(encrypted_len + AES_BLOCK_SIZE);
-    if (!decrypted) {
-        result = NOSTR_ERR_MEMORY;
-        goto cleanup;
-    }
-    
-    if (EVP_DecryptUpdate(ctx, decrypted, &decrypted_len, encrypted_data, encrypted_len) != 1) {
-        result = NOSTR_ERR_INVALID_PARAM;
-        goto cleanup;
-    }
-    
-    if (EVP_DecryptFinal_ex(ctx, decrypted + decrypted_len, &final_len) != 1) {
-        result = NOSTR_ERR_INVALID_PARAM;
-        goto cleanup;
-    }
-    
-    decrypted_len += final_len;
-    
-    *plaintext = malloc(decrypted_len + 1);
-    if (!*plaintext) {
-        result = NOSTR_ERR_MEMORY;
-        goto cleanup;
-    }
-    
-    memcpy(*plaintext, decrypted, decrypted_len);
-    (*plaintext)[decrypted_len] = '\0';
-    
-cleanup:
-    secure_wipe(shared_secret, sizeof(shared_secret));
-    if (ctx) EVP_CIPHER_CTX_free(ctx);
-    if (input_copy) free(input_copy);
-    if (encrypted_data) free(encrypted_data);
-    if (iv_data) free(iv_data);
-    if (decrypted) {
-        secure_wipe(decrypted, encrypted_len + AES_BLOCK_SIZE);
-        free(decrypted);
-    }
-    
-    return result;
+    (void)recipient_privkey; (void)sender_pubkey; (void)ciphertext; (void)plaintext;
+    return NOSTR_ERR_NOT_SUPPORTED;
 }
+#endif
 
 #else
 

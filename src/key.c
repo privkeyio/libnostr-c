@@ -78,7 +78,7 @@ static volatile int rng_initialized = 0;
 #endif
 #endif
 
-static int nostr_random_bytes(uint8_t *buf, size_t len) {
+int nostr_random_bytes(uint8_t *buf, size_t len) {
 #ifdef HAVE_MBEDTLS
 #ifdef ESP_PLATFORM
     esp_fill_random(buf, len);
