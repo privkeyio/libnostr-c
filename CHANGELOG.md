@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.2] - 2025-12-27
+
+### Added
+- ESP-IDF component support for ESP32 development
+- mbedtls cryptographic backend support for ESP32 platform
+- Zig build system support
+- NIP-11 relay information document support
+- NIP-09 event deletion support
+- NIP-01 relay-side protocol support
+- Relay accessor functions for improved API ergonomics
+
+### Fixed
+- NIP-44 MAC verification
+- NIP-01 double-escaping in serialize_for_id
+
 ## [0.1.1] - 2025-08-03
 
 ### Initial Release
