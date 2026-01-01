@@ -18,15 +18,25 @@ if(ESP_PLATFORM)
         list(APPEND NOSTR_ESP_REQUIRES json)
     endif()
 
+    idf_component_register(
+        SRCS ${NOSTR_ESP_SOURCES}
+        INCLUDE_DIRS "include"
+        REQUIRES ${NOSTR_ESP_REQUIRES}
+        PRIV_REQUIRES ${NOSTR_ESP_PRIV_REQUIRES}
+    )
+
     idf_build_get_property(build_dir BUILD_DIR)
     file(MAKE_DIRECTORY "${build_dir}/noscrypt")
-    file(GLOB NC_HEADERS "${CMAKE_CURRENT_LIST_DIR}/../noscrypt/include/*.h")
+    idf_component_get_property(nc_include noscrypt INCLUDE_DIRS)
+    list(GET nc_include 0 nc_include_dir)
+    file(GLOB NC_HEADERS "${nc_include_dir}/*.h")
     foreach(header ${NC_HEADERS})
         get_filename_component(header_name ${header} NAME)
         if(NOT EXISTS "${build_dir}/noscrypt/${header_name}")
             file(CREATE_LINK "${header}" "${build_dir}/noscrypt/${header_name}" SYMBOLIC)
         endif()
     endforeach()
+    target_include_directories(${COMPONENT_LIB} PUBLIC "${build_dir}")
 
     set(NOSTR_FEATURE_ENCODING 1)
     set(NOSTR_FEATURE_CRYPTO_NOSCRYPT 1)
@@ -36,13 +46,6 @@ if(ESP_PLATFORM)
         "${CMAKE_CURRENT_LIST_DIR}/include/nostr_features.h.in"
         "${build_dir}/nostr_features.h"
         @ONLY
-    )
-
-    idf_component_register(
-        SRCS ${NOSTR_ESP_SOURCES}
-        INCLUDE_DIRS "include" "${build_dir}"
-        REQUIRES ${NOSTR_ESP_REQUIRES}
-        PRIV_REQUIRES ${NOSTR_ESP_PRIV_REQUIRES}
     )
 
     target_compile_definitions(${COMPONENT_LIB} PUBLIC
