@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
-#include <noscrypt/noscrypt.h>
+#include <noscrypt.h>
 
 #ifdef HAVE_MBEDTLS
 #include <mbedtls/base64.h>

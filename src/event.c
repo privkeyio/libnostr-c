@@ -16,7 +16,7 @@
 #include <openssl/rand.h>
 #endif
 #ifdef HAVE_NOSCRYPT
-#include <noscrypt/noscrypt.h>
+#include <noscrypt.h>
 #endif
 #ifdef HAVE_SECP256K1
 #include <secp256k1.h>

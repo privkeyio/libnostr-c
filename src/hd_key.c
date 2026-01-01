@@ -13,7 +13,7 @@
 extern void secure_wipe(void* data, size_t len);
 
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
-#include <noscrypt/noscrypt.h>
+#include <noscrypt.h>
 extern NCContext* nc_ctx;
 #else
 #include <secp256k1.h>

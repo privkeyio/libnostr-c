@@ -14,7 +14,7 @@
 #endif
 
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
-#include <noscrypt/noscrypt.h>
+#include <noscrypt.h>
 #else
 #include <secp256k1.h>
 #include <secp256k1_extrakeys.h>
