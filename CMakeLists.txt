@@ -28,23 +28,27 @@ if(ESP_PLATFORM)
         endif()
     endforeach()
 
+    set(NOSTR_FEATURE_ENCODING 1)
+    set(NOSTR_FEATURE_CRYPTO_NOSCRYPT 1)
+    set(HAVE_NOSCRYPT 1)
+    set(HAVE_MBEDTLS 1)
+    configure_file(
+        "${CMAKE_CURRENT_LIST_DIR}/include/nostr_features.h.in"
+        "${build_dir}/nostr_features.h"
+        @ONLY
+    )
+
     idf_component_register(
         SRCS ${NOSTR_ESP_SOURCES}
-        INCLUDE_DIRS "include"
+        INCLUDE_DIRS "include" "${build_dir}"
         REQUIRES ${NOSTR_ESP_REQUIRES}
         PRIV_REQUIRES ${NOSTR_ESP_PRIV_REQUIRES}
     )
 
-    target_include_directories(${COMPONENT_LIB} PRIVATE "${build_dir}")
-
     target_compile_definitions(${COMPONENT_LIB} PUBLIC
-        HAVE_MBEDTLS=1
-        HAVE_NOSCRYPT=1
         NOSTR_FEATURE_STD=1
         NOSTR_FEATURE_EVENTS=1
         NOSTR_FEATURE_KEYS=1
-        NOSTR_FEATURE_CRYPTO_NOSCRYPT=1
-        NOSTR_FEATURE_ENCODING=1
         NOSTR_FEATURE_THREADING=0
     )
 

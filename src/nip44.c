@@ -213,7 +213,7 @@ static int base64_encode(const uint8_t* input, size_t input_len, char** output)
 }
 #endif
 
-#ifdef ESP_PLATFORM
+#if !defined(HAVE_MBEDTLS) && defined(ESP_PLATFORM)
 static int base64_decode(const char* input, uint8_t** output, size_t* output_len)
 {
     size_t input_len = strlen(input);
@@ -233,7 +233,7 @@ static int base64_decode(const char* input, uint8_t** output, size_t* output_len
 
     return 0;
 }
-#else
+#elif !defined(HAVE_MBEDTLS)
 static int base64_decode(const char* input, uint8_t** output, size_t* output_len)
 {
     BIO* b64 = NULL;
