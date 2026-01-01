@@ -274,8 +274,13 @@ nostr_error_t nostr_zap_create_request(nostr_event** request, uint64_t amount_ms
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 
-nostr_error_t nostr_zap_verify(const nostr_event* receipt, const nostr_event* request, const nostr_key* server_pubkey) {
+nostr_error_t nostr_zap_verify(const nostr_event* receipt, const nostr_event* request, const char* server_pubkey) {
     (void)receipt; (void)request; (void)server_pubkey;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_zap_parse_receipt(const nostr_event* event, uint64_t* amount, char** bolt11, char* preimage, nostr_event** zap_request) {
+    (void)event; (void)amount; (void)bolt11; (void)preimage; (void)zap_request;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 

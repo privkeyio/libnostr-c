@@ -211,7 +211,29 @@ static int base64_encode(const uint8_t* input, size_t input_len, char** output)
     BIO_free_all(b64);
     return 0;
 }
+#endif
 
+#if !defined(HAVE_MBEDTLS) && defined(ESP_PLATFORM)
+static int base64_decode(const char* input, uint8_t** output, size_t* output_len)
+{
+    size_t input_len = strlen(input);
+    size_t olen = 0;
+
+    mbedtls_base64_decode(NULL, 0, &olen, (const unsigned char*)input, input_len);
+
+    *output = malloc(olen);
+    if (!*output) {
+        return -1;
+    }
+
+    if (mbedtls_base64_decode(*output, olen, output_len, (const unsigned char*)input, input_len) != 0) {
+        free(*output);
+        return -1;
+    }
+
+    return 0;
+}
+#elif !defined(HAVE_MBEDTLS)
 static int base64_decode(const char* input, uint8_t** output, size_t* output_len)
 {
     BIO* b64 = NULL;
@@ -277,9 +299,13 @@ nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nos
     memcpy(nc_public.key, recipient_pubkey->data, NC_PUBKEY_SIZE);
     
     /* Generate random nonce */
+#ifdef ESP_PLATFORM
+    esp_fill_random(nonce, NIP44_NONCE_SIZE);
+#else
     if (RAND_bytes(nonce, NIP44_NONCE_SIZE) != 1) {
         return NOSTR_ERR_MEMORY;
     }
+#endif
     
     /* Pad the plaintext */
     if (pad_plaintext((const uint8_t*)plaintext, plaintext_len, 
@@ -626,8 +652,102 @@ cleanup:
 nostr_error_t nostr_nip04_decrypt(const nostr_privkey* recipient_privkey, const nostr_key* sender_pubkey,
                                   const char* ciphertext, char** plaintext)
 {
-    (void)recipient_privkey; (void)sender_pubkey; (void)ciphertext; (void)plaintext;
-    return NOSTR_ERR_NOT_SUPPORTED;
+    uint8_t shared_secret[32];
+    char* content_part = NULL;
+    char* iv_part = NULL;
+    uint8_t* encrypted_data = NULL;
+    size_t encrypted_len;
+    uint8_t* iv_data = NULL;
+    size_t iv_len;
+    EVP_CIPHER_CTX* ctx = NULL;
+    uint8_t* decrypted = NULL;
+    int decrypted_len = 0, final_len = 0;
+    nostr_error_t result = NOSTR_OK;
+
+    if (!recipient_privkey || !sender_pubkey || !ciphertext || !plaintext) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+
+    char* input_copy = strdup(ciphertext);
+    if (!input_copy) {
+        return NOSTR_ERR_MEMORY;
+    }
+
+    char* iv_marker = strstr(input_copy, "?iv=");
+    if (!iv_marker) {
+        free(input_copy);
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+
+    *iv_marker = '\0';
+    content_part = input_copy;
+    iv_part = iv_marker + 4;
+
+    if (base64_decode(content_part, &encrypted_data, &encrypted_len) != 0) {
+        result = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
+    }
+
+    if (base64_decode(iv_part, &iv_data, &iv_len) != 0 || iv_len != 16) {
+        result = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
+    }
+
+    if (nostr_key_ecdh(recipient_privkey, sender_pubkey, shared_secret) != NOSTR_OK) {
+        result = NOSTR_ERR_INVALID_KEY;
+        goto cleanup;
+    }
+
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        result = NOSTR_ERR_MEMORY;
+        goto cleanup;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, shared_secret, iv_data) != 1) {
+        result = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
+    }
+
+    decrypted = malloc(encrypted_len + AES_BLOCK_SIZE);
+    if (!decrypted) {
+        result = NOSTR_ERR_MEMORY;
+        goto cleanup;
+    }
+
+    if (EVP_DecryptUpdate(ctx, decrypted, &decrypted_len, encrypted_data, encrypted_len) != 1) {
+        result = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
+    }
+
+    if (EVP_DecryptFinal_ex(ctx, decrypted + decrypted_len, &final_len) != 1) {
+        result = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
+    }
+
+    decrypted_len += final_len;
+
+    *plaintext = malloc(decrypted_len + 1);
+    if (!*plaintext) {
+        result = NOSTR_ERR_MEMORY;
+        goto cleanup;
+    }
+
+    memcpy(*plaintext, decrypted, decrypted_len);
+    (*plaintext)[decrypted_len] = '\0';
+
+cleanup:
+    secure_wipe(shared_secret, sizeof(shared_secret));
+    if (ctx) EVP_CIPHER_CTX_free(ctx);
+    if (input_copy) free(input_copy);
+    if (encrypted_data) free(encrypted_data);
+    if (iv_data) free(iv_data);
+    if (decrypted) {
+        secure_wipe(decrypted, encrypted_len + AES_BLOCK_SIZE);
+        free(decrypted);
+    }
+
+    return result;
 }
 #endif
 

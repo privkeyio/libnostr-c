@@ -159,8 +159,7 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
         if (!new_memory) {
             return NOSTR_ERR_MEMORY;
         }
-        
-        // If memory moved, update all existing pointers
+
         if (new_memory != old_memory) {
             ptrdiff_t offset = (char*)new_memory - (char*)old_memory;
             for (size_t i = 0; i < event->tags_count; i++) {
@@ -172,7 +171,7 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
                 }
             }
         }
-        
+
         event->tag_arena->memory = new_memory;
         event->tag_arena->capacity = new_capacity;
     }

@@ -497,13 +497,28 @@ nostr_error_t nostr_nip13_mine_event_threaded(nostr_event* event, int target_dif
 #else
 
 /* NIP-13 functionality not available */
-nostr_error_t nostr_nip13_calculate_difficulty(const nostr_event* event, int* difficulty) {
-    (void)event; (void)difficulty;
+int nostr_nip13_calculate_difficulty(const uint8_t* event_id) {
+    (void)event_id;
+    return -1;
+}
+
+nostr_error_t nostr_nip13_mine_event(nostr_event* event, int target_difficulty, uint64_t max_iterations) {
+    (void)event; (void)target_difficulty; (void)max_iterations;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 
-nostr_error_t nostr_nip13_mine_event(nostr_event* event, int target_difficulty) {
-    (void)event; (void)target_difficulty;
+nostr_error_t nostr_nip13_verify_pow(const nostr_event* event, int min_difficulty) {
+    (void)event; (void)min_difficulty;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_nip13_add_nonce_tag(nostr_event* event, uint64_t nonce_value, int target_difficulty) {
+    (void)event; (void)nonce_value; (void)target_difficulty;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_nip13_mine_event_threaded(nostr_event* event, int target_difficulty, int num_threads, uint64_t max_iterations) {
+    (void)event; (void)target_difficulty; (void)num_threads; (void)max_iterations;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 

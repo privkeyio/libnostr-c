@@ -18,35 +18,38 @@ if(ESP_PLATFORM)
         list(APPEND NOSTR_ESP_REQUIRES json)
     endif()
 
+    idf_build_get_property(build_dir BUILD_DIR)
+    file(MAKE_DIRECTORY "${build_dir}/noscrypt")
+    file(GLOB NC_HEADERS "${CMAKE_CURRENT_LIST_DIR}/../noscrypt/include/*.h")
+    foreach(header ${NC_HEADERS})
+        get_filename_component(header_name ${header} NAME)
+        if(NOT EXISTS "${build_dir}/noscrypt/${header_name}")
+            file(CREATE_LINK "${header}" "${build_dir}/noscrypt/${header_name}" SYMBOLIC)
+        endif()
+    endforeach()
+
+    set(NOSTR_FEATURE_ENCODING 1)
+    set(NOSTR_FEATURE_CRYPTO_NOSCRYPT 1)
+    set(HAVE_NOSCRYPT 1)
+    set(HAVE_MBEDTLS 1)
+    configure_file(
+        "${CMAKE_CURRENT_LIST_DIR}/include/nostr_features.h.in"
+        "${build_dir}/nostr_features.h"
+        @ONLY
+    )
+
     idf_component_register(
         SRCS ${NOSTR_ESP_SOURCES}
-        INCLUDE_DIRS "include" "${CMAKE_CURRENT_BINARY_DIR}/include"
+        INCLUDE_DIRS "include" "${build_dir}"
         REQUIRES ${NOSTR_ESP_REQUIRES}
         PRIV_REQUIRES ${NOSTR_ESP_PRIV_REQUIRES}
     )
 
-    set(HAVE_MBEDTLS 1)
-    set(NOSTR_FEATURE_ENCODING 1)
-    set(NOSTR_FEATURE_THREADING 0)
-    set(NOSTR_FEATURE_NIP13 0)
-    set(NOSTR_FEATURE_NIP57 0)
-    set(NOSTR_FEATURE_RELAY 0)
-    set(NOSTR_FEATURE_RELAY_PROTOCOL 0)
-    set(NOSTR_FEATURE_HD_KEYS 0)
-    set(NOSTR_FEATURE_JSON_ENHANCED 0)
-
     target_compile_definitions(${COMPONENT_LIB} PUBLIC
-        HAVE_MBEDTLS=1
-        HAVE_NOSCRYPT=1
-        NOSTR_FEATURE_CRYPTO_NOSCRYPT=1
-        NOSTR_FEATURE_ENCODING=1
+        NOSTR_FEATURE_STD=1
+        NOSTR_FEATURE_EVENTS=1
+        NOSTR_FEATURE_KEYS=1
         NOSTR_FEATURE_THREADING=0
-    )
-
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/nostr_features.h.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/include/nostr_features.h"
-        @ONLY
     )
 
     return()
