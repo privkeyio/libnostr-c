@@ -1,6 +1,6 @@
 /**
  * @file relay_protocol.c
- * @brief NIP-01 Relay-side protocol implementation
+ * @brief NIP-01 Relay-side protocol core implementation
  */
 
 #include "../include/nostr_relay_protocol.h"
@@ -8,16 +8,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
-#include <ctype.h>
-#include <inttypes.h>
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 #include <cjson/cJSON.h>
 #endif
-
-/* ============================================================================
- * Error Handling
- * ============================================================================ */
 
 const char* nostr_relay_error_string(nostr_relay_error_t error)
 {
@@ -52,16 +46,6 @@ size_t nostr_validation_error_format(const nostr_validation_result_t* result, ch
     }
 
     const char* prefix = "invalid:";
-    if (result->error_code == NOSTR_RELAY_ERR_ID_MISMATCH) {
-        prefix = "invalid:";
-    } else if (result->error_code == NOSTR_RELAY_ERR_SIG_MISMATCH) {
-        prefix = "invalid:";
-    } else if (result->error_code == NOSTR_RELAY_ERR_FUTURE_EVENT) {
-        prefix = "invalid:";
-    } else if (result->error_code == NOSTR_RELAY_ERR_EXPIRED_EVENT) {
-        prefix = "invalid:";
-    }
-
     int len;
     if (result->error_field[0] != '\0') {
         len = snprintf(buf, buf_size, "%s %s for field '%s'",
@@ -72,10 +56,6 @@ size_t nostr_validation_error_format(const nostr_validation_result_t* result, ch
 
     return (len > 0 && (size_t)len < buf_size) ? (size_t)len : 0;
 }
-
-/* ============================================================================
- * Validation Utilities
- * ============================================================================ */
 
 bool nostr_validate_hex64(const char* hex)
 {
@@ -131,29 +111,60 @@ bool nostr_validate_timestamp(int64_t timestamp, int64_t max_future_seconds)
     return timestamp <= (now + max_future_seconds);
 }
 
+bool nostr_validate_address(const char* address)
+{
+    if (!address || !*address) {
+        return false;
+    }
+
+    const char* first_colon = strchr(address, ':');
+    if (!first_colon || first_colon == address) {
+        return false;
+    }
+
+    for (const char* p = address; p < first_colon; p++) {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+    }
+
+    const char* pubkey_start = first_colon + 1;
+    const char* second_colon = strchr(pubkey_start, ':');
+    if (!second_colon) {
+        return false;
+    }
+
+    size_t pubkey_len = (size_t)(second_colon - pubkey_start);
+    if (pubkey_len != 64) {
+        return false;
+    }
+
+    for (const char* p = pubkey_start; p < second_colon; p++) {
+        char c = *p;
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 int64_t nostr_timestamp_now(void)
 {
     return (int64_t)time(NULL);
 }
-
-/* ============================================================================
- * Event Kind Classification (NIP-01)
- * ============================================================================ */
 
 nostr_kind_type_t nostr_kind_get_type(int32_t kind)
 {
     if (kind >= 20000 && kind < 30000) {
         return NOSTR_KIND_EPHEMERAL;
     }
-
     if (kind >= 30000 && kind < 40000) {
         return NOSTR_KIND_ADDRESSABLE;
     }
-
     if (kind == 0 || kind == 3 || (kind >= 10000 && kind < 20000)) {
         return NOSTR_KIND_REPLACEABLE;
     }
-
     return NOSTR_KIND_REGULAR;
 }
 
@@ -176,10 +187,6 @@ bool nostr_kind_is_addressable(int32_t kind)
 {
     return nostr_kind_get_type(kind) == NOSTR_KIND_ADDRESSABLE;
 }
-
-/* ============================================================================
- * Tag Utilities
- * ============================================================================ */
 
 const char* nostr_event_get_tag_value(const nostr_event* event, const char* tag_name)
 {
@@ -248,10 +255,6 @@ const char** nostr_event_get_tag_at(const nostr_event* event, size_t index, size
     return (const char**)event->tags[index].values;
 }
 
-/* ============================================================================
- * Expiration (NIP-40)
- * ============================================================================ */
-
 int64_t nostr_event_get_expiration(const nostr_event* event)
 {
     const char* exp_str = nostr_event_get_tag_value(event, "expiration");
@@ -281,10 +284,6 @@ bool nostr_event_is_expired_now(const nostr_event* event)
     return nostr_event_is_expired(event, nostr_timestamp_now());
 }
 
-/* ============================================================================
- * Event Parsing and Serialization (NIP-01)
- * ============================================================================ */
-
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
 nostr_relay_error_t nostr_event_parse(const char* json, size_t json_len, nostr_event** event)
@@ -309,56 +308,6 @@ nostr_relay_error_t nostr_event_parse(const char* json, size_t json_len, nostr_e
         default:
             return NOSTR_RELAY_ERR_INVALID_JSON;
     }
-}
-
-static char* escape_json_string_canonical(const char* input)
-{
-    if (!input) return NULL;
-
-    size_t len = strlen(input);
-    size_t max_output_len = len * 2 + 1;
-    char* output = malloc(max_output_len);
-    if (!output) return NULL;
-
-    size_t j = 0;
-    for (size_t i = 0; i < len; i++) {
-        unsigned char c = (unsigned char)input[i];
-        switch (c) {
-            case '"':
-                output[j++] = '\\';
-                output[j++] = '"';
-                break;
-            case '\\':
-                output[j++] = '\\';
-                output[j++] = '\\';
-                break;
-            case '\n':
-                output[j++] = '\\';
-                output[j++] = 'n';
-                break;
-            case '\r':
-                output[j++] = '\\';
-                output[j++] = 'r';
-                break;
-            case '\t':
-                output[j++] = '\\';
-                output[j++] = 't';
-                break;
-            case '\b':
-                output[j++] = '\\';
-                output[j++] = 'b';
-                break;
-            case '\f':
-                output[j++] = '\\';
-                output[j++] = 'f';
-                break;
-            default:
-                output[j++] = (char)c;
-                break;
-        }
-    }
-    output[j] = '\0';
-    return output;
 }
 
 nostr_relay_error_t nostr_event_serialize_canonical(const nostr_event* event, char* buf, size_t buf_size, size_t* out_len)
@@ -444,7 +393,7 @@ nostr_relay_error_t nostr_event_serialize(const nostr_event* event, char* buf, s
     return NOSTR_RELAY_OK;
 }
 
-#else  /* !NOSTR_FEATURE_JSON_ENHANCED */
+#else
 
 nostr_relay_error_t nostr_event_parse(const char* json, size_t json_len, nostr_event** event)
 {
@@ -472,11 +421,7 @@ nostr_relay_error_t nostr_event_serialize(const nostr_event* event, char* buf, s
     return NOSTR_RELAY_ERR_INVALID_JSON;
 }
 
-#endif  /* NOSTR_FEATURE_JSON_ENHANCED */
-
-/* ============================================================================
- * Event Comparison Functions
- * ============================================================================ */
+#endif
 
 static int compare_event_ids(const uint8_t* a, const uint8_t* b)
 {
@@ -500,10 +445,6 @@ int nostr_event_compare_addressable(const nostr_event* a, const nostr_event* b)
 {
     return nostr_event_compare_replaceable(a, b);
 }
-
-/* ============================================================================
- * Event Validation (NIP-01)
- * ============================================================================ */
 
 nostr_relay_error_t nostr_event_validate_full(const nostr_event* event, int64_t max_future_seconds, nostr_validation_result_t* result)
 {
@@ -566,827 +507,6 @@ nostr_relay_error_t nostr_event_validate_full(const nostr_event* event, int64_t 
     result->valid = true;
     return NOSTR_RELAY_OK;
 }
-
-/* ============================================================================
- * Filter Functions (NIP-01)
- * ============================================================================ */
-
-#ifdef NOSTR_FEATURE_JSON_ENHANCED
-
-static nostr_relay_error_t parse_string_array(cJSON* arr, char*** out_arr, size_t* out_count)
-{
-    if (!arr || !cJSON_IsArray(arr)) {
-        *out_arr = NULL;
-        *out_count = 0;
-        return NOSTR_RELAY_OK;
-    }
-
-    int count = cJSON_GetArraySize(arr);
-    if (count == 0) {
-        *out_arr = NULL;
-        *out_count = 0;
-        return NOSTR_RELAY_OK;
-    }
-
-    *out_arr = malloc(sizeof(char*) * count);
-    if (!*out_arr) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    *out_count = 0;
-    for (int i = 0; i < count; i++) {
-        cJSON* item = cJSON_GetArrayItem(arr, i);
-        if (cJSON_IsString(item) && item->valuestring) {
-            (*out_arr)[*out_count] = strdup(item->valuestring);
-            if (!(*out_arr)[*out_count]) {
-                for (size_t j = 0; j < *out_count; j++) {
-                    free((*out_arr)[j]);
-                }
-                free(*out_arr);
-                *out_arr = NULL;
-                *out_count = 0;
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-            (*out_count)++;
-        }
-    }
-
-    return NOSTR_RELAY_OK;
-}
-
-static nostr_relay_error_t parse_int_array(cJSON* arr, int32_t** out_arr, size_t* out_count)
-{
-    if (!arr || !cJSON_IsArray(arr)) {
-        *out_arr = NULL;
-        *out_count = 0;
-        return NOSTR_RELAY_OK;
-    }
-
-    int count = cJSON_GetArraySize(arr);
-    if (count == 0) {
-        *out_arr = NULL;
-        *out_count = 0;
-        return NOSTR_RELAY_OK;
-    }
-
-    *out_arr = malloc(sizeof(int32_t) * count);
-    if (!*out_arr) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    *out_count = 0;
-    for (int i = 0; i < count; i++) {
-        cJSON* item = cJSON_GetArrayItem(arr, i);
-        if (cJSON_IsNumber(item)) {
-            (*out_arr)[(*out_count)++] = (int32_t)item->valueint;
-        }
-    }
-
-    return NOSTR_RELAY_OK;
-}
-
-nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_filter_t* filter)
-{
-    (void)json_len;
-
-    if (!json || !filter) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    memset(filter, 0, sizeof(nostr_filter_t));
-
-    cJSON* root = cJSON_Parse(json);
-    if (!root) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    nostr_relay_error_t err;
-
-    err = parse_string_array(cJSON_GetObjectItem(root, "ids"), &filter->ids, &filter->ids_count);
-    if (err != NOSTR_RELAY_OK) goto cleanup;
-
-    err = parse_string_array(cJSON_GetObjectItem(root, "authors"), &filter->authors, &filter->authors_count);
-    if (err != NOSTR_RELAY_OK) goto cleanup;
-
-    err = parse_int_array(cJSON_GetObjectItem(root, "kinds"), &filter->kinds, &filter->kinds_count);
-    if (err != NOSTR_RELAY_OK) goto cleanup;
-
-    err = parse_string_array(cJSON_GetObjectItem(root, "#e"), &filter->e_tags, &filter->e_tags_count);
-    if (err != NOSTR_RELAY_OK) goto cleanup;
-
-    err = parse_string_array(cJSON_GetObjectItem(root, "#p"), &filter->p_tags, &filter->p_tags_count);
-    if (err != NOSTR_RELAY_OK) goto cleanup;
-
-    size_t generic_count = 0;
-    nostr_generic_tag_filter_t* generic_tags = NULL;
-
-    cJSON* item;
-    cJSON_ArrayForEach(item, root) {
-        if (item->string && item->string[0] == '#' &&
-            item->string[1] != '\0' && item->string[2] == '\0') {
-            char tag_char = item->string[1];
-            if (tag_char != 'e' && tag_char != 'p' && isalpha((unsigned char)tag_char)) {
-                generic_count++;
-            }
-        }
-    }
-
-    if (generic_count > 0) {
-        generic_tags = calloc(generic_count, sizeof(nostr_generic_tag_filter_t));
-        if (!generic_tags) {
-            err = NOSTR_RELAY_ERR_MEMORY;
-            goto cleanup;
-        }
-
-        size_t idx = 0;
-        cJSON_ArrayForEach(item, root) {
-            if (item->string && item->string[0] == '#' &&
-                item->string[1] != '\0' && item->string[2] == '\0') {
-                char tag_char = item->string[1];
-                if (tag_char != 'e' && tag_char != 'p' && isalpha((unsigned char)tag_char)) {
-                    generic_tags[idx].tag_name = tag_char;
-                    err = parse_string_array(item, &generic_tags[idx].values, &generic_tags[idx].values_count);
-                    if (err != NOSTR_RELAY_OK) {
-                        filter->generic_tags = generic_tags;
-                        filter->generic_tags_count = idx;
-                        goto cleanup;
-                    }
-                    idx++;
-                }
-            }
-        }
-        filter->generic_tags = generic_tags;
-        filter->generic_tags_count = generic_count;
-    }
-
-    cJSON* since = cJSON_GetObjectItem(root, "since");
-    if (since && cJSON_IsNumber(since)) {
-        filter->since = (int64_t)since->valuedouble;
-    }
-
-    cJSON* until = cJSON_GetObjectItem(root, "until");
-    if (until && cJSON_IsNumber(until)) {
-        filter->until = (int64_t)until->valuedouble;
-    }
-
-    cJSON* limit = cJSON_GetObjectItem(root, "limit");
-    if (limit && cJSON_IsNumber(limit)) {
-        filter->limit = limit->valueint;
-    }
-
-    cJSON_Delete(root);
-    return NOSTR_RELAY_OK;
-
-cleanup:
-    cJSON_Delete(root);
-    nostr_filter_free(filter);
-    return err;
-}
-
-#else
-
-nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_filter_t* filter)
-{
-    (void)json;
-    (void)json_len;
-    (void)filter;
-    return NOSTR_RELAY_ERR_INVALID_JSON;
-}
-
-#endif
-
-void nostr_filter_free(nostr_filter_t* filter)
-{
-    if (!filter) return;
-
-    if (filter->ids) {
-        for (size_t i = 0; i < filter->ids_count; i++) {
-            free(filter->ids[i]);
-        }
-        free(filter->ids);
-    }
-
-    if (filter->authors) {
-        for (size_t i = 0; i < filter->authors_count; i++) {
-            free(filter->authors[i]);
-        }
-        free(filter->authors);
-    }
-
-    free(filter->kinds);
-
-    if (filter->e_tags) {
-        for (size_t i = 0; i < filter->e_tags_count; i++) {
-            free(filter->e_tags[i]);
-        }
-        free(filter->e_tags);
-    }
-
-    if (filter->p_tags) {
-        for (size_t i = 0; i < filter->p_tags_count; i++) {
-            free(filter->p_tags[i]);
-        }
-        free(filter->p_tags);
-    }
-
-    if (filter->generic_tags) {
-        for (size_t i = 0; i < filter->generic_tags_count; i++) {
-            if (filter->generic_tags[i].values) {
-                for (size_t j = 0; j < filter->generic_tags[i].values_count; j++) {
-                    free(filter->generic_tags[i].values[j]);
-                }
-                free(filter->generic_tags[i].values);
-            }
-        }
-        free(filter->generic_tags);
-    }
-
-    memset(filter, 0, sizeof(nostr_filter_t));
-}
-
-nostr_relay_error_t nostr_filter_validate(const nostr_filter_t* filter, nostr_validation_result_t* result)
-{
-    if (!filter || !result) {
-        if (result) {
-            result->valid = false;
-            result->error_code = NOSTR_RELAY_ERR_MISSING_FIELD;
-        }
-        return NOSTR_RELAY_ERR_MISSING_FIELD;
-    }
-
-    result->valid = true;
-    result->error_code = NOSTR_RELAY_OK;
-    result->error_message[0] = '\0';
-    result->error_field[0] = '\0';
-
-    for (size_t i = 0; i < filter->ids_count; i++) {
-        if (!nostr_validate_hex_prefix(filter->ids[i])) {
-            result->valid = false;
-            result->error_code = NOSTR_RELAY_ERR_INVALID_ID;
-            strncpy(result->error_message, "invalid hex prefix in ids", sizeof(result->error_message) - 1);
-            strncpy(result->error_field, "ids", sizeof(result->error_field) - 1);
-            return NOSTR_RELAY_ERR_INVALID_ID;
-        }
-    }
-
-    for (size_t i = 0; i < filter->authors_count; i++) {
-        if (!nostr_validate_hex_prefix(filter->authors[i])) {
-            result->valid = false;
-            result->error_code = NOSTR_RELAY_ERR_INVALID_PUBKEY;
-            strncpy(result->error_message, "invalid hex prefix in authors", sizeof(result->error_message) - 1);
-            strncpy(result->error_field, "authors", sizeof(result->error_field) - 1);
-            return NOSTR_RELAY_ERR_INVALID_PUBKEY;
-        }
-    }
-
-    for (size_t i = 0; i < filter->e_tags_count; i++) {
-        if (!nostr_validate_hex64(filter->e_tags[i])) {
-            result->valid = false;
-            result->error_code = NOSTR_RELAY_ERR_INVALID_ID;
-            strncpy(result->error_message, "invalid event ID in #e filter", sizeof(result->error_message) - 1);
-            strncpy(result->error_field, "#e", sizeof(result->error_field) - 1);
-            return NOSTR_RELAY_ERR_INVALID_ID;
-        }
-    }
-
-    for (size_t i = 0; i < filter->p_tags_count; i++) {
-        if (!nostr_validate_hex64(filter->p_tags[i])) {
-            result->valid = false;
-            result->error_code = NOSTR_RELAY_ERR_INVALID_PUBKEY;
-            strncpy(result->error_message, "invalid pubkey in #p filter", sizeof(result->error_message) - 1);
-            strncpy(result->error_field, "#p", sizeof(result->error_field) - 1);
-            return NOSTR_RELAY_ERR_INVALID_PUBKEY;
-        }
-    }
-
-    return NOSTR_RELAY_OK;
-}
-
-static bool hex_starts_with(const char* hex, size_t hex_len, const char* prefix)
-{
-    size_t prefix_len = strlen(prefix);
-    if (prefix_len > hex_len) return false;
-    return strncmp(hex, prefix, prefix_len) == 0;
-}
-
-static void id_to_hex(const uint8_t* id, char* hex)
-{
-    for (int i = 0; i < NOSTR_ID_SIZE; i++) {
-        sprintf(hex + i * 2, "%02x", id[i]);
-    }
-    hex[64] = '\0';
-}
-
-static void pubkey_to_hex(const nostr_key* key, char* hex)
-{
-    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
-        sprintf(hex + i * 2, "%02x", key->data[i]);
-    }
-    hex[64] = '\0';
-}
-
-bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event)
-{
-    if (!filter || !event) return false;
-
-    char hex_buf[65];
-
-    if (filter->ids_count > 0) {
-        id_to_hex(event->id, hex_buf);
-        bool matched = false;
-        for (size_t i = 0; i < filter->ids_count; i++) {
-            if (hex_starts_with(hex_buf, 64, filter->ids[i])) {
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) return false;
-    }
-
-    if (filter->authors_count > 0) {
-        pubkey_to_hex(&event->pubkey, hex_buf);
-        bool matched = false;
-        for (size_t i = 0; i < filter->authors_count; i++) {
-            if (hex_starts_with(hex_buf, 64, filter->authors[i])) {
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) return false;
-    }
-
-    if (filter->kinds_count > 0) {
-        bool matched = false;
-        for (size_t i = 0; i < filter->kinds_count; i++) {
-            if (filter->kinds[i] == (int32_t)event->kind) {
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) return false;
-    }
-
-    if (filter->since > 0 && event->created_at < filter->since) {
-        return false;
-    }
-
-    if (filter->until > 0 && event->created_at > filter->until) {
-        return false;
-    }
-
-    if (filter->e_tags_count > 0) {
-        bool matched = false;
-        const char* e_values[256];
-        size_t e_count = nostr_event_get_tag_values(event, "e", e_values, 256);
-
-        for (size_t i = 0; i < filter->e_tags_count && !matched; i++) {
-            for (size_t j = 0; j < e_count; j++) {
-                if (e_values[j] && strcmp(e_values[j], filter->e_tags[i]) == 0) {
-                    matched = true;
-                    break;
-                }
-            }
-        }
-        if (!matched) return false;
-    }
-
-    if (filter->p_tags_count > 0) {
-        bool matched = false;
-        const char* p_values[256];
-        size_t p_count = nostr_event_get_tag_values(event, "p", p_values, 256);
-
-        for (size_t i = 0; i < filter->p_tags_count && !matched; i++) {
-            for (size_t j = 0; j < p_count; j++) {
-                if (p_values[j] && strcmp(p_values[j], filter->p_tags[i]) == 0) {
-                    matched = true;
-                    break;
-                }
-            }
-        }
-        if (!matched) return false;
-    }
-
-    for (size_t t = 0; t < filter->generic_tags_count; t++) {
-        char tag_name[2] = { filter->generic_tags[t].tag_name, '\0' };
-
-        const char* tag_values[256];
-        size_t tag_count = nostr_event_get_tag_values(event, tag_name, tag_values, 256);
-
-        bool matched = false;
-        for (size_t i = 0; i < filter->generic_tags[t].values_count && !matched; i++) {
-            for (size_t j = 0; j < tag_count; j++) {
-                if (tag_values[j] && strcmp(tag_values[j], filter->generic_tags[t].values[i]) == 0) {
-                    matched = true;
-                    break;
-                }
-            }
-        }
-        if (!matched) return false;
-    }
-
-    return true;
-}
-
-bool nostr_filters_match(const nostr_filter_t* filters, size_t count, const nostr_event* event)
-{
-    if (!filters || count == 0 || !event) return false;
-
-    for (size_t i = 0; i < count; i++) {
-        if (nostr_filter_matches(&filters[i], event)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* ============================================================================
- * Client Message Parsing (NIP-01)
- * ============================================================================ */
-
-#ifdef NOSTR_FEATURE_JSON_ENHANCED
-
-nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, nostr_client_msg_t* msg)
-{
-    (void)json_len;
-
-    if (!json || !msg) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    memset(msg, 0, sizeof(nostr_client_msg_t));
-    msg->type = NOSTR_CLIENT_MSG_UNKNOWN;
-
-    cJSON* root = cJSON_Parse(json);
-    if (!root || !cJSON_IsArray(root)) {
-        if (root) cJSON_Delete(root);
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    int arr_size = cJSON_GetArraySize(root);
-    if (arr_size < 1) {
-        cJSON_Delete(root);
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    cJSON* msg_type = cJSON_GetArrayItem(root, 0);
-    if (!cJSON_IsString(msg_type)) {
-        cJSON_Delete(root);
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    const char* type_str = msg_type->valuestring;
-
-    if (strcmp(type_str, "EVENT") == 0) {
-        if (arr_size < 2) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_MISSING_FIELD;
-        }
-
-        cJSON* event_json = cJSON_GetArrayItem(root, 1);
-        char* event_str = cJSON_PrintUnformatted(event_json);
-        if (!event_str) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_MEMORY;
-        }
-
-        nostr_error_t err = nostr_event_from_json(event_str, &msg->data.event.event);
-        free(event_str);
-
-        if (err != NOSTR_OK) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_INVALID_JSON;
-        }
-
-        msg->type = NOSTR_CLIENT_MSG_EVENT;
-    }
-    else if (strcmp(type_str, "REQ") == 0) {
-        if (arr_size < 2) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_MISSING_FIELD;
-        }
-
-        cJSON* sub_id = cJSON_GetArrayItem(root, 1);
-        if (!cJSON_IsString(sub_id)) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_INVALID_SUBSCRIPTION_ID;
-        }
-
-        if (!nostr_validate_subscription_id(sub_id->valuestring)) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_INVALID_SUBSCRIPTION_ID;
-        }
-
-        strncpy(msg->data.req.subscription_id, sub_id->valuestring, 64);
-        msg->data.req.subscription_id[64] = '\0';
-
-        size_t filter_count = arr_size - 2;
-        if (filter_count > 0) {
-            msg->data.req.filters = calloc(filter_count, sizeof(nostr_filter_t));
-            if (!msg->data.req.filters) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-
-            msg->data.req.filters_count = 0;
-            for (int i = 2; i < arr_size; i++) {
-                cJSON* filter_json = cJSON_GetArrayItem(root, i);
-                char* filter_str = cJSON_PrintUnformatted(filter_json);
-                if (!filter_str) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return NOSTR_RELAY_ERR_MEMORY;
-                }
-
-                nostr_relay_error_t err = nostr_filter_parse(filter_str, strlen(filter_str),
-                                                             &msg->data.req.filters[msg->data.req.filters_count]);
-                free(filter_str);
-
-                if (err != NOSTR_RELAY_OK) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return err;
-                }
-                msg->data.req.filters_count++;
-            }
-        }
-
-        msg->type = NOSTR_CLIENT_MSG_REQ;
-    }
-    else if (strcmp(type_str, "CLOSE") == 0) {
-        if (arr_size < 2) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_MISSING_FIELD;
-        }
-
-        cJSON* sub_id = cJSON_GetArrayItem(root, 1);
-        if (!cJSON_IsString(sub_id)) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_INVALID_SUBSCRIPTION_ID;
-        }
-
-        strncpy(msg->data.close.subscription_id, sub_id->valuestring, 64);
-        msg->data.close.subscription_id[64] = '\0';
-
-        msg->type = NOSTR_CLIENT_MSG_CLOSE;
-    }
-    else if (strcmp(type_str, "AUTH") == 0) {
-        if (arr_size < 2) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_MISSING_FIELD;
-        }
-
-        cJSON* event_json = cJSON_GetArrayItem(root, 1);
-        char* event_str = cJSON_PrintUnformatted(event_json);
-        if (!event_str) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_MEMORY;
-        }
-
-        nostr_error_t err = nostr_event_from_json(event_str, &msg->data.auth.event);
-        free(event_str);
-
-        if (err != NOSTR_OK) {
-            cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_INVALID_JSON;
-        }
-
-        msg->type = NOSTR_CLIENT_MSG_AUTH;
-    }
-    else {
-        cJSON_Delete(root);
-        return NOSTR_RELAY_ERR_UNKNOWN_MESSAGE_TYPE;
-    }
-
-    cJSON_Delete(root);
-    return NOSTR_RELAY_OK;
-}
-
-#else
-
-nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, nostr_client_msg_t* msg)
-{
-    (void)json;
-    (void)json_len;
-    (void)msg;
-    return NOSTR_RELAY_ERR_INVALID_JSON;
-}
-
-#endif
-
-void nostr_client_msg_free(nostr_client_msg_t* msg)
-{
-    if (!msg) return;
-
-    switch (msg->type) {
-        case NOSTR_CLIENT_MSG_EVENT:
-            if (msg->data.event.event) {
-                nostr_event_destroy(msg->data.event.event);
-            }
-            break;
-        case NOSTR_CLIENT_MSG_REQ:
-            if (msg->data.req.filters) {
-                for (size_t i = 0; i < msg->data.req.filters_count; i++) {
-                    nostr_filter_free(&msg->data.req.filters[i]);
-                }
-                free(msg->data.req.filters);
-            }
-            break;
-        case NOSTR_CLIENT_MSG_AUTH:
-            if (msg->data.auth.event) {
-                nostr_event_destroy(msg->data.auth.event);
-            }
-            break;
-        case NOSTR_CLIENT_MSG_CLOSE:
-        case NOSTR_CLIENT_MSG_UNKNOWN:
-            break;
-    }
-
-    memset(msg, 0, sizeof(nostr_client_msg_t));
-}
-
-/* ============================================================================
- * Relay Message Serialization (NIP-01)
- * ============================================================================ */
-
-void nostr_relay_msg_event(nostr_relay_msg_t* msg, const char* sub_id, const nostr_event* event)
-{
-    if (!msg) return;
-    memset(msg, 0, sizeof(nostr_relay_msg_t));
-    msg->type = NOSTR_RELAY_MSG_EVENT;
-    if (sub_id) {
-        strncpy(msg->data.event.subscription_id, sub_id, 64);
-        msg->data.event.subscription_id[64] = '\0';
-    }
-    msg->data.event.event = event;
-}
-
-void nostr_relay_msg_ok(nostr_relay_msg_t* msg, const char* event_id, bool success, const char* message)
-{
-    if (!msg) return;
-    memset(msg, 0, sizeof(nostr_relay_msg_t));
-    msg->type = NOSTR_RELAY_MSG_OK;
-    if (event_id) {
-        strncpy(msg->data.ok.event_id, event_id, 64);
-        msg->data.ok.event_id[64] = '\0';
-    }
-    msg->data.ok.success = success;
-    if (message) {
-        strncpy(msg->data.ok.message, message, 255);
-        msg->data.ok.message[255] = '\0';
-    }
-}
-
-void nostr_relay_msg_eose(nostr_relay_msg_t* msg, const char* sub_id)
-{
-    if (!msg) return;
-    memset(msg, 0, sizeof(nostr_relay_msg_t));
-    msg->type = NOSTR_RELAY_MSG_EOSE;
-    if (sub_id) {
-        strncpy(msg->data.eose.subscription_id, sub_id, 64);
-        msg->data.eose.subscription_id[64] = '\0';
-    }
-}
-
-void nostr_relay_msg_closed(nostr_relay_msg_t* msg, const char* sub_id, const char* message)
-{
-    if (!msg) return;
-    memset(msg, 0, sizeof(nostr_relay_msg_t));
-    msg->type = NOSTR_RELAY_MSG_CLOSED;
-    if (sub_id) {
-        strncpy(msg->data.closed.subscription_id, sub_id, 64);
-        msg->data.closed.subscription_id[64] = '\0';
-    }
-    if (message) {
-        strncpy(msg->data.closed.message, message, 255);
-        msg->data.closed.message[255] = '\0';
-    }
-}
-
-void nostr_relay_msg_notice(nostr_relay_msg_t* msg, const char* message)
-{
-    if (!msg) return;
-    memset(msg, 0, sizeof(nostr_relay_msg_t));
-    msg->type = NOSTR_RELAY_MSG_NOTICE;
-    if (message) {
-        strncpy(msg->data.notice.message, message, 255);
-        msg->data.notice.message[255] = '\0';
-    }
-}
-
-void nostr_relay_msg_auth(nostr_relay_msg_t* msg, const char* challenge)
-{
-    if (!msg) return;
-    memset(msg, 0, sizeof(nostr_relay_msg_t));
-    msg->type = NOSTR_RELAY_MSG_AUTH;
-    if (challenge) {
-        strncpy(msg->data.auth.challenge, challenge, 127);
-        msg->data.auth.challenge[127] = '\0';
-    }
-}
-
-#ifdef NOSTR_FEATURE_JSON_ENHANCED
-
-nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char* buf, size_t buf_size, size_t* out_len)
-{
-    if (!msg || !buf || buf_size == 0) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    cJSON* root = cJSON_CreateArray();
-    if (!root) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    switch (msg->type) {
-        case NOSTR_RELAY_MSG_EVENT: {
-            cJSON_AddItemToArray(root, cJSON_CreateString("EVENT"));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.event.subscription_id));
-
-            if (!msg->data.event.event) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MISSING_FIELD;
-            }
-            char* event_json = NULL;
-            if (nostr_event_to_json(msg->data.event.event, &event_json) != NOSTR_OK || !event_json) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-            cJSON* event_obj = cJSON_Parse(event_json);
-            free(event_json);
-            if (!event_obj) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-            cJSON_AddItemToArray(root, event_obj);
-            break;
-        }
-
-        case NOSTR_RELAY_MSG_OK:
-            cJSON_AddItemToArray(root, cJSON_CreateString("OK"));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.ok.event_id));
-            cJSON_AddItemToArray(root, cJSON_CreateBool(msg->data.ok.success));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.ok.message));
-            break;
-
-        case NOSTR_RELAY_MSG_EOSE:
-            cJSON_AddItemToArray(root, cJSON_CreateString("EOSE"));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.eose.subscription_id));
-            break;
-
-        case NOSTR_RELAY_MSG_CLOSED:
-            cJSON_AddItemToArray(root, cJSON_CreateString("CLOSED"));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.closed.subscription_id));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.closed.message));
-            break;
-
-        case NOSTR_RELAY_MSG_NOTICE:
-            cJSON_AddItemToArray(root, cJSON_CreateString("NOTICE"));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.notice.message));
-            break;
-
-        case NOSTR_RELAY_MSG_AUTH:
-            cJSON_AddItemToArray(root, cJSON_CreateString("AUTH"));
-            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.auth.challenge));
-            break;
-    }
-
-    char* json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    size_t len = strlen(json_str);
-    if (len >= buf_size) {
-        free(json_str);
-        if (out_len) *out_len = len;
-        return NOSTR_RELAY_ERR_BUFFER_TOO_SMALL;
-    }
-
-    memcpy(buf, json_str, len + 1);
-    free(json_str);
-
-    if (out_len) *out_len = len;
-    return NOSTR_RELAY_OK;
-}
-
-#else
-
-nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char* buf, size_t buf_size, size_t* out_len)
-{
-    (void)msg;
-    (void)buf;
-    (void)buf_size;
-    (void)out_len;
-    return NOSTR_RELAY_ERR_INVALID_JSON;
-}
-
-#endif
-
-/* ============================================================================
- * Event Deletion (NIP-09)
- * ============================================================================ */
 
 void nostr_deletion_free(nostr_deletion_request_t* request)
 {
@@ -1477,12 +597,14 @@ nostr_relay_error_t nostr_deletion_parse(const nostr_event* event, nostr_deletio
                     request->event_ids_count++;
                 }
             } else if (strcmp(event->tags[i].values[0], "a") == 0) {
-                request->addresses[request->addresses_count] = strdup(event->tags[i].values[1]);
-                if (!request->addresses[request->addresses_count]) {
-                    nostr_deletion_free(request);
-                    return NOSTR_RELAY_ERR_MEMORY;
+                if (nostr_validate_address(event->tags[i].values[1])) {
+                    request->addresses[request->addresses_count] = strdup(event->tags[i].values[1]);
+                    if (!request->addresses[request->addresses_count]) {
+                        nostr_deletion_free(request);
+                        return NOSTR_RELAY_ERR_MEMORY;
+                    }
+                    request->addresses_count++;
                 }
-                request->addresses_count++;
             }
         }
     }
@@ -1497,17 +619,14 @@ bool nostr_deletion_authorized(const nostr_deletion_request_t* request, const no
     }
 
     char target_pubkey[65];
-    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
-        sprintf(target_pubkey + i * 2, "%02x", target_event->pubkey.data[i]);
-    }
-    target_pubkey[64] = '\0';
+    nostr_bytes_to_hex(target_event->pubkey.data, NOSTR_PUBKEY_SIZE, target_pubkey);
 
     if (strcmp(request->pubkey, target_pubkey) != 0) {
         return false;
     }
 
     char target_id[65];
-    id_to_hex(target_event->id, target_id);
+    nostr_bytes_to_hex(target_event->id, NOSTR_ID_SIZE, target_id);
 
     for (size_t i = 0; i < request->event_ids_count; i++) {
         if (strcmp(request->event_ids[i], target_id) == 0) {
@@ -1529,10 +648,7 @@ bool nostr_deletion_authorized_address(const nostr_deletion_request_t* request, 
     }
 
     char target_pubkey[65];
-    for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
-        sprintf(target_pubkey + i * 2, "%02x", target_event->pubkey.data[i]);
-    }
-    target_pubkey[64] = '\0';
+    nostr_bytes_to_hex(target_event->pubkey.data, NOSTR_PUBKEY_SIZE, target_pubkey);
 
     if (strcmp(request->pubkey, target_pubkey) != 0) {
         return false;
@@ -1558,416 +674,6 @@ bool nostr_deletion_authorized_address(const nostr_deletion_request_t* request, 
 
     return false;
 }
-
-/* ============================================================================
- * NIP-11 Relay Information Document
- * ============================================================================ */
-
-void nostr_relay_limitation_init(nostr_relay_limitation_t* limitation)
-{
-    if (!limitation) return;
-
-    memset(limitation, 0, sizeof(nostr_relay_limitation_t));
-    limitation->max_message_length = NOSTR_DEFAULT_MAX_MESSAGE_LENGTH;
-    limitation->max_subscriptions = NOSTR_DEFAULT_MAX_SUBSCRIPTIONS;
-    limitation->max_filters = NOSTR_DEFAULT_MAX_FILTERS;
-    limitation->max_limit = NOSTR_DEFAULT_MAX_LIMIT;
-    limitation->max_subid_length = NOSTR_DEFAULT_MAX_SUBID_LENGTH;
-    limitation->max_event_tags = NOSTR_DEFAULT_MAX_EVENT_TAGS;
-    limitation->max_content_length = NOSTR_DEFAULT_MAX_CONTENT_LENGTH;
-    limitation->default_limit = NOSTR_DEFAULT_DEFAULT_LIMIT;
-    limitation->min_pow_difficulty = 0;
-    limitation->auth_required = false;
-    limitation->payment_required = false;
-    limitation->restricted_writes = false;
-    limitation->created_at_lower_limit = 0;
-    limitation->created_at_upper_limit = 0;
-}
-
-void nostr_relay_info_init(nostr_relay_info_t* info)
-{
-    if (!info) return;
-
-    memset(info, 0, sizeof(nostr_relay_info_t));
-    nostr_relay_limitation_init(&info->limitation);
-}
-
-nostr_relay_error_t nostr_relay_info_set_nips(nostr_relay_info_t* info,
-                                              int32_t* nips,
-                                              size_t count)
-{
-    if (!info) {
-        return NOSTR_RELAY_ERR_MISSING_FIELD;
-    }
-
-    info->supported_nips = nips;
-    info->supported_nips_count = count;
-    return NOSTR_RELAY_OK;
-}
-
-nostr_relay_error_t nostr_relay_info_add_nip(nostr_relay_info_t* info, int32_t nip)
-{
-    if (!info) {
-        return NOSTR_RELAY_ERR_MISSING_FIELD;
-    }
-
-    size_t new_count = info->supported_nips_count + 1;
-    int32_t* new_nips = realloc((void*)info->supported_nips, new_count * sizeof(int32_t));
-    if (!new_nips) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    new_nips[info->supported_nips_count] = nip;
-    info->supported_nips = new_nips;
-    info->supported_nips_count = new_count;
-    return NOSTR_RELAY_OK;
-}
-
-void nostr_relay_info_free(nostr_relay_info_t* info)
-{
-    if (!info) return;
-
-    free((void*)info->supported_nips);
-    free((void*)info->retention);
-    free((void*)info->relay_countries);
-    free((void*)info->language_tags);
-    free((void*)info->tags);
-    if (info->fees.admission) free((void*)info->fees.admission);
-    if (info->fees.subscription) free((void*)info->fees.subscription);
-    if (info->fees.publication) free((void*)info->fees.publication);
-
-    memset(info, 0, sizeof(nostr_relay_info_t));
-}
-
-#ifdef NOSTR_FEATURE_JSON_ENHANCED
-
-nostr_relay_error_t nostr_relay_limitation_serialize(const nostr_relay_limitation_t* limitation,
-                                                     char* buf,
-                                                     size_t buf_size,
-                                                     size_t* out_len)
-{
-    if (!limitation || !buf || buf_size == 0) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    cJSON* obj = cJSON_CreateObject();
-    if (!obj) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    if (limitation->max_message_length > 0) {
-        cJSON_AddNumberToObject(obj, "max_message_length", limitation->max_message_length);
-    }
-    if (limitation->max_subscriptions > 0) {
-        cJSON_AddNumberToObject(obj, "max_subscriptions", limitation->max_subscriptions);
-    }
-    if (limitation->max_filters > 0) {
-        cJSON_AddNumberToObject(obj, "max_filters", limitation->max_filters);
-    }
-    if (limitation->max_limit > 0) {
-        cJSON_AddNumberToObject(obj, "max_limit", limitation->max_limit);
-    }
-    if (limitation->max_subid_length > 0) {
-        cJSON_AddNumberToObject(obj, "max_subid_length", limitation->max_subid_length);
-    }
-    if (limitation->max_event_tags > 0) {
-        cJSON_AddNumberToObject(obj, "max_event_tags", limitation->max_event_tags);
-    }
-    if (limitation->max_content_length > 0) {
-        cJSON_AddNumberToObject(obj, "max_content_length", limitation->max_content_length);
-    }
-    if (limitation->min_pow_difficulty > 0) {
-        cJSON_AddNumberToObject(obj, "min_pow_difficulty", limitation->min_pow_difficulty);
-    }
-    cJSON_AddBoolToObject(obj, "auth_required", limitation->auth_required);
-    cJSON_AddBoolToObject(obj, "payment_required", limitation->payment_required);
-    cJSON_AddBoolToObject(obj, "restricted_writes", limitation->restricted_writes);
-    if (limitation->created_at_lower_limit > 0) {
-        cJSON_AddNumberToObject(obj, "created_at_lower_limit", (double)limitation->created_at_lower_limit);
-    }
-    if (limitation->created_at_upper_limit > 0) {
-        cJSON_AddNumberToObject(obj, "created_at_upper_limit", (double)limitation->created_at_upper_limit);
-    }
-    if (limitation->default_limit > 0) {
-        cJSON_AddNumberToObject(obj, "default_limit", limitation->default_limit);
-    }
-
-    char* json_str = cJSON_PrintUnformatted(obj);
-    cJSON_Delete(obj);
-
-    if (!json_str) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    size_t len = strlen(json_str);
-    if (out_len) *out_len = len;
-
-    if (len >= buf_size) {
-        free(json_str);
-        return NOSTR_RELAY_ERR_BUFFER_TOO_SMALL;
-    }
-
-    memcpy(buf, json_str, len + 1);
-    free(json_str);
-    return NOSTR_RELAY_OK;
-}
-
-nostr_relay_error_t nostr_relay_info_serialize(const nostr_relay_info_t* info,
-                                               char* buf,
-                                               size_t buf_size,
-                                               size_t* out_len)
-{
-    if (!info || !buf || buf_size == 0) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    cJSON* obj = cJSON_CreateObject();
-    if (!obj) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    if (info->name) {
-        cJSON_AddStringToObject(obj, "name", info->name);
-    }
-    if (info->description) {
-        cJSON_AddStringToObject(obj, "description", info->description);
-    }
-    if (info->banner) {
-        cJSON_AddStringToObject(obj, "banner", info->banner);
-    }
-    if (info->icon) {
-        cJSON_AddStringToObject(obj, "icon", info->icon);
-    }
-    if (info->pubkey) {
-        cJSON_AddStringToObject(obj, "pubkey", info->pubkey);
-    }
-    if (info->self_pubkey) {
-        cJSON_AddStringToObject(obj, "self", info->self_pubkey);
-    }
-    if (info->contact) {
-        cJSON_AddStringToObject(obj, "contact", info->contact);
-    }
-
-    cJSON* nips_arr = cJSON_CreateArray();
-    for (size_t i = 0; i < info->supported_nips_count; i++) {
-        cJSON_AddItemToArray(nips_arr, cJSON_CreateNumber(info->supported_nips[i]));
-    }
-    cJSON_AddItemToObject(obj, "supported_nips", nips_arr);
-
-    if (info->software) {
-        cJSON_AddStringToObject(obj, "software", info->software);
-    }
-    if (info->version) {
-        cJSON_AddStringToObject(obj, "version", info->version);
-    }
-    if (info->privacy_policy) {
-        cJSON_AddStringToObject(obj, "privacy_policy", info->privacy_policy);
-    }
-    if (info->terms_of_service) {
-        cJSON_AddStringToObject(obj, "terms_of_service", info->terms_of_service);
-    }
-
-    cJSON* limitation_obj = cJSON_CreateObject();
-    if (info->limitation.max_message_length > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_message_length", info->limitation.max_message_length);
-    }
-    if (info->limitation.max_subscriptions > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_subscriptions", info->limitation.max_subscriptions);
-    }
-    if (info->limitation.max_filters > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_filters", info->limitation.max_filters);
-    }
-    if (info->limitation.max_limit > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_limit", info->limitation.max_limit);
-    }
-    if (info->limitation.max_subid_length > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_subid_length", info->limitation.max_subid_length);
-    }
-    if (info->limitation.max_event_tags > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_event_tags", info->limitation.max_event_tags);
-    }
-    if (info->limitation.max_content_length > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "max_content_length", info->limitation.max_content_length);
-    }
-    if (info->limitation.min_pow_difficulty > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "min_pow_difficulty", info->limitation.min_pow_difficulty);
-    }
-    cJSON_AddBoolToObject(limitation_obj, "auth_required", info->limitation.auth_required);
-    cJSON_AddBoolToObject(limitation_obj, "payment_required", info->limitation.payment_required);
-    cJSON_AddBoolToObject(limitation_obj, "restricted_writes", info->limitation.restricted_writes);
-    if (info->limitation.created_at_lower_limit > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "created_at_lower_limit", (double)info->limitation.created_at_lower_limit);
-    }
-    if (info->limitation.created_at_upper_limit > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "created_at_upper_limit", (double)info->limitation.created_at_upper_limit);
-    }
-    if (info->limitation.default_limit > 0) {
-        cJSON_AddNumberToObject(limitation_obj, "default_limit", info->limitation.default_limit);
-    }
-    cJSON_AddItemToObject(obj, "limitation", limitation_obj);
-
-    if (info->retention_count > 0 && info->retention) {
-        cJSON* retention_arr = cJSON_CreateArray();
-        for (size_t i = 0; i < info->retention_count; i++) {
-            cJSON* ret_obj = cJSON_CreateObject();
-            if (info->retention[i].kinds_count > 0) {
-                cJSON* kinds_arr = cJSON_CreateArray();
-                for (size_t j = 0; j < info->retention[i].kinds_count; j++) {
-                    cJSON_AddItemToArray(kinds_arr, cJSON_CreateNumber(info->retention[i].kinds[j]));
-                }
-                cJSON_AddItemToObject(ret_obj, "kinds", kinds_arr);
-            }
-            if (info->retention[i].time != 0) {
-                cJSON_AddNumberToObject(ret_obj, "time", (double)info->retention[i].time);
-            }
-            if (info->retention[i].count > 0) {
-                cJSON_AddNumberToObject(ret_obj, "count", info->retention[i].count);
-            }
-            cJSON_AddItemToArray(retention_arr, ret_obj);
-        }
-        cJSON_AddItemToObject(obj, "retention", retention_arr);
-    }
-
-    if (info->relay_countries_count > 0 && info->relay_countries) {
-        cJSON* countries_arr = cJSON_CreateArray();
-        for (size_t i = 0; i < info->relay_countries_count; i++) {
-            cJSON_AddItemToArray(countries_arr, cJSON_CreateString(info->relay_countries[i]));
-        }
-        cJSON_AddItemToObject(obj, "relay_countries", countries_arr);
-    }
-
-    if (info->language_tags_count > 0 && info->language_tags) {
-        cJSON* langs_arr = cJSON_CreateArray();
-        for (size_t i = 0; i < info->language_tags_count; i++) {
-            cJSON_AddItemToArray(langs_arr, cJSON_CreateString(info->language_tags[i]));
-        }
-        cJSON_AddItemToObject(obj, "language_tags", langs_arr);
-    }
-
-    if (info->tags_count > 0 && info->tags) {
-        cJSON* tags_arr = cJSON_CreateArray();
-        for (size_t i = 0; i < info->tags_count; i++) {
-            cJSON_AddItemToArray(tags_arr, cJSON_CreateString(info->tags[i]));
-        }
-        cJSON_AddItemToObject(obj, "tags", tags_arr);
-    }
-
-    if (info->posting_policy) {
-        cJSON_AddStringToObject(obj, "posting_policy", info->posting_policy);
-    }
-    if (info->payments_url) {
-        cJSON_AddStringToObject(obj, "payments_url", info->payments_url);
-    }
-
-    bool has_fees = (info->fees.admission_count > 0 ||
-                     info->fees.subscription_count > 0 ||
-                     info->fees.publication_count > 0);
-    if (has_fees) {
-        cJSON* fees_obj = cJSON_CreateObject();
-
-        if (info->fees.admission_count > 0 && info->fees.admission) {
-            cJSON* admission_arr = cJSON_CreateArray();
-            for (size_t i = 0; i < info->fees.admission_count; i++) {
-                cJSON* fee_obj = cJSON_CreateObject();
-                cJSON_AddNumberToObject(fee_obj, "amount", (double)info->fees.admission[i].amount);
-                if (info->fees.admission[i].unit) {
-                    cJSON_AddStringToObject(fee_obj, "unit", info->fees.admission[i].unit);
-                }
-                cJSON_AddItemToArray(admission_arr, fee_obj);
-            }
-            cJSON_AddItemToObject(fees_obj, "admission", admission_arr);
-        }
-
-        if (info->fees.subscription_count > 0 && info->fees.subscription) {
-            cJSON* sub_arr = cJSON_CreateArray();
-            for (size_t i = 0; i < info->fees.subscription_count; i++) {
-                cJSON* fee_obj = cJSON_CreateObject();
-                cJSON_AddNumberToObject(fee_obj, "amount", (double)info->fees.subscription[i].amount);
-                if (info->fees.subscription[i].unit) {
-                    cJSON_AddStringToObject(fee_obj, "unit", info->fees.subscription[i].unit);
-                }
-                if (info->fees.subscription[i].period > 0) {
-                    cJSON_AddNumberToObject(fee_obj, "period", info->fees.subscription[i].period);
-                }
-                cJSON_AddItemToArray(sub_arr, fee_obj);
-            }
-            cJSON_AddItemToObject(fees_obj, "subscription", sub_arr);
-        }
-
-        if (info->fees.publication_count > 0 && info->fees.publication) {
-            cJSON* pub_arr = cJSON_CreateArray();
-            for (size_t i = 0; i < info->fees.publication_count; i++) {
-                cJSON* fee_obj = cJSON_CreateObject();
-                if (info->fees.publication[i].kinds_count > 0 && info->fees.publication[i].kinds) {
-                    cJSON* kinds_arr = cJSON_CreateArray();
-                    for (size_t j = 0; j < info->fees.publication[i].kinds_count; j++) {
-                        cJSON_AddItemToArray(kinds_arr, cJSON_CreateNumber(info->fees.publication[i].kinds[j]));
-                    }
-                    cJSON_AddItemToObject(fee_obj, "kinds", kinds_arr);
-                }
-                cJSON_AddNumberToObject(fee_obj, "amount", (double)info->fees.publication[i].amount);
-                if (info->fees.publication[i].unit) {
-                    cJSON_AddStringToObject(fee_obj, "unit", info->fees.publication[i].unit);
-                }
-                cJSON_AddItemToArray(pub_arr, fee_obj);
-            }
-            cJSON_AddItemToObject(fees_obj, "publication", pub_arr);
-        }
-
-        cJSON_AddItemToObject(obj, "fees", fees_obj);
-    }
-
-    char* json_str = cJSON_PrintUnformatted(obj);
-    cJSON_Delete(obj);
-
-    if (!json_str) {
-        return NOSTR_RELAY_ERR_MEMORY;
-    }
-
-    size_t len = strlen(json_str);
-    if (out_len) *out_len = len;
-
-    if (len >= buf_size) {
-        free(json_str);
-        return NOSTR_RELAY_ERR_BUFFER_TOO_SMALL;
-    }
-
-    memcpy(buf, json_str, len + 1);
-    free(json_str);
-    return NOSTR_RELAY_OK;
-}
-
-#else
-
-nostr_relay_error_t nostr_relay_limitation_serialize(const nostr_relay_limitation_t* limitation,
-                                                     char* buf,
-                                                     size_t buf_size,
-                                                     size_t* out_len)
-{
-    (void)limitation;
-    (void)buf;
-    (void)buf_size;
-    (void)out_len;
-    return NOSTR_RELAY_ERR_INVALID_JSON;
-}
-
-nostr_relay_error_t nostr_relay_info_serialize(const nostr_relay_info_t* info,
-                                               char* buf,
-                                               size_t buf_size,
-                                               size_t* out_len)
-{
-    (void)info;
-    (void)buf;
-    (void)buf_size;
-    (void)out_len;
-    return NOSTR_RELAY_ERR_INVALID_JSON;
-}
-
-#endif
-
-/* ============================================================================
- * Tag Iteration for Indexing
- * ============================================================================ */
 
 void nostr_tag_iterator_init(nostr_tag_iterator_t* iter, const nostr_event* event)
 {
@@ -2033,172 +739,6 @@ bool nostr_tag_is_indexable(const char* tag_name)
     char c = tag_name[0];
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
-
-/* ============================================================================
- * Filter Tag Accessors for Query Planning
- * ============================================================================ */
-
-const char** nostr_filter_get_e_tags(const nostr_filter_t* filter, size_t* count)
-{
-    if (!filter) {
-        if (count) *count = 0;
-        return NULL;
-    }
-
-    if (count) *count = filter->e_tags_count;
-    return (const char**)filter->e_tags;
-}
-
-const char** nostr_filter_get_p_tags(const nostr_filter_t* filter, size_t* count)
-{
-    if (!filter) {
-        if (count) *count = 0;
-        return NULL;
-    }
-
-    if (count) *count = filter->p_tags_count;
-    return (const char**)filter->p_tags;
-}
-
-const char** nostr_filter_get_tag_values(const nostr_filter_t* filter,
-                                         char tag_name,
-                                         size_t* count)
-{
-    if (!filter) {
-        if (count) *count = 0;
-        return NULL;
-    }
-
-    if (tag_name == 'e') {
-        return nostr_filter_get_e_tags(filter, count);
-    }
-    if (tag_name == 'p') {
-        return nostr_filter_get_p_tags(filter, count);
-    }
-
-    for (size_t i = 0; i < filter->generic_tags_count; i++) {
-        if (filter->generic_tags[i].tag_name == tag_name) {
-            if (count) *count = filter->generic_tags[i].values_count;
-            return (const char**)filter->generic_tags[i].values;
-        }
-    }
-
-    if (count) *count = 0;
-    return NULL;
-}
-
-bool nostr_filter_has_tag_filters(const nostr_filter_t* filter)
-{
-    if (!filter) return false;
-
-    return (filter->e_tags_count > 0 ||
-            filter->p_tags_count > 0 ||
-            filter->generic_tags_count > 0);
-}
-
-/* ============================================================================
- * Filter Accessor Functions
- * ============================================================================ */
-
-const char** nostr_filter_get_ids(const nostr_filter_t* filter, size_t* out_count)
-{
-    if (!filter) {
-        if (out_count) *out_count = 0;
-        return NULL;
-    }
-    if (out_count) *out_count = filter->ids_count;
-    return (const char**)filter->ids;
-}
-
-const char** nostr_filter_get_authors(const nostr_filter_t* filter, size_t* out_count)
-{
-    if (!filter) {
-        if (out_count) *out_count = 0;
-        return NULL;
-    }
-    if (out_count) *out_count = filter->authors_count;
-    return (const char**)filter->authors;
-}
-
-const int32_t* nostr_filter_get_kinds(const nostr_filter_t* filter, size_t* out_count)
-{
-    if (!filter) {
-        if (out_count) *out_count = 0;
-        return NULL;
-    }
-    if (out_count) *out_count = filter->kinds_count;
-    return filter->kinds;
-}
-
-int64_t nostr_filter_get_since(const nostr_filter_t* filter)
-{
-    if (!filter) return 0;
-    return filter->since;
-}
-
-int64_t nostr_filter_get_until(const nostr_filter_t* filter)
-{
-    if (!filter) return 0;
-    return filter->until;
-}
-
-int32_t nostr_filter_get_limit(const nostr_filter_t* filter)
-{
-    if (!filter) return 0;
-    return filter->limit;
-}
-
-/* ============================================================================
- * Client Message Accessor Functions
- * ============================================================================ */
-
-nostr_client_msg_type_t nostr_client_msg_get_type(const nostr_client_msg_t* msg)
-{
-    if (!msg) return NOSTR_CLIENT_MSG_UNKNOWN;
-    return msg->type;
-}
-
-const nostr_event* nostr_client_msg_get_event(const nostr_client_msg_t* msg)
-{
-    if (!msg) return NULL;
-
-    switch (msg->type) {
-        case NOSTR_CLIENT_MSG_EVENT:
-            return msg->data.event.event;
-        case NOSTR_CLIENT_MSG_AUTH:
-            return msg->data.auth.event;
-        default:
-            return NULL;
-    }
-}
-
-const char* nostr_client_msg_get_subscription_id(const nostr_client_msg_t* msg)
-{
-    if (!msg) return NULL;
-
-    switch (msg->type) {
-        case NOSTR_CLIENT_MSG_REQ:
-            return msg->data.req.subscription_id;
-        case NOSTR_CLIENT_MSG_CLOSE:
-            return msg->data.close.subscription_id;
-        default:
-            return NULL;
-    }
-}
-
-const nostr_filter_t* nostr_client_msg_get_filters(const nostr_client_msg_t* msg, size_t* out_count)
-{
-    if (!msg || msg->type != NOSTR_CLIENT_MSG_REQ) {
-        if (out_count) *out_count = 0;
-        return NULL;
-    }
-    if (out_count) *out_count = msg->data.req.filters_count;
-    return msg->data.req.filters;
-}
-
-/* ============================================================================
- * Event Accessor Functions
- * ============================================================================ */
 
 const uint8_t* nostr_event_get_id(const nostr_event* event)
 {
@@ -2288,10 +828,6 @@ bool nostr_event_is_deletion(const nostr_event* event)
     return event->kind == 5;
 }
 
-/* ============================================================================
- * Binary Tag Extractors
- * ============================================================================ */
-
 static nostr_relay_error_t hex_string_to_bytes(const char* hex, uint8_t* out, size_t out_size)
 {
     if (!hex || !out) return NOSTR_RELAY_ERR_INVALID_ID;
@@ -2316,7 +852,6 @@ uint8_t (*nostr_event_get_e_tags_binary(const nostr_event* event, size_t* out_co
         return NULL;
     }
 
-    // Count valid e-tags
     size_t count = 0;
     for (size_t i = 0; i < event->tags_count; i++) {
         if (event->tags[i].count >= 2 &&
@@ -2333,14 +868,12 @@ uint8_t (*nostr_event_get_e_tags_binary(const nostr_event* event, size_t* out_co
         return NULL;
     }
 
-    // Allocate result array
     uint8_t (*result)[32] = malloc(count * 32);
     if (!result) {
         *out_count = 0;
         return NULL;
     }
 
-    // Convert hex strings to binary
     size_t idx = 0;
     for (size_t i = 0; i < event->tags_count && idx < count; i++) {
         if (event->tags[i].count >= 2 &&
@@ -2365,7 +898,6 @@ uint8_t (*nostr_event_get_p_tags_binary(const nostr_event* event, size_t* out_co
         return NULL;
     }
 
-    // Count valid p-tags
     size_t count = 0;
     for (size_t i = 0; i < event->tags_count; i++) {
         if (event->tags[i].count >= 2 &&
@@ -2382,14 +914,12 @@ uint8_t (*nostr_event_get_p_tags_binary(const nostr_event* event, size_t* out_co
         return NULL;
     }
 
-    // Allocate result array
     uint8_t (*result)[32] = malloc(count * 32);
     if (!result) {
         *out_count = 0;
         return NULL;
     }
 
-    // Convert hex strings to binary
     size_t idx = 0;
     for (size_t i = 0; i < event->tags_count && idx < count; i++) {
         if (event->tags[i].count >= 2 &&
@@ -2406,10 +936,6 @@ uint8_t (*nostr_event_get_p_tags_binary(const nostr_event* event, size_t* out_co
     *out_count = idx;
     return result;
 }
-
-/* ============================================================================
- * Utility Functions
- * ============================================================================ */
 
 nostr_relay_error_t nostr_hex_to_bytes(const char* hex, size_t hex_len, uint8_t* out, size_t out_size)
 {

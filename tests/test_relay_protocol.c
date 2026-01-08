@@ -941,8 +941,8 @@ void test_deletion_parse_with_addresses(void)
     deletion_event->kind = 5;
     memset(deletion_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
 
-    const char* a_tag1[] = {"a", "30023:abababababababababababababababababababababababababababababababababab:my-article"};
-    const char* a_tag2[] = {"a", "30023:abababababababababababababababababababababababababababababababababab:another-article"};
+    const char* a_tag1[] = {"a", "30023:abababababababababababababababababababababababababababababababab:my-article"};
+    const char* a_tag2[] = {"a", "30023:abababababababababababababababababababababababababababababababab:another-article"};
     nostr_event_add_tag(deletion_event, a_tag1, 2);
     nostr_event_add_tag(deletion_event, a_tag2, 2);
 
@@ -952,8 +952,8 @@ void test_deletion_parse_with_addresses(void)
     TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
     TEST_ASSERT_EQUAL(0, request.event_ids_count);
     TEST_ASSERT_EQUAL(2, request.addresses_count);
-    TEST_ASSERT_EQUAL_STRING("30023:abababababababababababababababababababababababababababababababababab:my-article", request.addresses[0]);
-    TEST_ASSERT_EQUAL_STRING("30023:abababababababababababababababababababababababababababababababababab:another-article", request.addresses[1]);
+    TEST_ASSERT_EQUAL_STRING("30023:abababababababababababababababababababababababababababababababab:my-article", request.addresses[0]);
+    TEST_ASSERT_EQUAL_STRING("30023:abababababababababababababababababababababababababababababababab:another-article", request.addresses[1]);
 
     nostr_deletion_free(&request);
     nostr_event_destroy(deletion_event);
@@ -1078,7 +1078,7 @@ void test_deletion_authorized_address(void)
     const char* d_tag[] = {"d", "my-article"};
     nostr_event_add_tag(target_event, d_tag, 2);
 
-    const char* a_tag[] = {"a", "30023:abababababababababababababababababababababababababababababababababab:my-article"};
+    const char* a_tag[] = {"a", "30023:abababababababababababababababababababababababababababababababab:my-article"};
     nostr_event_add_tag(deletion_event, a_tag, 2);
 
     nostr_deletion_request_t request;
@@ -1131,7 +1131,7 @@ void test_deletion_unauthorized_address_non_addressable(void)
     target_event->kind = 1;
     memset(target_event->pubkey.data, 0xAB, NOSTR_PUBKEY_SIZE);
 
-    const char* a_tag[] = {"a", "1:abababababababababababababababababababababababababababababababababab:test"};
+    const char* a_tag[] = {"a", "1:abababababababababababababababababababababababababababababababab:test"};
     nostr_event_add_tag(deletion_event, a_tag, 2);
 
     nostr_deletion_request_t request;

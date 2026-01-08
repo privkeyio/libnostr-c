@@ -636,7 +636,12 @@ if(NOSTR_FEATURE_HD_KEYS)
 endif()
 
 if(NOSTR_FEATURE_RELAY_PROTOCOL)
-    list(APPEND NOSTR_SOURCES src/relay_protocol.c)
+    list(APPEND NOSTR_SOURCES
+        src/relay_protocol.c
+        src/relay_filter.c
+        src/relay_message.c
+        src/relay_nip11.c
+    )
 endif()
 
 add_library(nostr SHARED ${NOSTR_SOURCES})
