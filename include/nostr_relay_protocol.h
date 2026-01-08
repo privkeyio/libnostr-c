@@ -504,6 +504,13 @@ bool nostr_validate_subscription_id(const char* sub_id);
 bool nostr_validate_timestamp(int64_t timestamp, int64_t max_future_seconds);
 
 /**
+ * @brief Validate an addressable event coordinate (NIP-33 "a" tag format)
+ * @param address String in format "<kind>:<pubkey>:<d-tag>"
+ * @return true if valid, false otherwise
+ */
+bool nostr_validate_address(const char* address);
+
+/**
  * @brief Get current Unix timestamp
  * @return Current Unix timestamp
  */
@@ -625,6 +632,7 @@ size_t nostr_validation_error_format(const nostr_validation_result_t* result, ch
 #define NOSTR_DEFAULT_MAX_EVENT_TAGS        2000
 #define NOSTR_DEFAULT_MAX_CONTENT_LENGTH    (64 * 1024)
 #define NOSTR_DEFAULT_DEFAULT_LIMIT         500
+#define NOSTR_MAX_TAG_FILTER_VALUES         256
 
 typedef struct {
     int32_t max_message_length;
@@ -710,7 +718,7 @@ nostr_relay_error_t nostr_relay_limitation_serialize(const nostr_relay_limitatio
                                                      size_t* out_len);
 
 nostr_relay_error_t nostr_relay_info_set_nips(nostr_relay_info_t* info,
-                                              int32_t* nips,
+                                              const int32_t* nips,
                                               size_t count);
 
 nostr_relay_error_t nostr_relay_info_add_nip(nostr_relay_info_t* info, int32_t nip);
