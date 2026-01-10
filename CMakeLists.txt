@@ -11,12 +11,18 @@ if(ESP_PLATFORM)
         "src/nip44.c"
     )
 
-    set(NOSTR_ESP_REQUIRES mbedtls noscrypt)
+    set(NOSTR_ESP_REQUIRES mbedtls noscrypt espressif__cjson)
     set(NOSTR_ESP_PRIV_REQUIRES esp_system)
 
-    if(CONFIG_NOSTR_JSON_SUPPORT)
-        list(APPEND NOSTR_ESP_REQUIRES json)
-    endif()
+    set(NOSTR_FEATURE_JSON_ENHANCED 1)
+    set(NOSTR_FEATURE_RELAY_PROTOCOL 1)
+    set(HAVE_CJSON 1)
+    list(APPEND NOSTR_ESP_SOURCES
+        "src/relay_protocol.c"
+        "src/relay_filter.c"
+        "src/relay_message.c"
+        "src/relay_nip11.c"
+    )
 
     idf_build_get_property(build_dir BUILD_DIR)
 
@@ -43,6 +49,9 @@ if(ESP_PLATFORM)
         NOSTR_FEATURE_KEYS=1
         NOSTR_FEATURE_THREADING=0
     )
+
+    target_include_directories(${COMPONENT_LIB} PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/include/compat")
 
     return()
 endif()
