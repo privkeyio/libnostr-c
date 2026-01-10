@@ -76,6 +76,11 @@ libnostr-c supports modular compilation - build only what you need:
 - Modern noscrypt backend provides NIP-44 encryption
 - Fallback to secp256k1 for basic operations
 
+## Projects Using libnostr-c
+
+- [keep-esp32](https://github.com/privkeyio/keep-esp32) - Air-gapped ESP32-S3 FROST threshold signing device with Nostr DKG coordination
+- [vain](https://github.com/privkeyio/vain) - High-performance vanity Nostr public key miner
+
 ## License
 The software in this repository is licensed under MIT. See the [LICENSE](LICENSE) file for details.
 
