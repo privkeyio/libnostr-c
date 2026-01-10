@@ -38,6 +38,7 @@ The following table lists supported platforms and cryptographic backends:
 | Linux    | noscrypt, secp256k1 | GCC/Clang | ✅ Tested |
 | macOS    | noscrypt, secp256k1 | Clang | ✅ Tested |
 | Windows  | noscrypt, secp256k1 | MSVC | ✅ Tested |
+| ESP-IDF  | noscrypt, mbedtls | ESP32/S2/S3/C3/C6, v5.0+ | ✅ Tested |
 
 ## Getting started
 Please use the following links to obtain packages and extended documentation.
