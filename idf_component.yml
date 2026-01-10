@@ -12,3 +12,5 @@ targets:
 dependencies:
   idf:
     version: ">=5.0"
+  espressif/cjson:
+    version: "*"
