@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3] - 2026-01-11
+
+### Added
+- ESP32-S3 CI build support
+- Relay protocol sources to ESP-IDF build
+
+### Changed
+- Refactored relay_protocol.c into modular files for better maintainability
+
+### Fixed
+- Wrapped escape_json_string in ifndef NOSTR_FEATURE_JSON_ENHANCED for conditional compilation
+
 ## [0.1.2] - 2025-12-27
 
 ### Added
