@@ -70,7 +70,7 @@ Automated builds and releases are available through GitHub Actions CI/CD.
 #### Features
 libnostr-c supports modular compilation - build only what you need:
 - Core NIPs (01, 02, 13, 19, 57) enabled by default
-- Optional NIPs (04, 09, 11, 17, 40, 44, 47, 59) via feature flags
+- Optional NIPs (04, 09, 11, 17, 40, 44, 46, 47, 59) via feature flags
 - NIP-11 relay information document for serving relay metadata
 - Relay protocol support for building relay implementations
 - Modern noscrypt backend provides NIP-44 encryption
@@ -79,6 +79,7 @@ libnostr-c supports modular compilation - build only what you need:
 ## Projects Using libnostr-c
 
 - [keep-esp32](https://github.com/privkeyio/keep-esp32) - Air-gapped ESP32-S3 FROST threshold signing device with Nostr DKG coordination
+- [wisp-esp32](https://github.com/privkeyio/wisp-esp32) - Minimal ESP32-S3 Nostr relay with 21-day ephemeral storage
 - [vain](https://github.com/privkeyio/vain) - High-performance vanity Nostr public key miner
 
 ## License

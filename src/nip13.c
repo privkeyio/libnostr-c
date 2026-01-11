@@ -19,7 +19,6 @@
 #else
 #include <unistd.h>
 #endif
-#include <openssl/sha.h>
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 #include <cjson/cJSON.h>
 #endif
