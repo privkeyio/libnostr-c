@@ -122,12 +122,13 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        preset: ["win-release", "win-release-vcpkg"]
+        preset: ["win-release"]
         include:
           - preset: "win-release"
             with_vcpkg: false
-          - preset: "win-release-vcpkg"
-            with_vcpkg: true
+          # Disabled: slow (~10 min) vcpkg build - uncomment to re-enable
+          # - preset: "win-release-vcpkg"
+          #   with_vcpkg: true
     
     steps:
       - uses: actions/checkout@v4

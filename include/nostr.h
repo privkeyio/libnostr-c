@@ -669,6 +669,31 @@ int nostr_constant_time_memcmp(const void* a, const void* b, size_t n);
 void secure_wipe(void* ptr, size_t len);
 
 /**
+ * @brief Decode hex string to bytes
+ * @param hex Input hex string
+ * @param out Output byte buffer
+ * @param out_len Size of output buffer
+ * @return Number of bytes written, or -1 on error
+ */
+int nostr_hex_decode(const char* hex, uint8_t* out, size_t out_len);
+
+/**
+ * @brief Encode bytes to hex string
+ * @param bytes Input byte buffer
+ * @param len Number of bytes to encode
+ * @param out Output hex string buffer (must be at least len*2+1)
+ */
+void nostr_hex_encode(const uint8_t* bytes, size_t len, char* out);
+
+/**
+ * @brief Fill buffer with cryptographically secure random bytes
+ * @param buf Output buffer
+ * @param len Number of bytes to generate
+ * @return 1 on success, 0 on error
+ */
+int nostr_random_bytes(uint8_t* buf, size_t len);
+
+/**
  * @brief Create a zap request event (NIP-57 kind 9734)
  * @param event Output event pointer
  * @param amount Amount in millisats
@@ -872,6 +897,35 @@ nostr_error_t nostr_nip59_create_seal(nostr_event** seal, const nostr_event* rum
  */
 nostr_error_t nostr_nip59_create_gift_wrap(nostr_event** gift_wrap, const nostr_event* seal,
                                            const nostr_key* recipient_pubkey, const char** extra_tags, size_t tags_count);
+
+// NIP-46 Nostr Connect (Remote Signer) types and functions
+#define NOSTR_NIP46_KIND 24133
+
+typedef struct nostr_nip46_request {
+    char id[65];
+    char method[32];
+    char* params;
+    size_t params_len;
+    nostr_key sender_pubkey;
+} nostr_nip46_request_t;
+
+typedef struct nostr_nip46_response {
+    char id[65];
+    char* result;
+    char* error;
+} nostr_nip46_response_t;
+
+nostr_error_t nostr_nip46_parse_request(const nostr_event* event,
+                                        const nostr_privkey* recipient_privkey,
+                                        nostr_nip46_request_t* request);
+
+nostr_error_t nostr_nip46_create_response(const nostr_nip46_response_t* response,
+                                          const nostr_privkey* signer_privkey,
+                                          const nostr_key* recipient_pubkey,
+                                          nostr_event** event_out);
+
+void nostr_nip46_request_free(nostr_nip46_request_t* request);
+void nostr_nip46_response_free(nostr_nip46_response_t* response);
 
 // NIP-47 Nostr Wallet Connect functions
 typedef struct nwc_connection nwc_connection_t;

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.4] - 2026-01-11
+
+### Added
+- NIP-46 (Nostr Connect) remote signer support
+- Public hex utilities: `nostr_hex_decode()`, `nostr_hex_encode()`
+- NIP-13 proof-of-work support for ESP-IDF builds
+
+### Changed
+- Removed unused OpenSSL SHA header from nip13.c
+
 ## [0.1.3] - 2026-01-11
 
 ### Added

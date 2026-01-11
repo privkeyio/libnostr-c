@@ -8,6 +8,7 @@ if(ESP_PLATFORM)
         "src/config.c"
         "src/features.c"
         "src/bech32.c"
+        "src/nip13.c"
         "src/nip44.c"
     )
 
@@ -27,6 +28,7 @@ if(ESP_PLATFORM)
     idf_build_get_property(build_dir BUILD_DIR)
 
     set(NOSTR_FEATURE_ENCODING 1)
+    set(NOSTR_FEATURE_NIP13 1)
     set(NOSTR_FEATURE_CRYPTO_NOSCRYPT 1)
     set(HAVE_NOSCRYPT 1)
     set(HAVE_MBEDTLS 1)
@@ -56,7 +58,7 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(libnostr-c VERSION 0.1.3 LANGUAGES C)
+project(libnostr-c VERSION 0.1.4 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -93,6 +95,7 @@ option(NOSTR_FEATURE_NIP04 "Enable NIP-04: Legacy Encrypted Direct Messages (dep
 option(NOSTR_FEATURE_NIP13 "Enable NIP-13: Proof of Work" ON)
 option(NOSTR_FEATURE_NIP17 "Enable NIP-17: Private Direct Messages" OFF)
 option(NOSTR_FEATURE_NIP44 "Enable NIP-44: Encrypted Payloads v2" OFF)
+option(NOSTR_FEATURE_NIP46 "Enable NIP-46: Nostr Connect (Remote Signer)" OFF)
 option(NOSTR_FEATURE_NIP47 "Enable NIP-47: Nostr Wallet Connect" OFF)
 option(NOSTR_FEATURE_NIP57 "Enable NIP-57: Lightning Zaps" ON)
 option(NOSTR_FEATURE_NIP59 "Enable NIP-59: Gift Wrap" OFF)
@@ -129,6 +132,7 @@ if(NOSTR_FEATURE_ALL_NIPS)
     set(NOSTR_FEATURE_NIP13 ON)
     set(NOSTR_FEATURE_NIP17 ON)
     set(NOSTR_FEATURE_NIP44 ON)
+    set(NOSTR_FEATURE_NIP46 ON)
     set(NOSTR_FEATURE_NIP47 ON)
     set(NOSTR_FEATURE_NIP57 ON)
     set(NOSTR_FEATURE_NIP59 ON)
@@ -530,7 +534,7 @@ if(NOT HAVE_CRYPTO_BACKEND)
 endif()
 
 # Validate feature dependencies
-set(FEATURES_REQUIRING_NOSCRYPT "NIP04;NIP17;NIP44;NIP47;NIP59;HD_KEYS")
+set(FEATURES_REQUIRING_NOSCRYPT "NIP04;NIP17;NIP44;NIP46;NIP47;NIP59;HD_KEYS")
 foreach(FEATURE ${FEATURES_REQUIRING_NOSCRYPT})
     if(NOSTR_FEATURE_${FEATURE} AND NOT HAVE_NOSCRYPT)
         message(FATAL_ERROR "Feature ${FEATURE} requires noscrypt but it's not available")
@@ -624,8 +628,12 @@ if(NOSTR_FEATURE_NIP44 OR NOSTR_FEATURE_NIP04)
     list(APPEND NOSTR_SOURCES src/nip44.c)
 endif()
 
+if(NOSTR_FEATURE_NIP46)
+    list(APPEND NOSTR_SOURCES src/nip46.c)
+endif()
+
 if(NOSTR_FEATURE_NIP47)
-    list(APPEND NOSTR_SOURCES 
+    list(APPEND NOSTR_SOURCES
         src/nip47.c
         src/nip47_session.c
         src/nip47_commands.c
