@@ -206,10 +206,11 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
     return NOSTR_OK;
 }
 
+#ifndef NOSTR_FEATURE_JSON_ENHANCED
 static char* escape_json_string(const char* input)
 {
     if (!input) return NULL;
-    
+
     size_t len = strlen(input);
     size_t max_output_len = len * 2 + 1;
     char* output = malloc(max_output_len);
@@ -254,6 +255,7 @@ static char* escape_json_string(const char* input)
     output[j] = '\0';
     return output;
 }
+#endif
 
 static char* serialize_for_id(const nostr_event* event)
 {
