@@ -44,39 +44,46 @@ add_custom_target(profile
     COMMENT "Profiling CPU usage with callgrind"
 )
 
-add_executable(memory_analysis memory_analysis.c)
-target_include_directories(memory_analysis PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(memory_analysis nostr_static)
+# Unix-only tools (use sys/resource.h, /proc, etc.)
+if(NOT WIN32)
+    add_executable(memory_analysis memory_analysis.c)
+    target_include_directories(memory_analysis PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(memory_analysis nostr_static)
 
-add_executable(simd_analysis simd_analysis.c)
-target_include_directories(simd_analysis PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(simd_analysis nostr_static)
-target_compile_options(simd_analysis PRIVATE -msse2 -mavx2)
+    # SIMD analysis only on x86/x86_64 (SSE2/AVX2 not available on ARM)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|amd64|i[3-6]86)")
+        add_executable(simd_analysis simd_analysis.c)
+        target_include_directories(simd_analysis PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../include
+            ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        target_link_libraries(simd_analysis nostr_static)
+        target_compile_options(simd_analysis PRIVATE -msse2 -mavx2)
+
+        add_custom_target(simd-analysis
+            COMMAND ${CMAKE_CURRENT_BINARY_DIR}/simd_analysis
+            DEPENDS simd_analysis
+            COMMENT "Analyzing SIMD optimization opportunities"
+        )
+    endif()
+
+    add_custom_target(memory-analysis
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/memory_analysis
+        DEPENDS memory_analysis
+        COMMENT "Analyzing memory allocation patterns"
+    )
+
+endif()
 
 add_executable(regression_test regression_test.c)
-target_include_directories(regression_test PRIVATE 
+target_include_directories(regression_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(regression_test nostr_static)
-
-add_custom_target(memory-analysis
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/memory_analysis
-    DEPENDS memory_analysis
-    COMMENT "Analyzing memory allocation patterns"
-)
-
-add_custom_target(simd-analysis
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/simd_analysis
-    DEPENDS simd_analysis
-    COMMENT "Analyzing SIMD optimization opportunities"
-)
 
 add_custom_target(regression-test
     COMMAND ${CMAKE_CURRENT_BINARY_DIR}/regression_test

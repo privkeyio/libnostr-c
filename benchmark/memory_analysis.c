@@ -6,21 +6,6 @@
 #include "benchmark.h"
 #include "nostr_features.h"
 
-// Stub functions for disabled features
-#ifndef NOSTR_FEATURE_NIP44
-static inline nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, const char* plaintext, size_t plaintext_len, char** ciphertext) {
-    *ciphertext = strdup("disabled");
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
-#endif
-
-#ifndef NOSTR_FEATURE_NIP04
-static inline nostr_error_t nostr_nip04_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, const char* plaintext, char** ciphertext) {
-    *ciphertext = strdup("disabled");
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
-#endif
-
 typedef struct {
     size_t peak_rss;
     size_t current_rss;
@@ -151,29 +136,33 @@ static void analyze_crypto_memory_usage(void) {
         size_t msg_len = strlen(msg);
         
         printf("Message size: %zu bytes\n", msg_len);
-        
+
+#ifdef NOSTR_FEATURE_NIP44
         size_t before_nip44 = get_current_rss();
         char* nip44_ciphertext;
         nostr_nip44_encrypt(&sender.privkey, &recipient.pubkey, msg, msg_len, &nip44_ciphertext);
         size_t after_nip44 = get_current_rss();
-        
+
         if (nip44_ciphertext) {
             printf("  NIP-44 encrypt: %zu bytes overhead, ciphertext: %zu bytes\n",
                    after_nip44 - before_nip44, strlen(nip44_ciphertext));
             free(nip44_ciphertext);
         }
-        
+#endif
+
+#ifdef NOSTR_FEATURE_NIP04
         size_t before_nip04 = get_current_rss();
         char* nip04_ciphertext;
         nostr_nip04_encrypt(&sender.privkey, &recipient.pubkey, msg, &nip04_ciphertext);
         size_t after_nip04 = get_current_rss();
-        
+
         if (nip04_ciphertext) {
             printf("  NIP-04 encrypt: %zu bytes overhead, ciphertext: %zu bytes\n",
                    after_nip04 - before_nip04, strlen(nip04_ciphertext));
             free(nip04_ciphertext);
         }
-        
+#endif
+
         printf("\n");
     }
     

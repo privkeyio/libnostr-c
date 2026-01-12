@@ -99,106 +99,131 @@ static void key_generate_wrapper(void* data) {
     nostr_key_generate(&privkey, &pubkey);
 }
 
+typedef struct {
+    const char* hex;
+    nostr_key* key;
+} hex_key_ctx;
+
+static void hex_to_key_wrapper(void* data) {
+    hex_key_ctx* ctx = (hex_key_ctx*)data;
+    (void)nostr_key_from_hex(ctx->hex, ctx->key);
+}
+
+static volatile char benchmark_sink;
+
+static void key_to_hex_wrapper(void* data) {
+    char hex[65];
+    (void)nostr_key_to_hex((const nostr_key*)data, hex, sizeof(hex));
+    benchmark_sink = hex[0];
+}
+
+static void event_compute_id_wrapper(void* data) {
+    nostr_event_compute_id((nostr_event*)data);
+}
+
+typedef struct {
+    nostr_event* event;
+    nostr_privkey* privkey;
+} sign_ctx;
+
+static void event_sign_wrapper(void* data) {
+    sign_ctx* ctx = (sign_ctx*)data;
+    nostr_event_sign(ctx->event, ctx->privkey);
+}
+
+static void event_verify_wrapper(void* data) {
+    nostr_event_verify((const nostr_event*)data);
+}
+
+typedef struct {
+    nostr_privkey* sender_privkey;
+    nostr_key* recipient_pubkey;
+    const char* plaintext;
+    size_t plaintext_len;
+} encrypt_ctx;
+
+#ifdef NOSTR_FEATURE_NIP44
+static void nip44_encrypt_wrapper(void* data) {
+    encrypt_ctx* ctx = (encrypt_ctx*)data;
+    char* ciphertext = NULL;
+    (void)nostr_nip44_encrypt(ctx->sender_privkey, ctx->recipient_pubkey,
+                              ctx->plaintext, ctx->plaintext_len, &ciphertext);
+    free(ciphertext);
+}
+#endif
+
+#ifdef NOSTR_FEATURE_NIP04
+static void nip04_encrypt_wrapper(void* data) {
+    encrypt_ctx* ctx = (encrypt_ctx*)data;
+    char* ciphertext = NULL;
+    (void)nostr_nip04_encrypt(ctx->sender_privkey, ctx->recipient_pubkey,
+                              ctx->plaintext, &ciphertext);
+    free(ciphertext);
+}
+#endif
+
 static void run_regression_benchmarks(regression_report* report) {
     benchmark_result result;
-    
+
     nostr_privkey privkey;
     nostr_key pubkey;
     nostr_key_generate(&privkey, &pubkey);
-    
+
     benchmark_run("key_generation", key_generate_wrapper, NULL, 1000, &result);
     add_measurement(report, "key_generation", result.avg_ns);
-    
+
     const char* test_hex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
     nostr_key key;
-    
-    void hex_to_key_wrapper(void* data) {
-        nostr_key_from_hex((const char*)data, &key);
-    }
-    
-    benchmark_run("key_from_hex", hex_to_key_wrapper, (void*)test_hex, 10000, &result);
+    hex_key_ctx hex_ctx = {.hex = test_hex, .key = &key};
+
+    benchmark_run("key_from_hex", hex_to_key_wrapper, &hex_ctx, 10000, &result);
     add_measurement(report, "key_from_hex", result.avg_ns);
-    
-    void key_to_hex_wrapper(void* data) {
-        char hex[65];
-        nostr_key_to_hex((const nostr_key*)data, hex, sizeof(hex));
-    }
-    
+
     benchmark_run("key_to_hex", key_to_hex_wrapper, &key, 10000, &result);
     add_measurement(report, "key_to_hex", result.avg_ns);
-    
+
     nostr_event* event;
     nostr_event_create(&event);
     event->kind = 1;
     event->created_at = time(NULL);
     event->pubkey = pubkey;
     nostr_event_set_content(event, "Test event content");
-    
-    void event_compute_id_wrapper(void* data) {
-        nostr_event_compute_id((nostr_event*)data);
-    }
-    
+
     benchmark_run("event_compute_id", event_compute_id_wrapper, event, 10000, &result);
     add_measurement(report, "event_compute_id", result.avg_ns);
-    
-    void event_sign_wrapper(void* data) {
-        nostr_event_sign((nostr_event*)data, &privkey);
-    }
-    
-    benchmark_run("event_sign", event_sign_wrapper, event, 1000, &result);
+
+    sign_ctx sctx = {.event = event, .privkey = &privkey};
+
+    benchmark_run("event_sign", event_sign_wrapper, &sctx, 1000, &result);
     add_measurement(report, "event_sign", result.avg_ns);
-    
+
     nostr_event_sign(event, &privkey);
-    
-    void event_verify_wrapper(void* data) {
-        nostr_event_verify((const nostr_event*)data);
-    }
-    
+
     benchmark_run("event_verify", event_verify_wrapper, event, 1000, &result);
     add_measurement(report, "event_verify", result.avg_ns);
-    
+
     nostr_keypair sender, recipient;
     nostr_keypair_generate(&sender);
     nostr_keypair_generate(&recipient);
-    
+
     const char* test_message = "Test message for encryption benchmarks";
-    
-    typedef struct {
-        nostr_privkey* sender_privkey;
-        nostr_key* recipient_pubkey;
-        const char* plaintext;
-        size_t plaintext_len;
-    } encrypt_ctx;
-    
-    encrypt_ctx ctx = {
+    encrypt_ctx ectx = {
         .sender_privkey = &sender.privkey,
         .recipient_pubkey = &recipient.pubkey,
         .plaintext = test_message,
         .plaintext_len = strlen(test_message)
     };
-    
-    void nip44_encrypt_wrapper(void* data) {
-        encrypt_ctx* ctx = (encrypt_ctx*)data;
-        char* ciphertext;
-        nostr_nip44_encrypt(ctx->sender_privkey, ctx->recipient_pubkey,
-                           ctx->plaintext, ctx->plaintext_len, &ciphertext);
-        if (ciphertext) free(ciphertext);
-    }
-    
-    benchmark_run("nip44_encrypt", nip44_encrypt_wrapper, &ctx, 1000, &result);
+
+#ifdef NOSTR_FEATURE_NIP44
+    benchmark_run("nip44_encrypt", nip44_encrypt_wrapper, &ectx, 1000, &result);
     add_measurement(report, "nip44_encrypt", result.avg_ns);
-    
-    void nip04_encrypt_wrapper(void* data) {
-        encrypt_ctx* ctx = (encrypt_ctx*)data;
-        char* ciphertext;
-        nostr_nip04_encrypt(ctx->sender_privkey, ctx->recipient_pubkey,
-                           ctx->plaintext, &ciphertext);
-        if (ciphertext) free(ciphertext);
-    }
-    
-    benchmark_run("nip04_encrypt", nip04_encrypt_wrapper, &ctx, 1000, &result);
+#endif
+
+#ifdef NOSTR_FEATURE_NIP04
+    benchmark_run("nip04_encrypt", nip04_encrypt_wrapper, &ectx, 1000, &result);
     add_measurement(report, "nip04_encrypt", result.avg_ns);
-    
+#endif
+
     nostr_event_destroy(event);
     nostr_keypair_destroy(&sender);
     nostr_keypair_destroy(&recipient);
