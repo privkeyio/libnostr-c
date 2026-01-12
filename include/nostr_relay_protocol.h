@@ -51,7 +51,8 @@ typedef enum {
     NOSTR_RELAY_ERR_TOO_MANY_FILTERS,
     NOSTR_RELAY_ERR_BUFFER_TOO_SMALL,
     NOSTR_RELAY_ERR_MEMORY,
-    NOSTR_RELAY_ERR_UNKNOWN_MESSAGE_TYPE
+    NOSTR_RELAY_ERR_UNKNOWN_MESSAGE_TYPE,
+    NOSTR_RELAY_ERR_STORAGE
 } nostr_relay_error_t;
 
 /* ============================================================================
