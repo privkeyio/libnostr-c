@@ -49,36 +49,38 @@ kcachegrind callgrind.out
 
 | Operation | Typical Performance | Notes |
 |-----------|-------------------|-------|
-| Key Generation | ~50,000 ns/op | Cryptographically secure random generation |
-| Key From/To Hex | ~500 ns/op | Simple string conversion |
-| Key From/To Bech32 | ~2,000 ns/op | Includes checksum validation |
-| ECDH Operation | ~45,000 ns/op | secp256k1 point multiplication |
+| Key Generation | ~19,000 ns/op | Cryptographically secure random generation |
+| Key To Hex | ~900 ns/op | Binary to hex string |
+| Key From Hex | ~1,500 ns/op | Hex string parsing + validation |
+| Key To Bech32 | ~900 ns/op | Bech32 encoding |
+| Key From Bech32 | ~2,500 ns/op | Bech32 decoding + checksum validation |
+| ECDH Operation | ~36,000 ns/op | secp256k1 point multiplication |
 
 ### Cryptographic Operations
 
 | Operation | Message Size | Performance | Throughput |
 |-----------|-------------|-------------|------------|
-| NIP-44 Encrypt | 13 bytes | ~180,000 ns/op | ~0.07 MB/s |
-| NIP-44 Encrypt | 100 bytes | ~185,000 ns/op | ~0.54 MB/s |
-| NIP-44 Encrypt | 500 bytes | ~190,000 ns/op | ~2.6 MB/s |
-| NIP-44 Decrypt | 13 bytes | ~175,000 ns/op | ~0.07 MB/s |
-| NIP-44 Decrypt | 100 bytes | ~180,000 ns/op | ~0.56 MB/s |
-| NIP-44 Decrypt | 500 bytes | ~185,000 ns/op | ~2.7 MB/s |
-| NIP-04 Encrypt | 13 bytes | ~120,000 ns/op | ~0.11 MB/s |
-| NIP-04 Decrypt | 13 bytes | ~115,000 ns/op | ~0.11 MB/s |
+| NIP-44 Encrypt | 13 bytes | ~46,000 ns/op | ~0.27 MB/s |
+| NIP-44 Encrypt | 125 bytes | ~46,000 ns/op | ~2.6 MB/s |
+| NIP-44 Encrypt | 231 bytes | ~48,000 ns/op | ~4.6 MB/s |
+| NIP-44 Decrypt | 13 bytes | ~45,000 ns/op | ~0.27 MB/s |
+| NIP-44 Decrypt | 125 bytes | ~45,000 ns/op | ~2.6 MB/s |
+| NIP-44 Decrypt | 231 bytes | ~46,000 ns/op | ~4.8 MB/s |
+| NIP-04 Encrypt | 13 bytes | ~38,000 ns/op | ~0.32 MB/s |
+| NIP-04 Decrypt | 13 bytes | ~38,000 ns/op | ~0.33 MB/s |
 
 ### Event Operations
 
 | Operation | Performance | Notes |
 |-----------|-------------|-------|
-| Event Creation | ~1,500 ns/op | Memory allocation and initialization |
-| Event Set Content | ~800 ns/op | String copy and allocation |
-| Event Add Tag | ~1,200 ns/op | Arena allocation for tags |
-| Event Compute ID | ~15,000 ns/op | SHA256 + JSON serialization |
-| Event Sign | ~50,000 ns/op | Schnorr signature generation |
-| Event Verify | ~75,000 ns/op | Schnorr signature verification |
-| Event To JSON | ~8,000 ns/op | JSON serialization |
-| Event From JSON | ~12,000 ns/op | JSON parsing and validation |
+| Event Creation | ~55 ns/op | Memory allocation and initialization |
+| Event Set Content | ~70 ns/op | String copy and allocation |
+| Event Add Tag | ~90 ns/op | Arena allocation for tags |
+| Event Compute ID | ~2,300 ns/op | SHA256 + JSON serialization |
+| Event Sign | ~88,000 ns/op | Schnorr signature generation |
+| Event Verify | ~36,000 ns/op | Schnorr signature verification |
+| Event To JSON | ~4,800 ns/op | JSON serialization |
+| Event From JSON | ~7,200 ns/op | JSON parsing and validation |
 
 ### Memory Usage Patterns
 
@@ -205,25 +207,29 @@ make -C build regression-test
 
 ## Benchmark Results Reference
 
-### Typical Performance (AMD64, 3.2GHz)
-```
+### Typical Performance (x86_64)
+```text
 Key Operations:
-  nostr_key_generate                    : 47234.50 ns/op
-  nostr_key_from_hex                    :   465.23 ns/op
-  nostr_key_to_hex                      :   512.11 ns/op
-  nostr_key_to_bech32                   :  1876.45 ns/op
-  nostr_key_ecdh                        : 44321.67 ns/op
+  nostr_key_generate                    : 19241.80 ns/op
+  nostr_key_from_hex                    :  1533.63 ns/op
+  nostr_key_to_hex                      :   873.06 ns/op
+  nostr_key_to_bech32                   :   868.13 ns/op
+  nostr_key_from_bech32                 :  2576.45 ns/op
+  nostr_key_ecdh                        : 35904.65 ns/op
 
 Crypto Operations:
-  NIP-44 Encrypt (13 bytes)             : 178345.12 ns/op (0.07 MB/s)
-  NIP-44 Decrypt (13 bytes)             : 172891.34 ns/op (0.08 MB/s)
-  NIP-04 Encrypt (13 bytes)             : 118756.78 ns/op (0.11 MB/s)
+  NIP-44 Encrypt (13 bytes)             : 46058.59 ns/op (0.27 MB/s)
+  NIP-44 Decrypt (13 bytes)             : 45098.18 ns/op (0.27 MB/s)
+  NIP-04 Encrypt (13 bytes)             : 38384.53 ns/op (0.32 MB/s)
+  NIP-04 Decrypt (13 bytes)             : 37917.54 ns/op (0.33 MB/s)
 
 Event Operations:
-  nostr_event_create                    :  1456.23 ns/op
-  nostr_event_compute_id                : 14567.89 ns/op
-  nostr_event_sign                      : 49123.45 ns/op
-  nostr_event_verify                    : 73456.78 ns/op
+  nostr_event_create                    :    54.14 ns/op
+  nostr_event_compute_id                :  2271.63 ns/op
+  nostr_event_sign                      : 87580.18 ns/op
+  nostr_event_verify                    : 35829.01 ns/op
+  nostr_event_to_json                   :  4805.83 ns/op
+  nostr_event_from_json                 :  7208.14 ns/op
 ```
 
 ## Best Practices

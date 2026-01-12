@@ -2,14 +2,6 @@
 #include "nostr_features.h"
 #include <string.h>
 
-// Stub functions for disabled features
-#ifndef NOSTR_FEATURE_HD_KEYS
-typedef struct { int dummy; } nostr_hd_key;
-static inline nostr_error_t nostr_hd_key_from_seed(const uint8_t* seed, size_t seed_len, nostr_hd_key* key) { return NOSTR_ERR_NOT_SUPPORTED; }
-static inline nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* parent, const char* path, nostr_hd_key* child) { return NOSTR_ERR_NOT_SUPPORTED; }
-#define NOSTR_HD_PATH_STANDARD "m/44'/1237'/0'/0/0"
-#endif
-
 static void bench_privkey_to_hex_func(void* data) {
     const nostr_privkey* privkey = (const nostr_privkey*)data;
     char hex[65];
@@ -46,17 +38,19 @@ static void bench_event_id_from_bech32_func(void* data) {
     nostr_event_id_from_bech32(bech32, id);
 }
 
+#ifdef NOSTR_FEATURE_HD_KEYS
 static void bench_hd_key_operations_func(void* data) {
     (void)data;
     uint8_t seed[32];
     for (int i = 0; i < 32; i++) seed[i] = i;
-    
+
     nostr_hd_key master;
     if (nostr_hd_key_from_seed(seed, sizeof(seed), &master) == NOSTR_OK) {
         nostr_hd_key derived;
         nostr_hd_key_derive_path(&master, NOSTR_HD_PATH_STANDARD, &derived);
     }
 }
+#endif
 
 void bench_encoding_operations(void) {
     benchmark_result result;
@@ -88,8 +82,10 @@ void bench_encoding_operations(void) {
     benchmark_run("Event ID From Bech32", bench_event_id_from_bech32_func, (void*)test_event_bech32, 10000, &result);
     print_benchmark_result("nostr_event_id_from_bech32", &result);
     
+#ifdef NOSTR_FEATURE_HD_KEYS
     benchmark_run("HD Key Derivation", bench_hd_key_operations_func, NULL, 1000, &result);
     print_benchmark_result("HD Key Derivation Path", &result);
-    
+#endif
+
     nostr_keypair_destroy(&keypair);
 }

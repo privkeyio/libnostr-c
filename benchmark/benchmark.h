@@ -2,6 +2,7 @@
 #define BENCHMARK_H
 
 #include <stdint.h>
+#include <inttypes.h>
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,8 @@
 
 #ifdef __MACH__
 #include <mach/mach_time.h>
+#elif defined(_WIN32)
+#include <windows.h>
 #endif
 
 typedef struct {
@@ -81,7 +84,7 @@ static inline void benchmark_run(const char* name, void (*func)(void*), void* da
 }
 
 static inline void print_benchmark_result(const char* name, const benchmark_result* result) {
-    printf("%-40s: %8.2f ns/op (min: %8.2f, max: %8.2f) [%lu ops]\n",
+    printf("%-40s: %8.2f ns/op (min: %8.2f, max: %8.2f) [%" PRIu64 " ops]\n",
            name, result->avg_ns, result->min_ns, result->max_ns, result->iterations);
 }
 

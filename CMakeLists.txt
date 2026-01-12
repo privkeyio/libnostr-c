@@ -862,6 +862,7 @@ set_target_properties(nostr_static PROPERTIES
 enable_testing()
 add_subdirectory(tests)
 add_subdirectory(examples)
+add_subdirectory(benchmark)
 
 install(TARGETS nostr nostr_static
     EXPORT libnostr-c-targets

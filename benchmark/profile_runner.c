@@ -4,39 +4,7 @@
 #include "benchmark.h"
 #include "nostr_features.h"
 
-// Stub functions for disabled features
-#ifndef NOSTR_FEATURE_NIP44
-static inline nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, const char* plaintext, size_t plaintext_len, char** ciphertext) {
-    *ciphertext = strdup("disabled");
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
-static inline nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const nostr_key* sender_pubkey, const char* ciphertext, char** plaintext, size_t* plaintext_len) {
-    *plaintext = strdup("disabled");
-    *plaintext_len = 8;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
-#endif
-
-#ifndef NOSTR_FEATURE_NIP04
-static inline nostr_error_t nostr_nip04_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, const char* plaintext, char** ciphertext) {
-    *ciphertext = strdup("disabled");
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
-static inline nostr_error_t nostr_nip04_decrypt(const nostr_privkey* recipient_privkey, const nostr_key* sender_pubkey, const char* ciphertext, char** plaintext) {
-    *plaintext = strdup("disabled");
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
-#endif
-
-#ifndef NOSTR_FEATURE_HD_KEYS
-typedef struct { int dummy; } nostr_hd_key;
-static inline nostr_error_t nostr_hd_key_from_seed(const uint8_t* seed, size_t seed_len, nostr_hd_key* key) { return NOSTR_ERR_NOT_SUPPORTED; }
-static inline nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* parent, const char* path, nostr_hd_key* child) { return NOSTR_ERR_NOT_SUPPORTED; }
-static inline nostr_error_t nostr_hd_key_to_keypair(const nostr_hd_key* hd_key, nostr_keypair* keypair) { return NOSTR_ERR_NOT_SUPPORTED; }
-#define NOSTR_HD_PATH_STANDARD "m/44'/1237'/0'/0/0"
-#endif
-
-int main(int argc, char* argv[]) {
+int main(void) {
     printf("libnostr-c CPU Profiling Runner\n");
     printf("===============================\n\n");
     
@@ -65,35 +33,43 @@ int main(int argc, char* argv[]) {
         nostr_keypair_destroy(&keypair);
     }
     
-    printf("Testing crypto operations...\n");
     nostr_keypair sender, recipient;
     nostr_keypair_generate(&sender);
     nostr_keypair_generate(&recipient);
-    
+
+#if defined(NOSTR_FEATURE_NIP44) || defined(NOSTR_FEATURE_NIP04)
+    printf("Testing crypto operations...\n");
     const char* test_message = "This is a test message for crypto profiling operations.";
-    
+
     for (int i = 0; i < 1000; i++) {
+#ifdef NOSTR_FEATURE_NIP44
         char* nip44_ciphertext;
-        if (nostr_nip44_encrypt(&sender.privkey, &recipient.pubkey, 
+        if (nostr_nip44_encrypt(&sender.privkey, &recipient.pubkey,
                                test_message, strlen(test_message), &nip44_ciphertext) == NOSTR_OK) {
             char* plaintext;
             size_t plaintext_len;
-            nostr_nip44_decrypt(&recipient.privkey, &sender.pubkey,
-                               nip44_ciphertext, &plaintext, &plaintext_len);
-            if (plaintext) free(plaintext);
+            if (nostr_nip44_decrypt(&recipient.privkey, &sender.pubkey,
+                                    nip44_ciphertext, &plaintext, &plaintext_len) == NOSTR_OK) {
+                free(plaintext);
+            }
             free(nip44_ciphertext);
         }
-        
+#endif
+
+#ifdef NOSTR_FEATURE_NIP04
         char* nip04_ciphertext;
-        if (nostr_nip04_encrypt(&sender.privkey, &recipient.pubkey, 
+        if (nostr_nip04_encrypt(&sender.privkey, &recipient.pubkey,
                                test_message, &nip04_ciphertext) == NOSTR_OK) {
             char* plaintext;
-            nostr_nip04_decrypt(&recipient.privkey, &sender.pubkey,
-                               nip04_ciphertext, &plaintext);
-            if (plaintext) free(plaintext);
+            if (nostr_nip04_decrypt(&recipient.privkey, &sender.pubkey,
+                                    nip04_ciphertext, &plaintext) == NOSTR_OK) {
+                free(plaintext);
+            }
             free(nip04_ciphertext);
         }
+#endif
     }
+#endif
     
     printf("Testing event operations...\n");
     for (int i = 0; i < 5000; i++) {
@@ -124,21 +100,23 @@ int main(int argc, char* argv[]) {
         }
     }
     
+#ifdef NOSTR_FEATURE_HD_KEYS
     printf("Testing HD key derivation...\n");
     uint8_t seed[32];
     for (int i = 0; i < 32; i++) seed[i] = i;
-    
+
     for (int i = 0; i < 1000; i++) {
         nostr_hd_key master;
         if (nostr_hd_key_from_seed(seed, sizeof(seed), &master) == NOSTR_OK) {
             nostr_hd_key derived;
             nostr_hd_key_derive_path(&master, NOSTR_HD_PATH_STANDARD, &derived);
-            
+
             nostr_keypair keypair;
             nostr_hd_key_to_keypair(&derived, &keypair);
             nostr_keypair_destroy(&keypair);
         }
     }
+#endif
     
     printf("Profiling complete. Check callgrind.out for detailed analysis.\n");
     
