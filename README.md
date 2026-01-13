@@ -80,6 +80,7 @@ libnostr-c supports modular compilation - build only what you need:
 
 - [keep-esp32](https://github.com/privkeyio/keep-esp32) - Air-gapped ESP32-S3 FROST threshold signing device with Nostr DKG coordination
 - [wisp-esp32](https://github.com/privkeyio/wisp-esp32) - Minimal ESP32-S3 Nostr relay with 21-day ephemeral storage
+- [whisper](https://github.com/privkeyio/whisper) - Encrypted DM pipe for Nostr using NIP-17 + NIP-44, Unix-style CLI
 - [vain](https://github.com/privkeyio/vain) - High-performance vanity Nostr public key miner
 
 ## License
