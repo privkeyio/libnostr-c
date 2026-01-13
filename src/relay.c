@@ -31,9 +31,13 @@ typedef struct {
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
     CRITICAL_SECTION queue_mutex;
+    HANDLE service_thread;
 #else
     pthread_mutex_t queue_mutex;
+    pthread_t service_thread;
 #endif
+    volatile bool service_running;
+    bool service_thread_created;
 #endif
     bool reconnect_enabled;
     int reconnect_interval;
@@ -43,6 +47,26 @@ typedef struct {
     size_t buffer_size;
     size_t buffer_pos;
 } relay_context;
+
+#ifdef NOSTR_FEATURE_THREADING
+#ifdef _WIN32
+static DWORD WINAPI service_thread_func(LPVOID arg) {
+#else
+static void* service_thread_func(void* arg) {
+#endif
+    relay_context* ctx = (relay_context*)arg;
+    while (ctx->service_running) {
+        struct lws_context* context = ctx->context;
+        if (!context) break;
+        lws_service(context, 50);
+    }
+#ifdef _WIN32
+    return 0;
+#else
+    return NULL;
+#endif
+}
+#endif
 
 static int callback_nostr_relay(struct lws* wsi, enum lws_callback_reasons reason,
                                void* user, void* in, size_t len);
@@ -92,12 +116,7 @@ static void unlock_queue_mutex(relay_context* ctx) { (void)ctx; }
 #endif
 
 static struct lws_protocols protocols[] = {
-    {
-        "nostr-protocol",
-        callback_nostr_relay,
-        sizeof(relay_context),
-        65536,
-    },
+    { "nostr-protocol", callback_nostr_relay, sizeof(relay_context), 65536 },
     { NULL, NULL, 0, 0 }
 };
 
@@ -233,7 +252,35 @@ nostr_error_t nostr_relay_connect(nostr_relay* relay, nostr_relay_callback callb
     ctx->wsi = wsi;
     lws_set_opaque_user_data(wsi, relay);
     free(url_copy);
-    
+
+#ifdef NOSTR_FEATURE_THREADING
+    ctx->service_running = true;
+    ctx->service_thread_created = false;
+#ifdef _WIN32
+    ctx->service_thread = CreateThread(NULL, 0, service_thread_func, ctx, 0, NULL);
+    if (!ctx->service_thread) {
+        ctx->service_running = false;
+        destroy_queue_mutex(ctx);
+        relay->ws_handle = NULL;
+        lws_context_destroy(context);
+        free(ctx);
+        relay->state = NOSTR_RELAY_ERROR;
+        return NOSTR_ERR_MEMORY;
+    }
+#else
+    if (pthread_create(&ctx->service_thread, NULL, service_thread_func, ctx) != 0) {
+        ctx->service_running = false;
+        destroy_queue_mutex(ctx);
+        relay->ws_handle = NULL;
+        lws_context_destroy(context);
+        free(ctx);
+        relay->state = NOSTR_RELAY_ERROR;
+        return NOSTR_ERR_MEMORY;
+    }
+#endif
+    ctx->service_thread_created = true;
+#endif
+
     if (callback) {
         callback(relay, NOSTR_RELAY_CONNECTING, user_data);
     }
@@ -248,13 +295,29 @@ nostr_error_t nostr_relay_disconnect(nostr_relay* relay) {
 
     relay_context* ctx = (relay_context*)relay->ws_handle;
     ctx->reconnect_enabled = false;
-    
-    if (ctx->wsi) {
+
+    struct lws_context* context_to_destroy = ctx->context;
+    ctx->context = NULL;
+
+#ifdef NOSTR_FEATURE_THREADING
+    ctx->service_running = false;
+    if (ctx->service_thread_created) {
+#ifdef _WIN32
+        WaitForSingleObject(ctx->service_thread, INFINITE);
+        CloseHandle(ctx->service_thread);
+#else
+        pthread_join(ctx->service_thread, NULL);
+#endif
+        ctx->service_thread_created = false;
+    }
+#endif
+
+    if (ctx->wsi && relay->state == NOSTR_RELAY_CONNECTED) {
         lws_close_reason(ctx->wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
     }
-    
-    if (ctx->context) {
-        lws_context_destroy(ctx->context);
+
+    if (context_to_destroy) {
+        lws_context_destroy(context_to_destroy);
     }
     
     destroy_queue_mutex(ctx);
@@ -310,12 +373,14 @@ nostr_error_t nostr_relay_send_event(nostr_relay* relay, const nostr_event* even
     }
     
     memcpy(&buf[LWS_PRE], msg, msg_len);
-    
+
+    lock_queue_mutex(ctx);
     int result = lws_write(ctx->wsi, &buf[LWS_PRE], msg_len, LWS_WRITE_TEXT);
-    
+    unlock_queue_mutex(ctx);
+
     free(msg);
     free(buf);
-    
+
     return (result < 0) ? NOSTR_ERR_CONNECTION : NOSTR_OK;
 }
 
@@ -357,12 +422,14 @@ nostr_error_t nostr_subscribe(nostr_relay* relay, const char* subscription_id,
     }
     
     memcpy(&buf[LWS_PRE], msg, msg_len);
-    
+
+    lock_queue_mutex(ctx);
     int result = lws_write(ctx->wsi, &buf[LWS_PRE], msg_len, LWS_WRITE_TEXT);
-    
+    unlock_queue_mutex(ctx);
+
     free(msg);
     free(buf);
-    
+
     return (result < 0) ? NOSTR_ERR_CONNECTION : NOSTR_OK;
 }
 
@@ -424,12 +491,14 @@ nostr_error_t nostr_relay_unsubscribe(nostr_relay* relay, const char* subscripti
     }
     
     memcpy(&buf[LWS_PRE], msg, msg_len);
-    
+
+    lock_queue_mutex(ctx);
     int result = lws_write(ctx->wsi, &buf[LWS_PRE], msg_len, LWS_WRITE_TEXT);
-    
+    unlock_queue_mutex(ctx);
+
     free(msg);
     free(buf);
-    
+
     return (result < 0) ? NOSTR_ERR_CONNECTION : NOSTR_OK;
 }
 
