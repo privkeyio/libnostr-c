@@ -689,7 +689,7 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
     memcpy(nc_public.key, event->pubkey.data, NC_PUBKEY_SIZE);
 
     // Verify the signature using noscrypt
-    if (NCVerifyData(nc_ctx, &nc_public, event->id, NOSTR_ID_SIZE, event->sig) != NC_SUCCESS) {
+    if (NCVerifyDigest(nc_ctx, &nc_public, event->id, event->sig) != NC_SUCCESS) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 
