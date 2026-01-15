@@ -165,9 +165,10 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
             for (size_t i = 0; i < event->tags_count; i++) {
                 // Update the values array pointer
                 event->tags[i].values = (char**)((char*)event->tags[i].values + offset);
-                // Update all string pointers within the values array
                 for (size_t j = 0; j < event->tags[i].count; j++) {
-                    event->tags[i].values[j] += offset;
+                    if (event->tags[i].values[j]) {
+                        event->tags[i].values[j] += offset;
+                    }
                 }
             }
         }
@@ -583,15 +584,14 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
         return result;
     }
 
-    // Sign the event ID using noscrypt
-    // Generate secure random for signature
+    // Sign using NCSignDigest since event->id is already a SHA256 digest
     uint8_t random32[32];
     if (nostr_random_bytes(random32, 32) != 1) {
         memset(&nc_secret, 0, sizeof(nc_secret));
         return NOSTR_ERR_MEMORY;
     }
     
-    if (NCSignData(nc_ctx, &nc_secret, random32, event->id, NOSTR_ID_SIZE, event->sig) != NC_SUCCESS) {
+    if (NCSignDigest(nc_ctx, &nc_secret, random32, event->id, event->sig) != NC_SUCCESS) {
         memset(&nc_secret, 0, sizeof(nc_secret));
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
@@ -688,8 +688,8 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
     NCPublicKey nc_public;
     memcpy(nc_public.key, event->pubkey.data, NC_PUBKEY_SIZE);
 
-    // Verify the signature using noscrypt
-    if (NCVerifyData(nc_ctx, &nc_public, event->id, NOSTR_ID_SIZE, event->sig) != NC_SUCCESS) {
+    // Verify the signature using noscrypt (event->id is already the SHA256 digest)
+    if (NCVerifyDigest(nc_ctx, &nc_public, event->id, event->sig) != NC_SUCCESS) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 

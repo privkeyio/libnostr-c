@@ -40,7 +40,15 @@ static int ctx_initialized = 0;
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 static CRITICAL_SECTION ctx_init_lock;
-static volatile int ctx_init_lock_initialized = 0;
+static INIT_ONCE ctx_init_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK init_lock_callback(PINIT_ONCE InitOnce, PVOID Parameter, PVOID *Context) {
+    (void)InitOnce;
+    (void)Parameter;
+    (void)Context;
+    InitializeCriticalSection(&ctx_init_lock);
+    return TRUE;
+}
 #else
 static pthread_mutex_t ctx_init_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
@@ -49,10 +57,7 @@ static pthread_mutex_t ctx_init_lock = PTHREAD_MUTEX_INITIALIZER;
 static void lock_ctx_init(void) {
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
-    if (!ctx_init_lock_initialized) {
-        InitializeCriticalSection(&ctx_init_lock);
-        ctx_init_lock_initialized = 1;
-    }
+    InitOnceExecuteOnce(&ctx_init_once, init_lock_callback, NULL, NULL);
     EnterCriticalSection(&ctx_init_lock);
 #else
     pthread_mutex_lock(&ctx_init_lock);

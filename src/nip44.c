@@ -477,11 +477,13 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     
     if (NCEncryptionSetProperty(&enc_args, NC_ENC_SET_VERSION, NC_ENC_VERSION_NIP44) != NC_SUCCESS) {
         free(payload);
+        free(decrypted);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     if (NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_IV, nonce, NIP44_NONCE_SIZE) != NC_SUCCESS) {
         free(payload);
+        free(decrypted);
         return NOSTR_ERR_INVALID_PARAM;
     }
     
