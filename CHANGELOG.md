@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5] - 2026-01-14
+
+### Fixed
+- Use NCSignDigest/NCVerifyDigest for event signing (event ID is already a SHA256 digest)
+- Windows threading race condition in context initialization using InitOnceExecuteOnce
+- Memory corruption in NIP-13 nonce tag updates (use arena allocation)
+- Memory leaks in NIP-44 decrypt error paths
+
 ## [0.1.4] - 2026-01-11
 
 ### Added

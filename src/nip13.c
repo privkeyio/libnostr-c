@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <inttypes.h>
 #include <time.h>
 #ifdef NOSTR_FEATURE_THREADING
@@ -57,16 +58,74 @@ static nostr_error_t find_nonce_tag_index(const nostr_event* event, size_t* inde
     if (!event || !index) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     for (size_t i = 0; i < event->tags_count; i++) {
-        if (event->tags[i].count > 0 && event->tags[i].values[0] && 
+        if (event->tags[i].count > 0 && event->tags[i].values[0] &&
             strcmp(event->tags[i].values[0], "nonce") == 0) {
             *index = i;
             return NOSTR_OK;
         }
     }
-    
+
     return NOSTR_ERR_NOT_FOUND;
+}
+
+// Ensure arena has enough capacity, growing if needed and updating pointers
+static int arena_ensure_capacity(nostr_event* event, size_t needed)
+{
+    if (!event || !event->tag_arena) {
+        return -1;
+    }
+
+    if (event->tag_arena->used + needed <= event->tag_arena->capacity) {
+        return 0;
+    }
+
+    size_t new_capacity = event->tag_arena->capacity;
+    while (new_capacity < event->tag_arena->used + needed) {
+        new_capacity *= 2;
+    }
+
+    void* old_memory = event->tag_arena->memory;
+    void* new_memory = realloc(event->tag_arena->memory, new_capacity);
+    if (!new_memory) {
+        return -1;
+    }
+
+    if (new_memory != old_memory) {
+        ptrdiff_t offset = (char*)new_memory - (char*)old_memory;
+        for (size_t i = 0; i < event->tags_count; i++) {
+            event->tags[i].values = (char**)((char*)event->tags[i].values + offset);
+            for (size_t j = 0; j < event->tags[i].count; j++) {
+                if (event->tags[i].values[j]) {
+                    event->tags[i].values[j] += offset;
+                }
+            }
+        }
+    }
+
+    event->tag_arena->memory = new_memory;
+    event->tag_arena->capacity = new_capacity;
+    return 0;
+}
+
+// Helper to allocate a string from the event's tag arena
+static char* arena_strdup(nostr_event* event, const char* str)
+{
+    if (!event || !event->tag_arena || !str) {
+        return NULL;
+    }
+
+    size_t len = strlen(str) + 1;
+
+    if (arena_ensure_capacity(event, len) != 0) {
+        return NULL;
+    }
+
+    char* ptr = (char*)event->tag_arena->memory + event->tag_arena->used;
+    event->tag_arena->used += len;
+    memcpy(ptr, str, len);
+    return ptr;
 }
 
 nostr_error_t nostr_nip13_add_nonce_tag(nostr_event* event, uint64_t nonce_value, int target_difficulty)
@@ -93,36 +152,38 @@ nostr_error_t nostr_nip13_add_nonce_tag(nostr_event* event, uint64_t nonce_value
     
     size_t nonce_idx;
     nostr_error_t err = find_nonce_tag_index(event, &nonce_idx);
-    
+
     if (err == NOSTR_OK) {
-        if (event->tags[nonce_idx].count >= 2 && event->tags[nonce_idx].values[1]) {
-            free(event->tags[nonce_idx].values[1]);
-        }
-        if (event->tags[nonce_idx].count >= 3 && event->tags[nonce_idx].values[2]) {
-            free(event->tags[nonce_idx].values[2]);
-            event->tags[nonce_idx].values[2] = NULL;
-        }
-        
-        event->tags[nonce_idx].values[1] = strdup(nonce_str);
-        if (!event->tags[nonce_idx].values[1]) {
+        // Update existing nonce tag
+        // Note: Old strings remain in arena (can't be individually freed) but will be
+        // cleaned up when the event is destroyed. This is acceptable for mining workloads.
+        char* new_nonce = arena_strdup(event, nonce_str);
+        if (!new_nonce) {
             return NOSTR_ERR_MEMORY;
         }
-        
+        event->tags[nonce_idx].values[1] = new_nonce;
+
         if (target_difficulty > 0) {
             if (event->tags[nonce_idx].count < 3) {
-                char** new_values = realloc(event->tags[nonce_idx].values, 3 * sizeof(char*));
-                if (!new_values) {
+                // Need to expand values array - allocate new array from arena
+                size_t new_values_size = 3 * sizeof(char*);
+                if (arena_ensure_capacity(event, new_values_size) != 0) {
                     return NOSTR_ERR_MEMORY;
                 }
+                char** new_values = (char**)((char*)event->tag_arena->memory + event->tag_arena->used);
+                event->tag_arena->used += new_values_size;
+                new_values[0] = event->tags[nonce_idx].values[0];
+                new_values[1] = event->tags[nonce_idx].values[1];
+                new_values[2] = NULL;
                 event->tags[nonce_idx].values = new_values;
-                event->tags[nonce_idx].values[2] = NULL;
                 event->tags[nonce_idx].count = 3;
             }
-            
-            event->tags[nonce_idx].values[2] = strdup(target_str);
-            if (!event->tags[nonce_idx].values[2]) {
+
+            char* new_target = arena_strdup(event, target_str);
+            if (!new_target) {
                 return NOSTR_ERR_MEMORY;
             }
+            event->tags[nonce_idx].values[2] = new_target;
         } else {
             event->tags[nonce_idx].count = 2;
         }
