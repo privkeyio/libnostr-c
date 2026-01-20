@@ -22,23 +22,26 @@ void setUp(void) {}
 void tearDown(void) {}
 #endif
 
-extern void run_relay_protocol_core_tests(void);
-extern void run_relay_protocol_json_tests(void);
+extern int run_relay_protocol_core_tests(void);
+extern int run_relay_protocol_json_tests(void);
 extern int run_relay_protocol_nip_tests(void);
-extern void run_relay_protocol_accessor_tests(void);
+extern int run_relay_protocol_accessor_tests(void);
 
 int main(void)
 {
-    int result = 0;
     nostr_init();
 
-    run_relay_protocol_core_tests();
-    run_relay_protocol_json_tests();
-    result = run_relay_protocol_nip_tests();
-    run_relay_protocol_accessor_tests();
+    int r1 = run_relay_protocol_core_tests();
+    int r2 = run_relay_protocol_json_tests();
+    int r3 = run_relay_protocol_nip_tests();
+    int r4 = run_relay_protocol_accessor_tests();
+
+    int result = r1 || r2 || r3 || r4;
 
     if (result == 0) {
         printf("\nAll relay protocol tests passed!\n");
+    } else {
+        printf("\nSome tests failed!\n");
     }
 
     nostr_cleanup();

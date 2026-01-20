@@ -14,10 +14,14 @@
 #include "../include/nostr_relay_protocol.h"
 
 #ifndef HAVE_UNITY
+static int g_test_failed = 0;
+static int g_tests_failed_count = 0;
+
 #define TEST_ASSERT_EQUAL(expected, actual) \
     do { \
         if ((expected) != (actual)) { \
             printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
+            g_test_failed = 1; \
             return; \
         } \
     } while(0)
@@ -26,6 +30,7 @@
     do { \
         if ((ptr) == NULL) { \
             printf("Pointer is NULL: %s\n", #ptr); \
+            g_test_failed = 1; \
             return; \
         } \
     } while(0)
@@ -34,6 +39,7 @@
     do { \
         if ((ptr) != NULL) { \
             printf("Pointer is not NULL: %s\n", #ptr); \
+            g_test_failed = 1; \
             return; \
         } \
     } while(0)
@@ -42,6 +48,7 @@
     do { \
         if (!(condition)) { \
             printf("Condition failed: %s\n", #condition); \
+            g_test_failed = 1; \
             return; \
         } \
     } while(0)
@@ -50,6 +57,7 @@
     do { \
         if ((condition)) { \
             printf("Condition should be false: %s\n", #condition); \
+            g_test_failed = 1; \
             return; \
         } \
     } while(0)
@@ -58,7 +66,20 @@
     do { \
         if (strcmp(expected, actual) != 0) { \
             printf("String comparison failed: '%s' != '%s'\n", expected, actual); \
+            g_test_failed = 1; \
             return; \
+        } \
+    } while(0)
+
+#define RUN_TEST(test_func, test_name) \
+    do { \
+        g_test_failed = 0; \
+        test_func(); \
+        if (g_test_failed) { \
+            printf("  FAILED: %s\n", test_name); \
+            g_tests_failed_count++; \
+        } else { \
+            printf("  Success: %s\n", test_name); \
         } \
     } while(0)
 #endif
@@ -324,48 +345,62 @@ void test_event_binary_tag_extractors_no_tags(void)
     nostr_event_destroy(event);
 }
 
-void run_relay_protocol_accessor_tests(void)
+int run_relay_protocol_accessor_tests(void)
 {
+#ifndef HAVE_UNITY
+    g_tests_failed_count = 0;
+#endif
+
     printf("Running relay protocol accessor tests...\n");
 
-    test_nostr_hex_to_bytes();
-    printf("  Success: nostr_hex_to_bytes\n");
-    test_nostr_bytes_to_hex();
-    printf("  Success: nostr_bytes_to_hex\n");
-    test_nostr_version();
-    printf("  Success: nostr_version\n");
-    test_nostr_free();
-    printf("  Success: nostr_free\n");
-    test_nostr_free_strings();
-    printf("  Success: nostr_free_strings\n");
-    test_filter_accessors();
-    printf("  Success: filter_accessors\n");
-    test_filter_accessors_null();
-    printf("  Success: filter_accessors_null\n");
-    test_client_msg_accessors();
-    printf("  Success: client_msg_accessors\n");
-    test_client_msg_accessors_null();
-    printf("  Success: client_msg_accessors_null\n");
-    test_event_accessors();
-    printf("  Success: event_accessors\n");
-    test_event_accessors_null();
-    printf("  Success: event_accessors_null\n");
-    test_event_is_deletion();
-    printf("  Success: event_is_deletion\n");
-    test_event_binary_tag_extractors();
-    printf("  Success: event_binary_tag_extractors\n");
-    test_event_binary_tag_extractors_no_tags();
-    printf("  Success: event_binary_tag_extractors_no_tags\n");
+#ifdef HAVE_UNITY
+    RUN_TEST(test_nostr_hex_to_bytes);
+    RUN_TEST(test_nostr_bytes_to_hex);
+    RUN_TEST(test_nostr_version);
+    RUN_TEST(test_nostr_free);
+    RUN_TEST(test_nostr_free_strings);
+    RUN_TEST(test_filter_accessors);
+    RUN_TEST(test_filter_accessors_null);
+    RUN_TEST(test_client_msg_accessors);
+    RUN_TEST(test_client_msg_accessors_null);
+    RUN_TEST(test_event_accessors);
+    RUN_TEST(test_event_accessors_null);
+    RUN_TEST(test_event_is_deletion);
+    RUN_TEST(test_event_binary_tag_extractors);
+    RUN_TEST(test_event_binary_tag_extractors_no_tags);
+#else
+    RUN_TEST(test_nostr_hex_to_bytes, "nostr_hex_to_bytes");
+    RUN_TEST(test_nostr_bytes_to_hex, "nostr_bytes_to_hex");
+    RUN_TEST(test_nostr_version, "nostr_version");
+    RUN_TEST(test_nostr_free, "nostr_free");
+    RUN_TEST(test_nostr_free_strings, "nostr_free_strings");
+    RUN_TEST(test_filter_accessors, "filter_accessors");
+    RUN_TEST(test_filter_accessors_null, "filter_accessors_null");
+    RUN_TEST(test_client_msg_accessors, "client_msg_accessors");
+    RUN_TEST(test_client_msg_accessors_null, "client_msg_accessors_null");
+    RUN_TEST(test_event_accessors, "event_accessors");
+    RUN_TEST(test_event_accessors_null, "event_accessors_null");
+    RUN_TEST(test_event_is_deletion, "event_is_deletion");
+    RUN_TEST(test_event_binary_tag_extractors, "event_binary_tag_extractors");
+    RUN_TEST(test_event_binary_tag_extractors_no_tags, "event_binary_tag_extractors_no_tags");
+#endif
 
+#ifndef HAVE_UNITY
+    if (g_tests_failed_count > 0) {
+        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
+        return g_tests_failed_count;
+    }
+#endif
     printf("All relay protocol accessor tests passed!\n");
+    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
 int main(void)
 {
     nostr_init();
-    run_relay_protocol_accessor_tests();
+    int result = run_relay_protocol_accessor_tests();
     nostr_cleanup();
-    return 0;
+    return result;
 }
 #endif
