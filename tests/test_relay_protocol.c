@@ -24,20 +24,23 @@ void tearDown(void) {}
 
 extern void run_relay_protocol_core_tests(void);
 extern void run_relay_protocol_json_tests(void);
-extern void run_relay_protocol_nip_tests(void);
+extern int run_relay_protocol_nip_tests(void);
 extern void run_relay_protocol_accessor_tests(void);
 
 int main(void)
 {
+    int result = 0;
     nostr_init();
 
     run_relay_protocol_core_tests();
     run_relay_protocol_json_tests();
-    run_relay_protocol_nip_tests();
+    result = run_relay_protocol_nip_tests();
     run_relay_protocol_accessor_tests();
 
-    printf("\nAll relay protocol tests passed!\n");
+    if (result == 0) {
+        printf("\nAll relay protocol tests passed!\n");
+    }
 
     nostr_cleanup();
-    return 0;
+    return result;
 }
