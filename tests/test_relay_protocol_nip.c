@@ -139,8 +139,8 @@ void test_deletion_parse_invalid_kind(void)
 
 void test_deletion_parse_null_params(void)
 {
-    nostr_deletion_request_t request;
-    nostr_event event;
+    nostr_deletion_request_t request = {0};
+    nostr_event event = {0};
 
     TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_MISSING_FIELD, nostr_deletion_parse(NULL, &request));
     TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_MISSING_FIELD, nostr_deletion_parse(&event, NULL));
