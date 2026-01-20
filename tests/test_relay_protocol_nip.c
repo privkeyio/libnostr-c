@@ -363,6 +363,8 @@ void test_relay_info_set_nips(void)
     TEST_ASSERT_EQUAL(9, info.supported_nips[1]);
     TEST_ASSERT_EQUAL(11, info.supported_nips[2]);
     TEST_ASSERT_EQUAL(40, info.supported_nips[3]);
+
+    nostr_relay_info_free(&info);
 }
 
 void test_relay_info_add_nip(void)
@@ -507,6 +509,8 @@ void test_relay_info_serialize_full(void)
     TEST_ASSERT_TRUE(strstr(buf, "\"payment_required\":true") != NULL);
     TEST_ASSERT_TRUE(strstr(buf, "\"restricted_writes\":true") != NULL);
     TEST_ASSERT_TRUE(strstr(buf, "\"max_message_length\":70000") != NULL);
+
+    nostr_relay_info_free(&info);
 }
 
 void test_relay_info_serialize_with_countries_and_tags(void)
