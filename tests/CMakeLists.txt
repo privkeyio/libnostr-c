@@ -56,7 +56,14 @@ if(NOSTR_FEATURE_HD_KEYS)
 endif()
 
 if(NOSTR_FEATURE_RELAY_PROTOCOL)
-    add_executable(test_relay_protocol test_relay_protocol.c)
+    add_executable(test_relay_protocol
+        test_relay_protocol.c
+        test_relay_protocol_core.c
+        test_relay_protocol_json.c
+        test_relay_protocol_nip.c
+        test_relay_protocol_accessors.c
+    )
+    target_compile_definitions(test_relay_protocol PRIVATE TEST_RUNNER_INCLUDED)
     target_link_libraries(test_relay_protocol nostr_static)
     add_test(NAME relay_protocol_tests COMMAND test_relay_protocol)
 
