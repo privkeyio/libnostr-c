@@ -28,16 +28,16 @@ static uint32_t bech32_polymod(const uint8_t* values, size_t len) {
 
 static int bech32_hrp_expand(const char* hrp, uint8_t* ret, size_t ret_size) {
     size_t hrp_len = strlen(hrp);
-    size_t required = hrp_len * 2 + 1;
-    if (required > ret_size) return -1;
+    size_t expanded_len = hrp_len * 2 + 1;
+    if (expanded_len > ret_size) return -1;
+
     for (size_t i = 0; i < hrp_len; i++) {
         ret[i] = hrp[i] >> 5;
-    }
-    ret[hrp_len] = 0;
-    for (size_t i = 0; i < hrp_len; i++) {
         ret[hrp_len + 1 + i] = hrp[i] & 31;
     }
-    return hrp_len * 2 + 1;
+    ret[hrp_len] = 0;
+
+    return (int)expanded_len;
 }
 
 static int bech32_verify_checksum(const char* hrp, const uint8_t* data, size_t data_len) {
@@ -263,13 +263,15 @@ static size_t build_tlv(uint8_t* out, size_t out_size,
         pos += special_len;
     }
 
-    for (size_t i = 0; i < relay_count && relays && relays[i]; i++) {
-        size_t rlen = strlen(relays[i]);
-        if (rlen > 255 || pos + 2 + rlen > out_size) continue;
-        out[pos++] = TLV_RELAY;
-        out[pos++] = rlen;
-        memcpy(out + pos, relays[i], rlen);
-        pos += rlen;
+    if (relays) {
+        for (size_t i = 0; i < relay_count && relays[i]; i++) {
+            size_t rlen = strlen(relays[i]);
+            if (rlen > 255 || pos + 2 + rlen > out_size) continue;
+            out[pos++] = TLV_RELAY;
+            out[pos++] = (uint8_t)rlen;
+            memcpy(out + pos, relays[i], rlen);
+            pos += rlen;
+        }
     }
 
     if (author) {
@@ -463,9 +465,9 @@ nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay) {
 
     uint8_t special[NOSTR_URI_MAX_RELAY_LEN];
     size_t special_len = 0;
-    size_t dummy_count = 0;
+    size_t unused_count = 0;
 
-    err = parse_tlv(data, data_len, special, sizeof(special), &special_len, NULL, &dummy_count, 0, NULL, NULL, NULL, NULL);
+    err = parse_tlv(data, data_len, special, sizeof(special), &special_len, NULL, &unused_count, 0, NULL, NULL, NULL, NULL);
     if (err != NOSTR_OK || special_len == 0 || special_len >= NOSTR_URI_MAX_RELAY_LEN) {
         return err != NOSTR_OK ? err : NOSTR_ERR_ENCODING;
     }
