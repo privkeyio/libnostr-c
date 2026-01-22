@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/nostr.h"
-#include "../include/nostr_features.h"
+#include "nostr.h"
 
 #define TEST_ASSERT_EQUAL(expected, actual) \
     do { \
