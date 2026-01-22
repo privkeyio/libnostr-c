@@ -264,6 +264,8 @@ static size_t build_tlv(uint8_t* out, size_t out_size,
     }
 
     if (relays) {
+        if (relay_count > NOSTR_URI_MAX_RELAYS)
+            relay_count = NOSTR_URI_MAX_RELAYS;
         for (size_t i = 0; i < relay_count && relays[i]; i++) {
             size_t rlen = strlen(relays[i]);
             if (rlen > 255 || pos + 2 + rlen > out_size) continue;
@@ -527,30 +529,31 @@ nostr_error_t nostr_uri_parse(const char* uri, nostr_uri* result) {
 nostr_error_t nostr_uri_encode(const nostr_uri* uri, char* output, size_t output_size) {
     if (!uri || !output || output_size < 7) return NOSTR_ERR_INVALID_PARAM;
 
-    char bech32[1024];
+    char* bech32 = output + 6;
+    size_t bech32_size = output_size - 6;
     nostr_error_t err;
 
     switch (uri->type) {
         case NOSTR_URI_NPUB:
-            err = nostr_key_to_bech32(&uri->data.npub, "npub", bech32, sizeof(bech32));
+            err = nostr_key_to_bech32(&uri->data.npub, "npub", bech32, bech32_size);
             break;
         case NOSTR_URI_NSEC:
-            err = nostr_privkey_to_bech32(&uri->data.nsec, bech32, sizeof(bech32));
+            err = nostr_privkey_to_bech32(&uri->data.nsec, bech32, bech32_size);
             break;
         case NOSTR_URI_NOTE:
-            err = nostr_event_id_to_bech32(uri->data.note, bech32, sizeof(bech32));
+            err = nostr_event_id_to_bech32(uri->data.note, bech32, bech32_size);
             break;
         case NOSTR_URI_NPROFILE:
-            err = nostr_nprofile_encode(&uri->data.nprofile, bech32, sizeof(bech32));
+            err = nostr_nprofile_encode(&uri->data.nprofile, bech32, bech32_size);
             break;
         case NOSTR_URI_NEVENT:
-            err = nostr_nevent_encode(&uri->data.nevent, bech32, sizeof(bech32));
+            err = nostr_nevent_encode(&uri->data.nevent, bech32, bech32_size);
             break;
         case NOSTR_URI_NADDR:
-            err = nostr_naddr_encode(&uri->data.naddr, bech32, sizeof(bech32));
+            err = nostr_naddr_encode(&uri->data.naddr, bech32, bech32_size);
             break;
         case NOSTR_URI_NRELAY:
-            err = nostr_nrelay_encode(&uri->data.nrelay, bech32, sizeof(bech32));
+            err = nostr_nrelay_encode(&uri->data.nrelay, bech32, bech32_size);
             break;
         default:
             return NOSTR_ERR_INVALID_PARAM;
@@ -558,11 +561,7 @@ nostr_error_t nostr_uri_encode(const nostr_uri* uri, char* output, size_t output
 
     if (err != NOSTR_OK) return err;
 
-    size_t bech32_len = strlen(bech32);
-    if (output_size < 6 + bech32_len + 1) return NOSTR_ERR_INVALID_PARAM;
-
     memcpy(output, "nostr:", 6);
-    memcpy(output + 6, bech32, bech32_len + 1);
 
     return NOSTR_OK;
 }

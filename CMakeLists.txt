@@ -8,6 +8,7 @@ if(ESP_PLATFORM)
         "src/config.c"
         "src/features.c"
         "src/bech32.c"
+        "src/nip21.c"
         "src/nip13.c"
         "src/nip44.c"
     )

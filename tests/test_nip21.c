@@ -119,7 +119,7 @@ static void test_nevent_basic(void) {
     memset(&nevent, 0, sizeof(nevent));
 
     const char* id_hex = "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e";
-    nostr_hex_decode(id_hex, nevent.id, 32);
+    TEST_ASSERT_EQUAL(32, nostr_hex_decode(id_hex, nevent.id, 32));
 
     char bech32[512];
     TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nevent_encode(&nevent, bech32, sizeof(bech32)));
@@ -137,7 +137,7 @@ static void test_nevent_with_metadata(void) {
     memset(&nevent, 0, sizeof(nevent));
 
     const char* id_hex = "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e";
-    nostr_hex_decode(id_hex, nevent.id, 32);
+    TEST_ASSERT_EQUAL(32, nostr_hex_decode(id_hex, nevent.id, 32));
 
     const char* author_hex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
     TEST_ASSERT_EQUAL(NOSTR_OK, nostr_key_from_hex(author_hex, &nevent.author));
