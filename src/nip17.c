@@ -373,33 +373,34 @@ nostr_error_t nostr_nip17_unwrap_dm(const nostr_event* wrap, const nostr_privkey
     nostr_event* seal = NULL;
     char* decrypted_rumor_json = NULL;
     size_t decrypted_rumor_len;
-    
+
     if (!wrap || !recipient_privkey || !rumor) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     if (wrap->kind != KIND_GIFT_WRAP) {
         return NOSTR_ERR_INVALID_EVENT;
     }
-    
-    err = nostr_nip44_decrypt(recipient_privkey, &wrap->pubkey, wrap->content, 
+
+    err = nostr_nip44_decrypt(recipient_privkey, &wrap->pubkey, wrap->content,
                              &decrypted_seal_json, &decrypted_seal_len);
     if (err != NOSTR_OK) {
+        fprintf(stderr, "[nip17] gift wrap decrypt failed: %s\n", nostr_error_string(err));
         return err;
     }
-    
+
     err = nostr_event_from_json(decrypted_seal_json, &seal);
     secure_wipe(decrypted_seal_json, decrypted_seal_len);
     free(decrypted_seal_json);
     if (err != NOSTR_OK) {
         return err;
     }
-    
+
     if (seal->kind != KIND_SEAL) {
         nostr_event_destroy(seal);
         return NOSTR_ERR_INVALID_EVENT;
     }
-    
+
     err = nostr_event_verify(seal);
     if (err != NOSTR_OK) {
         nostr_event_destroy(seal);
@@ -436,13 +437,16 @@ nostr_error_t nostr_nip17_unwrap_dm(const nostr_event* wrap, const nostr_privkey
 #else
 
 /* NIP-17 functionality not available */
-nostr_error_t nostr_nip17_send_dm(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, const char* message, const char** relays, size_t relay_count, nostr_event** gift_wrap) {
-    (void)sender_privkey; (void)recipient_pubkey; (void)message; (void)relays; (void)relay_count; (void)gift_wrap;
+nostr_error_t nostr_nip17_send_dm(nostr_event** dm, const char* content,
+                                  const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey,
+                                  const char* subject, const uint8_t* reply_to, int64_t created_at) {
+    (void)dm; (void)content; (void)sender_privkey; (void)recipient_pubkey; (void)subject; (void)reply_to; (void)created_at;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 
-nostr_error_t nostr_nip17_unwrap_dm(const nostr_event* gift_wrap, const nostr_privkey* recipient_privkey, char** message, nostr_key* sender_pubkey) {
-    (void)gift_wrap; (void)recipient_privkey; (void)message; (void)sender_pubkey;
+nostr_error_t nostr_nip17_unwrap_dm(const nostr_event* wrap, const nostr_privkey* recipient_privkey,
+                                    nostr_event** rumor, nostr_key* sender_pubkey) {
+    (void)wrap; (void)recipient_privkey; (void)rumor; (void)sender_pubkey;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 

@@ -100,19 +100,6 @@ static int unpad_plaintext(const uint8_t* padded, size_t padded_len,
     uint8_t* result;
     uint32_t expected_pad_len;
     
-    /* DEBUG: Check if buffer is all zeros */
-    int all_zeros = 1;
-    for (size_t i = 0; i < padded_len && i < 16; i++) {
-        if (padded[i] != 0) {
-            all_zeros = 0;
-            break;
-        }
-    }
-    if (all_zeros && padded_len >= 16) {
-        /* Buffer appears to be all zeros - decryption may have failed */
-        return -1;
-    }
-    
     if (padded_len < 2) {
         return -1;
     }
@@ -125,7 +112,8 @@ static int unpad_plaintext(const uint8_t* padded, size_t padded_len,
     if (unpadded_len == 0 || unpadded_len > max_size) {
         return -1;
     }
-    
+
+    /* NIP-44 padding: calc_padded_len(plaintext_len + 2) includes length prefix */
     expected_pad_len = calc_padded_len(unpadded_len + 2);
     if (padded_len != expected_pad_len) {
         return -1;
@@ -353,7 +341,7 @@ nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nos
         free(encrypted);
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
-    
+
     free(padded_plaintext);
     
     /* Compute MAC over nonce || ciphertext */
@@ -408,7 +396,6 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     uint8_t* encrypted_data;
     uint8_t* mac;
     size_t encrypted_len;
-    uint8_t hmac_key[NC_HMAC_KEY_SIZE];
     NCEncryptionArgs enc_args = {0};
     NCSecretKey nc_secret;
     NCPublicKey nc_public;
@@ -437,7 +424,7 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     if (base64_decode(ciphertext, &payload, &payload_len) != 0) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     /* Validate payload size */
     /* Min: 1 (version) + 32 (nonce) + 32 (min ciphertext) + 32 (mac) = 97 */
     /* Max: 1 + 32 + 65535 + 32 = 65600 */
@@ -460,21 +447,43 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     
     memcpy(nc_secret.key, recipient_privkey->data, NC_SEC_KEY_SIZE);
     memcpy(nc_public.key, sender_pubkey->data, NC_PUBKEY_SIZE);
-    
-    /* Allocate decrypted buffer before using it */
+
+    /* First verify MAC using NCVerifyMac
+     * NIP-44 spec: MAC = HMAC(hmac_key, nonce || ciphertext)
+     * NCVerifyMac expects the payload to be what we HMAC over, so we need nonce || ciphertext
+     */
+    uint8_t* mac_payload = malloc(NIP44_NONCE_SIZE + encrypted_len);
+    if (!mac_payload) {
+        free(payload);
+        return NOSTR_ERR_MEMORY;
+    }
+    memcpy(mac_payload, nonce, NIP44_NONCE_SIZE);
+    memcpy(mac_payload + NIP44_NONCE_SIZE, encrypted_data, encrypted_len);
+
+    NCMacVerifyArgs mac_args = {0};
+    mac_args.mac32 = mac;
+    mac_args.nonce32 = nonce;
+    mac_args.payload = mac_payload;
+    mac_args.payloadSize = (uint32_t)(NIP44_NONCE_SIZE + encrypted_len);
+
+    result = NCVerifyMac(nc_ctx, &nc_secret, &nc_public, &mac_args);
+    free(mac_payload);
+    if (result != NC_SUCCESS) {
+        free(payload);
+        return NOSTR_ERR_INVALID_SIGNATURE;
+    }
+
+    /* Allocate decrypted buffer */
     decrypted = malloc(encrypted_len);
     if (!decrypted) {
         free(payload);
         return NOSTR_ERR_MEMORY;
     }
-    
-    /* Clear the decrypted buffer first */
     memset(decrypted, 0, encrypted_len);
-    
-    /* MAC is valid, now decrypt */
-    /* Reset encryption args for decryption */
+
+    /* Set up decryption args */
     memset(&enc_args, 0, sizeof(enc_args));
-    
+
     if (NCEncryptionSetProperty(&enc_args, NC_ENC_SET_VERSION, NC_ENC_VERSION_NIP44) != NC_SUCCESS) {
         free(payload);
         free(decrypted);
@@ -486,46 +495,20 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
         free(decrypted);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
-    /* Set HMAC key output buffer (even though we don't use it for decryption) */
-    if (NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_NIP44_MAC_KEY, hmac_key, sizeof(hmac_key)) != NC_SUCCESS) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
+
     if (NCEncryptionSetData(&enc_args, encrypted_data, decrypted, encrypted_len) != NC_SUCCESS) {
         free(payload);
         free(decrypted);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     result = NCDecrypt(nc_ctx, &nc_secret, &nc_public, &enc_args);
     if (result != NC_SUCCESS) {
         free(payload);
         free(decrypted);
-        return NOSTR_ERR_INVALID_SIGNATURE;
+        return NOSTR_ERR_ENCODING;
     }
 
-    uint8_t* mac_input = malloc(NIP44_NONCE_SIZE + encrypted_len);
-    if (!mac_input) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_MEMORY;
-    }
-    memcpy(mac_input, nonce, NIP44_NONCE_SIZE);
-    memcpy(mac_input + NIP44_NONCE_SIZE, encrypted_data, encrypted_len);
-
-    uint8_t computed_mac[NC_ENCRYPTION_MAC_SIZE];
-    result = NCComputeMac(nc_ctx, hmac_key, mac_input, NIP44_NONCE_SIZE + encrypted_len, computed_mac);
-    free(mac_input);
-
-    if (result != NC_SUCCESS || nostr_constant_time_memcmp(computed_mac, mac, NC_ENCRYPTION_MAC_SIZE) != 0) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_INVALID_SIGNATURE;
-    }
-    
     /* Unpad the decrypted data */
     if (unpad_plaintext(decrypted, encrypted_len, &unpadded, &unpadded_len) != 0) {
         free(payload);

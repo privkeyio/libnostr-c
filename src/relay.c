@@ -12,6 +12,33 @@
 #include <time.h>
 #include <cjson/cJSON.h>
 
+static char* find_json_array_end(const char* start) {
+    if (!start || *start != '[') return NULL;
+
+    int depth = 0;
+    bool in_string = false;
+    const char* p = start;
+
+    while (*p) {
+        if (in_string) {
+            if (*p == '\\' && *(p + 1)) {
+                p += 2;
+                continue;
+            }
+            if (*p == '"') in_string = false;
+        } else {
+            if (*p == '"') in_string = true;
+            else if (*p == '[' || *p == '{') depth++;
+            else if (*p == ']' || *p == '}') {
+                depth--;
+                if (depth == 0) return (char*)(p + 1);
+            }
+        }
+        p++;
+    }
+    return NULL;
+}
+
 typedef struct subscription {
     char* id;
     nostr_event_callback callback;
@@ -530,14 +557,16 @@ static int callback_nostr_relay(struct lws* wsi, enum lws_callback_reasons reaso
                 memcpy(ctx->receive_buffer + ctx->buffer_pos, in, len);
                 ctx->buffer_pos += len;
                 ctx->receive_buffer[ctx->buffer_pos] = '\0';
-                
+
                 char* start = ctx->receive_buffer;
                 char* end;
-                
-                while ((end = strchr(start, '\n')) != NULL || (end = strchr(start, ']')) != NULL) {
-                    if (*end == ']') end++;
+
+                while (*start == '\n' || *start == '\r' || *start == ' ') start++;
+
+                while (*start == '[' && (end = find_json_array_end(start)) != NULL) {
+                    char saved = *end;
                     *end = '\0';
-                    
+
                     cJSON* json = cJSON_Parse(start);
                     if (json && cJSON_IsArray(json)) {
                         int array_size = cJSON_GetArraySize(json);
@@ -626,9 +655,10 @@ static int callback_nostr_relay(struct lws* wsi, enum lws_callback_reasons reaso
                         }
                     }
                     cJSON_Delete(json);
-                    
-                    start = end + 1;
-                    while (*start && (*start == '\n' || *start == '\r')) start++;
+                    *end = saved;
+
+                    start = end;
+                    while (*start && (*start == '\n' || *start == '\r' || *start == ' ')) start++;
                 }
                 
                 size_t remaining = strlen(start);
