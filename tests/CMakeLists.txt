@@ -11,6 +11,7 @@ add_executable(test_runner
     test_event.c
     test_key.c
     test_bech32.c
+    test_nip21.c
     test_relay.c
     test_zap.c
     test_nip10.c

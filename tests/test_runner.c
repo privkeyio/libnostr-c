@@ -21,6 +21,7 @@ void run_key_tests(void);
 // Other test functions
 void run_event_tests(void);
 void run_bech32_tests(void);
+void run_nip21_tests(void);
 void run_relay_tests(void);
 void run_zap_tests(void);
 void run_nip10_tests(void);
@@ -45,7 +46,11 @@ int main(void)
     printf("Bech32 tests:\n");
     run_bech32_tests();
     printf("\n");
-    
+
+    printf("NIP-21 tests:\n");
+    run_nip21_tests();
+    printf("\n");
+
 #ifdef NOSTR_FEATURE_RELAY
     printf("Relay tests:\n");
     run_relay_tests();
