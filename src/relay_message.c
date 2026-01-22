@@ -194,6 +194,7 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
             cJSON_Delete(root);
             return NOSTR_RELAY_ERR_TOO_MANY_FILTERS;
         }
+        msg->type = NOSTR_CLIENT_MSG_COUNT;
         if (filter_count > 0) {
             msg->data.count.filters = calloc(filter_count, sizeof(nostr_filter_t));
             if (!msg->data.count.filters) {
@@ -223,8 +224,6 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
                 msg->data.count.filters_count++;
             }
         }
-
-        msg->type = NOSTR_CLIENT_MSG_COUNT;
     }
     else {
         cJSON_Delete(root);
