@@ -57,10 +57,7 @@ static bool is_valid_relay_url(const char* url)
     if (len == 0 || len > MAX_URL_LENGTH) {
         return false;
     }
-    if (strncmp(url, "wss://", 6) == 0 || strncmp(url, "ws://", 5) == 0) {
-        return true;
-    }
-    return false;
+    return strncmp(url, "wss://", 6) == 0 || strncmp(url, "ws://", 5) == 0;
 }
 
 nostr_error_t nostr_relay_list_add(nostr_relay_list* list, const char* url, bool read, bool write)
@@ -226,34 +223,36 @@ const nostr_relay_list_entry* nostr_relay_list_get(const nostr_relay_list* list,
     return &list->relays[index];
 }
 
-nostr_error_t nostr_relay_list_get_read_relays(const nostr_relay_list* list,
-                                                char*** urls, size_t* count)
+static nostr_error_t get_relays_by_flag(const nostr_relay_list* list, bool for_read,
+                                         char*** urls, size_t* count)
 {
     if (!list || !urls || !count) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    size_t read_count = 0;
+    size_t match_count = 0;
     for (size_t i = 0; i < list->count; i++) {
-        if (list->relays[i].read) {
-            read_count++;
+        bool match = for_read ? list->relays[i].read : list->relays[i].write;
+        if (match) {
+            match_count++;
         }
     }
 
-    if (read_count == 0) {
+    if (match_count == 0) {
         *urls = NULL;
         *count = 0;
         return NOSTR_OK;
     }
 
-    *urls = calloc(read_count, sizeof(char*));
+    *urls = calloc(match_count, sizeof(char*));
     if (!*urls) {
         return NOSTR_ERR_MEMORY;
     }
 
     size_t j = 0;
-    for (size_t i = 0; i < list->count && j < read_count; i++) {
-        if (list->relays[i].read) {
+    for (size_t i = 0; i < list->count && j < match_count; i++) {
+        bool match = for_read ? list->relays[i].read : list->relays[i].write;
+        if (match) {
             (*urls)[j] = strdup(list->relays[i].url);
             if (!(*urls)[j]) {
                 for (size_t k = 0; k < j; k++) {
@@ -267,53 +266,20 @@ nostr_error_t nostr_relay_list_get_read_relays(const nostr_relay_list* list,
         }
     }
 
-    *count = read_count;
+    *count = match_count;
     return NOSTR_OK;
+}
+
+nostr_error_t nostr_relay_list_get_read_relays(const nostr_relay_list* list,
+                                                char*** urls, size_t* count)
+{
+    return get_relays_by_flag(list, true, urls, count);
 }
 
 nostr_error_t nostr_relay_list_get_write_relays(const nostr_relay_list* list,
                                                  char*** urls, size_t* count)
 {
-    if (!list || !urls || !count) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    size_t write_count = 0;
-    for (size_t i = 0; i < list->count; i++) {
-        if (list->relays[i].write) {
-            write_count++;
-        }
-    }
-
-    if (write_count == 0) {
-        *urls = NULL;
-        *count = 0;
-        return NOSTR_OK;
-    }
-
-    *urls = calloc(write_count, sizeof(char*));
-    if (!*urls) {
-        return NOSTR_ERR_MEMORY;
-    }
-
-    size_t j = 0;
-    for (size_t i = 0; i < list->count && j < write_count; i++) {
-        if (list->relays[i].write) {
-            (*urls)[j] = strdup(list->relays[i].url);
-            if (!(*urls)[j]) {
-                for (size_t k = 0; k < j; k++) {
-                    free((*urls)[k]);
-                }
-                free(*urls);
-                *urls = NULL;
-                return NOSTR_ERR_MEMORY;
-            }
-            j++;
-        }
-    }
-
-    *count = write_count;
-    return NOSTR_OK;
+    return get_relays_by_flag(list, false, urls, count);
 }
 
 void nostr_relay_list_free_urls(char** urls, size_t count)

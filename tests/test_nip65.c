@@ -44,6 +44,16 @@
         } \
     } while(0)
 
+#define RUN_TEST(test_func) \
+    do { \
+        printf(#test_func ": "); \
+        if (test_func() == 0) { \
+            printf("PASS\n"); \
+        } else { \
+            failures++; \
+        } \
+    } while(0)
+
 static int test_relay_list_create_free(void)
 {
     nostr_relay_list* list = NULL;
@@ -296,82 +306,17 @@ int main(void)
 #ifdef NOSTR_FEATURE_NIP65
     printf("Running NIP-65 tests...\n\n");
 
-    printf("test_relay_list_create_free: ");
-    if (test_relay_list_create_free() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_create_invalid: ");
-    if (test_relay_list_create_invalid() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_add: ");
-    if (test_relay_list_add() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_add_invalid: ");
-    if (test_relay_list_add_invalid() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_to_event: ");
-    if (test_relay_list_to_event() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_from_event: ");
-    if (test_relay_list_from_event() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_from_event_invalid_kind: ");
-    if (test_relay_list_from_event_invalid_kind() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_get_read_relays: ");
-    if (test_relay_list_get_read_relays() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_get_write_relays: ");
-    if (test_relay_list_get_write_relays() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_get_out_of_bounds: ");
-    if (test_relay_list_get_out_of_bounds() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
-
-    printf("test_relay_list_capacity_growth: ");
-    if (test_relay_list_capacity_growth() == 0) {
-        printf("PASS\n");
-    } else {
-        failures++;
-    }
+    RUN_TEST(test_relay_list_create_free);
+    RUN_TEST(test_relay_list_create_invalid);
+    RUN_TEST(test_relay_list_add);
+    RUN_TEST(test_relay_list_add_invalid);
+    RUN_TEST(test_relay_list_to_event);
+    RUN_TEST(test_relay_list_from_event);
+    RUN_TEST(test_relay_list_from_event_invalid_kind);
+    RUN_TEST(test_relay_list_get_read_relays);
+    RUN_TEST(test_relay_list_get_write_relays);
+    RUN_TEST(test_relay_list_get_out_of_bounds);
+    RUN_TEST(test_relay_list_capacity_growth);
 
     printf("\n");
     if (failures == 0) {
