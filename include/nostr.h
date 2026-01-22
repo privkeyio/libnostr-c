@@ -1210,6 +1210,29 @@ void nostr_naddr_free(nostr_naddr* addr);
 nostr_error_t nostr_nrelay_encode(const nostr_nrelay* relay, char* bech32, size_t bech32_size);
 nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay);
 
+typedef struct nostr_relay_list_entry {
+    char* url;
+    bool read;
+    bool write;
+} nostr_relay_list_entry;
+
+typedef struct nostr_relay_list {
+    nostr_relay_list_entry* relays;
+    size_t count;
+    size_t capacity;
+} nostr_relay_list;
+
+nostr_error_t nostr_relay_list_create(nostr_relay_list** list);
+void nostr_relay_list_free(nostr_relay_list* list);
+nostr_error_t nostr_relay_list_add(nostr_relay_list* list, const char* url, bool read, bool write);
+nostr_error_t nostr_relay_list_to_event(const nostr_relay_list* list, nostr_event** event);
+nostr_error_t nostr_relay_list_from_event(const nostr_event* event, nostr_relay_list** list);
+size_t nostr_relay_list_count(const nostr_relay_list* list);
+const nostr_relay_list_entry* nostr_relay_list_get(const nostr_relay_list* list, size_t index);
+nostr_error_t nostr_relay_list_get_read_relays(const nostr_relay_list* list, char*** urls, size_t* count);
+nostr_error_t nostr_relay_list_get_write_relays(const nostr_relay_list* list, char*** urls, size_t* count);
+void nostr_relay_list_free_urls(char** urls, size_t count);
+
 #ifdef __cplusplus
 }
 #endif

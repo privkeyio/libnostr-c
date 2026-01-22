@@ -39,6 +39,12 @@ if(NOSTR_FEATURE_NIP59)
     add_test(NAME nip59_tests COMMAND test_nip59)
 endif()
 
+if(NOSTR_FEATURE_NIP65)
+    add_executable(test_nip65 test_nip65.c)
+    target_link_libraries(test_nip65 nostr_static)
+    add_test(NAME nip65_tests COMMAND test_nip65)
+endif()
+
 if(NOSTR_FEATURE_NIP47)
     add_executable(test_nip47 test_nip47_minimal.c)
     target_link_libraries(test_nip47 nostr_static)

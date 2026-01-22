@@ -102,6 +102,7 @@ option(NOSTR_FEATURE_NIP46 "Enable NIP-46: Nostr Connect (Remote Signer)" OFF)
 option(NOSTR_FEATURE_NIP47 "Enable NIP-47: Nostr Wallet Connect" OFF)
 option(NOSTR_FEATURE_NIP57 "Enable NIP-57: Lightning Zaps" ON)
 option(NOSTR_FEATURE_NIP59 "Enable NIP-59: Gift Wrap" OFF)
+option(NOSTR_FEATURE_NIP65 "Enable NIP-65: Relay List Metadata" ON)
 option(NOSTR_FEATURE_RELAY_PROTOCOL "Enable NIP-01 relay-side protocol support" ON)
 
 # Check if JSON_ENHANCED was set by user/preset before defining the option
@@ -141,6 +142,7 @@ if(NOSTR_FEATURE_ALL_NIPS)
     set(NOSTR_FEATURE_NIP47 ON)
     set(NOSTR_FEATURE_NIP57 ON)
     set(NOSTR_FEATURE_NIP59 ON)
+    set(NOSTR_FEATURE_NIP65 ON)
     set(NOSTR_FEATURE_HD_KEYS ON)
 endif()
 
@@ -659,6 +661,10 @@ endif()
 
 if(NOSTR_FEATURE_NIP59)
     list(APPEND NOSTR_SOURCES src/nip59.c)
+endif()
+
+if(NOSTR_FEATURE_NIP65)
+    list(APPEND NOSTR_SOURCES src/nip65.c)
 endif()
 
 if(NOSTR_FEATURE_HD_KEYS)
