@@ -23,6 +23,8 @@ void run_event_tests(void);
 void run_bech32_tests(void);
 void run_relay_tests(void);
 void run_zap_tests(void);
+void run_nip10_tests(void);
+void run_nip25_tests(void);
 void run_utils_tests(void);
 void run_coverage_tests(void);
 
@@ -55,7 +57,19 @@ int main(void)
     run_zap_tests();
     printf("\n");
 #endif
-    
+
+#ifdef NOSTR_FEATURE_NIP10
+    printf("NIP-10 tests:\n");
+    run_nip10_tests();
+    printf("\n");
+#endif
+
+#ifdef NOSTR_FEATURE_NIP25
+    printf("NIP-25 tests:\n");
+    run_nip25_tests();
+    printf("\n");
+#endif
+
     printf("Utils tests:\n");
     run_utils_tests();
     printf("\n");

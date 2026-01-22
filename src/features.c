@@ -8,12 +8,20 @@ int nostr_feature_nip_supported(int nip_number)
         case 4:
             return 1;
 #endif
+#ifdef NOSTR_FEATURE_NIP10
+        case 10:
+            return 1;
+#endif
 #ifdef NOSTR_FEATURE_NIP13
         case 13:
             return 1;
 #endif
 #ifdef NOSTR_FEATURE_NIP17
         case 17:
+            return 1;
+#endif
+#ifdef NOSTR_FEATURE_NIP25
+        case 25:
             return 1;
 #endif
 #ifdef NOSTR_FEATURE_NIP44
@@ -90,11 +98,17 @@ const char* nostr_feature_list_enabled(void)
 #ifdef NOSTR_FEATURE_NIP04
         strcat(feature_list, ",nip04");
 #endif
+#ifdef NOSTR_FEATURE_NIP10
+        strcat(feature_list, ",nip10");
+#endif
 #ifdef NOSTR_FEATURE_NIP13
         strcat(feature_list, ",nip13");
 #endif
 #ifdef NOSTR_FEATURE_NIP17
         strcat(feature_list, ",nip17");
+#endif
+#ifdef NOSTR_FEATURE_NIP25
+        strcat(feature_list, ",nip25");
 #endif
 #ifdef NOSTR_FEATURE_NIP44
         strcat(feature_list, ",nip44");
