@@ -142,6 +142,7 @@ typedef enum {
     NOSTR_CLIENT_MSG_REQ,       /**< ["REQ", <sub_id>, <filters...>] */
     NOSTR_CLIENT_MSG_CLOSE,     /**< ["CLOSE", <sub_id>] */
     NOSTR_CLIENT_MSG_AUTH,      /**< ["AUTH", <event>] (NIP-42) */
+    NOSTR_CLIENT_MSG_COUNT,     /**< ["COUNT", <query_id>, <filters...>] (NIP-45) */
     NOSTR_CLIENT_MSG_UNKNOWN    /**< Unknown message type */
 } nostr_client_msg_type_t;
 
@@ -165,6 +166,11 @@ typedef struct {
         struct {
             nostr_event* event;         /**< AUTH: auth event */
         } auth;
+        struct {
+            char query_id[65];          /**< COUNT: query ID (NIP-45) */
+            nostr_filter_t* filters;    /**< COUNT: array of filters */
+            size_t filters_count;       /**< COUNT: number of filters */
+        } count;
     } data;
 } nostr_client_msg_t;
 
@@ -181,7 +187,8 @@ typedef enum {
     NOSTR_RELAY_MSG_EOSE,       /**< ["EOSE", <sub_id>] */
     NOSTR_RELAY_MSG_CLOSED,     /**< ["CLOSED", <sub_id>, <message>] */
     NOSTR_RELAY_MSG_NOTICE,     /**< ["NOTICE", <message>] */
-    NOSTR_RELAY_MSG_AUTH        /**< ["AUTH", <challenge>] (NIP-42) */
+    NOSTR_RELAY_MSG_AUTH,       /**< ["AUTH", <challenge>] (NIP-42) */
+    NOSTR_RELAY_MSG_COUNT       /**< ["COUNT", <query_id>, {"count": N}] (NIP-45) */
 } nostr_relay_msg_type_t;
 
 /**
@@ -212,6 +219,11 @@ typedef struct {
         struct {
             char challenge[128];
         } auth;
+        struct {
+            char query_id[65];          /**< Query ID (NIP-45) */
+            int64_t count;              /**< Event count */
+            bool approximate;           /**< Whether count is approximate */
+        } count;
     } data;
 } nostr_relay_msg_t;
 
@@ -323,6 +335,11 @@ void nostr_relay_msg_notice(nostr_relay_msg_t* msg, const char* message);
  * @brief Convenience: initialize AUTH relay message (NIP-42)
  */
 void nostr_relay_msg_auth(nostr_relay_msg_t* msg, const char* challenge);
+
+/**
+ * @brief Convenience: initialize COUNT relay message (NIP-45)
+ */
+void nostr_relay_msg_count(nostr_relay_msg_t* msg, const char* query_id, int64_t count, bool approximate);
 
 /* ============================================================================
  * Event Parsing and Serialization (NIP-01)

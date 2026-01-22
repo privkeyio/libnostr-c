@@ -398,6 +398,39 @@ void test_relay_msg_auth(void)
     TEST_ASSERT_EQUAL_STRING("challenge-string-12345", msg.data.auth.challenge);
 }
 
+void test_relay_msg_count(void)
+{
+    nostr_relay_msg_t msg;
+    nostr_relay_msg_count(&msg, "query123", 238, false);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_MSG_COUNT, msg.type);
+    TEST_ASSERT_EQUAL_STRING("query123", msg.data.count.query_id);
+    TEST_ASSERT_EQUAL(238, msg.data.count.count);
+    TEST_ASSERT_FALSE(msg.data.count.approximate);
+}
+
+void test_relay_msg_count_approximate(void)
+{
+    nostr_relay_msg_t msg;
+    nostr_relay_msg_count(&msg, "query456", 93412452, true);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_MSG_COUNT, msg.type);
+    TEST_ASSERT_EQUAL_STRING("query456", msg.data.count.query_id);
+    TEST_ASSERT_EQUAL(93412452, msg.data.count.count);
+    TEST_ASSERT_TRUE(msg.data.count.approximate);
+}
+
+void test_relay_msg_count_negative(void)
+{
+    nostr_relay_msg_t msg;
+    nostr_relay_msg_count(&msg, "query789", -5, false);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_MSG_COUNT, msg.type);
+    TEST_ASSERT_EQUAL_STRING("query789", msg.data.count.query_id);
+    TEST_ASSERT_EQUAL(0, msg.data.count.count);
+    TEST_ASSERT_FALSE(msg.data.count.approximate);
+}
+
 void test_relay_error_string(void)
 {
     TEST_ASSERT_EQUAL_STRING("OK", nostr_relay_error_string(NOSTR_RELAY_OK));
@@ -546,6 +579,9 @@ int run_relay_protocol_core_tests(void)
     RUN_TEST(test_relay_msg_closed);
     RUN_TEST(test_relay_msg_notice);
     RUN_TEST(test_relay_msg_auth);
+    RUN_TEST(test_relay_msg_count);
+    RUN_TEST(test_relay_msg_count_approximate);
+    RUN_TEST(test_relay_msg_count_negative);
     RUN_TEST(test_relay_error_string);
     RUN_TEST(test_validation_error_format);
     RUN_TEST(test_tag_iterator_basic);
@@ -577,6 +613,9 @@ int run_relay_protocol_core_tests(void)
     RUN_TEST(test_relay_msg_closed, "relay_msg_closed");
     RUN_TEST(test_relay_msg_notice, "relay_msg_notice");
     RUN_TEST(test_relay_msg_auth, "relay_msg_auth");
+    RUN_TEST(test_relay_msg_count, "relay_msg_count");
+    RUN_TEST(test_relay_msg_count_approximate, "relay_msg_count_approximate");
+    RUN_TEST(test_relay_msg_count_negative, "relay_msg_count_negative");
     RUN_TEST(test_relay_error_string, "relay_error_string");
     RUN_TEST(test_validation_error_format, "validation_error_format");
     RUN_TEST(test_tag_iterator_basic, "tag_iterator_basic");
