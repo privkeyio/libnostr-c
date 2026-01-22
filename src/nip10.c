@@ -1,4 +1,7 @@
 #include "nostr.h"
+
+#ifdef NOSTR_FEATURE_NIP10
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,7 +19,8 @@ static void copy_bounded(char* dest, const char* src, size_t max_len)
         return;
     }
     size_t len = strlen(src);
-    if (len > max_len) len = max_len;
+    if (len > max_len)
+        len = max_len;
     memcpy(dest, src, len);
     dest[len] = '\0';
 }
@@ -196,33 +200,23 @@ nostr_error_t nostr_event_add_reply_tags(nostr_event* event, const char* root_id
 
 nostr_error_t nostr_event_add_mention_tag(nostr_event* event, const char* pubkey, const char* relay_hint)
 {
-    if (!event || !pubkey) {
+    if (!event || !pubkey)
         return NOSTR_ERR_INVALID_PARAM;
-    }
 
-    const char* tag[3];
-    size_t count = 2;
-    tag[0] = "p";
-    tag[1] = pubkey;
-    if (relay_hint) {
-        tag[2] = relay_hint;
-        count = 3;
-    }
-
+    const char* tag[3] = {"p", pubkey, relay_hint};
+    size_t count = relay_hint ? 3 : 2;
     return nostr_event_add_tag(event, tag, count);
 }
 
 nostr_error_t nostr_event_is_reply(const nostr_event* event, int* is_reply)
 {
-    if (!event || !is_reply) {
+    if (!event || !is_reply)
         return NOSTR_ERR_INVALID_PARAM;
-    }
 
     *is_reply = 0;
 
-    if (!event->tags && event->tags_count > 0) {
+    if (!event->tags && event->tags_count > 0)
         return NOSTR_OK;
-    }
 
     for (size_t i = 0; i < event->tags_count; i++) {
         if (event->tags[i].count >= 2 && event->tags[i].values[0] &&
@@ -234,3 +228,44 @@ nostr_error_t nostr_event_is_reply(const nostr_event* event, int* is_reply)
 
     return NOSTR_OK;
 }
+
+#else
+
+nostr_error_t nostr_event_get_root_id(const nostr_event* event, char* root_id, size_t root_id_size,
+                                      char* relay_hint, size_t relay_hint_size)
+{
+    (void)event; (void)root_id; (void)root_id_size;
+    (void)relay_hint; (void)relay_hint_size;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_event_get_reply_id(const nostr_event* event, char* reply_id, size_t reply_id_size,
+                                       char* relay_hint, size_t relay_hint_size)
+{
+    (void)event; (void)reply_id; (void)reply_id_size;
+    (void)relay_hint; (void)relay_hint_size;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_event_add_reply_tags(nostr_event* event, const char* root_id, const char* root_relay,
+                                         const char* root_pubkey, const char* reply_id,
+                                         const char* reply_relay, const char* reply_pubkey)
+{
+    (void)event; (void)root_id; (void)root_relay; (void)root_pubkey;
+    (void)reply_id; (void)reply_relay; (void)reply_pubkey;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_event_add_mention_tag(nostr_event* event, const char* pubkey, const char* relay_hint)
+{
+    (void)event; (void)pubkey; (void)relay_hint;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_event_is_reply(const nostr_event* event, int* is_reply)
+{
+    (void)event; (void)is_reply;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+#endif

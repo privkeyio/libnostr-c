@@ -9,6 +9,12 @@
 
 #ifdef NOSTR_FEATURE_NIP10
 
+#define TEST_ID_A    "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"
+#define TEST_ID_B    "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"
+#define TEST_PUBKEY  "cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333"
+#define TEST_RELAY_1 "wss://relay.example.com"
+#define TEST_RELAY_2 "wss://relay2.example.com"
+
 #ifndef HAVE_UNITY
 #define TEST_ASSERT_EQUAL(expected, actual) \
     do { \
@@ -49,11 +55,11 @@ static void test_get_root_id_marked(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* root_tag[] = {"e", "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", "wss://relay.example.com", "root"};
+    const char* root_tag[] = {"e", TEST_ID_A, TEST_RELAY_1, "root"};
     err = nostr_event_add_tag(event, root_tag, 4);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* reply_tag[] = {"e", "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", "wss://relay2.example.com", "reply"};
+    const char* reply_tag[] = {"e", TEST_ID_B, TEST_RELAY_2, "reply"};
     err = nostr_event_add_tag(event, reply_tag, 4);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
@@ -61,8 +67,8 @@ static void test_get_root_id_marked(void)
     char relay_hint[256];
     err = nostr_event_get_root_id(event, root_id, sizeof(root_id), relay_hint, sizeof(relay_hint));
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", root_id);
-    TEST_ASSERT_EQUAL_STRING("wss://relay.example.com", relay_hint);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_A, root_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_RELAY_1, relay_hint);
 
     nostr_event_destroy(event);
 }
@@ -73,11 +79,11 @@ static void test_get_reply_id_marked(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* root_tag[] = {"e", "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", "wss://relay.example.com", "root"};
+    const char* root_tag[] = {"e", TEST_ID_A, TEST_RELAY_1, "root"};
     err = nostr_event_add_tag(event, root_tag, 4);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* reply_tag[] = {"e", "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", "wss://relay2.example.com", "reply"};
+    const char* reply_tag[] = {"e", TEST_ID_B, TEST_RELAY_2, "reply"};
     err = nostr_event_add_tag(event, reply_tag, 4);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
@@ -85,8 +91,8 @@ static void test_get_reply_id_marked(void)
     char relay_hint[256];
     err = nostr_event_get_reply_id(event, reply_id, sizeof(reply_id), relay_hint, sizeof(relay_hint));
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", reply_id);
-    TEST_ASSERT_EQUAL_STRING("wss://relay2.example.com", relay_hint);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_B, reply_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_RELAY_2, relay_hint);
 
     nostr_event_destroy(event);
 }
@@ -97,11 +103,11 @@ static void test_get_root_id_positional(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* first_tag[] = {"e", "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", "wss://relay.example.com"};
+    const char* first_tag[] = {"e", TEST_ID_A, TEST_RELAY_1};
     err = nostr_event_add_tag(event, first_tag, 3);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* second_tag[] = {"e", "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", "wss://relay2.example.com"};
+    const char* second_tag[] = {"e", TEST_ID_B, TEST_RELAY_2};
     err = nostr_event_add_tag(event, second_tag, 3);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
@@ -109,7 +115,7 @@ static void test_get_root_id_positional(void)
     char relay_hint[256];
     err = nostr_event_get_root_id(event, root_id, sizeof(root_id), relay_hint, sizeof(relay_hint));
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", root_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_A, root_id);
 
     nostr_event_destroy(event);
 }
@@ -120,11 +126,11 @@ static void test_get_reply_id_positional(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* first_tag[] = {"e", "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", "wss://relay.example.com"};
+    const char* first_tag[] = {"e", TEST_ID_A, TEST_RELAY_1};
     err = nostr_event_add_tag(event, first_tag, 3);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    const char* second_tag[] = {"e", "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", "wss://relay2.example.com"};
+    const char* second_tag[] = {"e", TEST_ID_B, TEST_RELAY_2};
     err = nostr_event_add_tag(event, second_tag, 3);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
@@ -132,7 +138,7 @@ static void test_get_reply_id_positional(void)
     char relay_hint[256];
     err = nostr_event_get_reply_id(event, reply_id, sizeof(reply_id), relay_hint, sizeof(relay_hint));
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", reply_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_B, reply_id);
 
     nostr_event_destroy(event);
 }
@@ -143,15 +149,14 @@ static void test_add_reply_tags_direct_reply(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    err = nostr_event_add_reply_tags(event, "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-                                     "wss://relay.example.com", NULL, NULL, NULL, NULL);
+    err = nostr_event_add_reply_tags(event, TEST_ID_A, TEST_RELAY_1, NULL, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_EQUAL(1, event->tags_count);
 
     char root_id[65];
     err = nostr_event_get_root_id(event, root_id, sizeof(root_id), NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", root_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_A, root_id);
 
     nostr_event_destroy(event);
 }
@@ -162,11 +167,8 @@ static void test_add_reply_tags_threaded(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    err = nostr_event_add_reply_tags(event,
-                                     "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-                                     "wss://relay.example.com", "pubkey1",
-                                     "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-                                     "wss://relay2.example.com", "pubkey2");
+    err = nostr_event_add_reply_tags(event, TEST_ID_A, TEST_RELAY_1, "pubkey1",
+                                     TEST_ID_B, TEST_RELAY_2, "pubkey2");
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_EQUAL(2, event->tags_count);
 
@@ -174,12 +176,12 @@ static void test_add_reply_tags_threaded(void)
     char relay_hint[256];
     err = nostr_event_get_root_id(event, root_id, sizeof(root_id), relay_hint, sizeof(relay_hint));
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", root_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_A, root_id);
 
     char reply_id[65];
     err = nostr_event_get_reply_id(event, reply_id, sizeof(reply_id), NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
-    TEST_ASSERT_EQUAL_STRING("bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", reply_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_ID_B, reply_id);
 
     nostr_event_destroy(event);
 }
@@ -190,11 +192,11 @@ static void test_add_mention_tag(void)
     nostr_error_t err = nostr_event_create(&event);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
-    err = nostr_event_add_mention_tag(event, "cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333", "wss://relay.example.com");
+    err = nostr_event_add_mention_tag(event, TEST_PUBKEY, TEST_RELAY_1);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_EQUAL(1, event->tags_count);
     TEST_ASSERT_EQUAL_STRING("p", event->tags[0].values[0]);
-    TEST_ASSERT_EQUAL_STRING("cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333", event->tags[0].values[1]);
+    TEST_ASSERT_EQUAL_STRING(TEST_PUBKEY, event->tags[0].values[1]);
 
     nostr_event_destroy(event);
 }
@@ -210,7 +212,7 @@ static void test_is_reply(void)
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_EQUAL(0, is_reply);
 
-    const char* e_tag[] = {"e", "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"};
+    const char* e_tag[] = {"e", TEST_ID_A};
     err = nostr_event_add_tag(event, e_tag, 2);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 

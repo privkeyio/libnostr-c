@@ -1,4 +1,7 @@
 #include "nostr.h"
+
+#ifdef NOSTR_FEATURE_NIP25
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -96,21 +99,19 @@ nostr_error_t nostr_reaction_parse(const nostr_event* event, char* reaction_cont
     }
 
     for (size_t i = 0; i < event->tags_count; i++) {
-        if (event->tags[i].count < 2)
+        const nostr_tag* tag = &event->tags[i];
+        if (tag->count < 2 || !tag->values[0] || !tag->values[1])
             continue;
 
-        const char* tag_name = event->tags[i].values[0];
-        const char* tag_value = event->tags[i].values[1];
+        const char* name = tag->values[0];
+        const char* value = tag->values[1];
 
-        if (!tag_name || !tag_value)
-            continue;
-
-        if (strcmp(tag_name, "e") == 0)
-            last_e_id = tag_value;
-        else if (strcmp(tag_name, "p") == 0)
-            last_p_key = tag_value;
-        else if (strcmp(tag_name, "k") == 0 && target_kind) {
-            unsigned long kind_val = strtoul(tag_value, NULL, 10);
+        if (strcmp(name, "e") == 0) {
+            last_e_id = value;
+        } else if (strcmp(name, "p") == 0) {
+            last_p_key = value;
+        } else if (strcmp(name, "k") == 0 && target_kind) {
+            unsigned long kind_val = strtoul(value, NULL, 10);
             *target_kind = (kind_val > UINT16_MAX) ? UINT16_MAX : (uint16_t)kind_val;
         }
     }
@@ -145,3 +146,39 @@ nostr_error_t nostr_reaction_is_dislike(const nostr_event* event, int* is_dislik
     *is_dislike = (event->content && strcmp(event->content, "-") == 0);
     return NOSTR_OK;
 }
+
+#else
+
+nostr_error_t nostr_reaction_create(nostr_event** event, const char* reaction_content,
+                                    const char* target_event_id, const char* target_pubkey,
+                                    const char* relay_hint, uint16_t target_kind)
+{
+    (void)event; (void)reaction_content; (void)target_event_id;
+    (void)target_pubkey; (void)relay_hint; (void)target_kind;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_reaction_parse(const nostr_event* event, char* reaction_content, size_t content_size,
+                                   char* target_event_id, size_t event_id_size,
+                                   char* target_pubkey, size_t pubkey_size,
+                                   uint16_t* target_kind)
+{
+    (void)event; (void)reaction_content; (void)content_size;
+    (void)target_event_id; (void)event_id_size;
+    (void)target_pubkey; (void)pubkey_size; (void)target_kind;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_reaction_is_like(const nostr_event* event, int* is_like)
+{
+    (void)event; (void)is_like;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_reaction_is_dislike(const nostr_event* event, int* is_dislike)
+{
+    (void)event; (void)is_dislike;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+#endif

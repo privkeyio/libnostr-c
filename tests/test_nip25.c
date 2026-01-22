@@ -9,6 +9,10 @@
 
 #ifdef NOSTR_FEATURE_NIP25
 
+#define TEST_EVENT_ID "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"
+#define TEST_PUBKEY   "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"
+#define TEST_RELAY    "wss://relay.example.com"
+
 #ifndef HAVE_UNITY
 #define TEST_ASSERT_EQUAL(expected, actual) \
     do { \
@@ -46,10 +50,7 @@
 static void test_reaction_create_like(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "+",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        "wss://relay.example.com", 1);
+    nostr_error_t err = nostr_reaction_create(&event, "+", TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL(7, event->kind);
@@ -60,10 +61,10 @@ static void test_reaction_create_like(void)
         if (event->tags[i].count >= 2) {
             if (strcmp(event->tags[i].values[0], "e") == 0) {
                 found_e = 1;
-                TEST_ASSERT_EQUAL_STRING("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", event->tags[i].values[1]);
+                TEST_ASSERT_EQUAL_STRING(TEST_EVENT_ID, event->tags[i].values[1]);
             } else if (strcmp(event->tags[i].values[0], "p") == 0) {
                 found_p = 1;
-                TEST_ASSERT_EQUAL_STRING("bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", event->tags[i].values[1]);
+                TEST_ASSERT_EQUAL_STRING(TEST_PUBKEY, event->tags[i].values[1]);
             } else if (strcmp(event->tags[i].values[0], "k") == 0) {
                 found_k = 1;
                 TEST_ASSERT_EQUAL_STRING("1", event->tags[i].values[1]);
@@ -81,10 +82,7 @@ static void test_reaction_create_like(void)
 static void test_reaction_create_dislike(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "-",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, "-", TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL(7, event->kind);
@@ -96,10 +94,7 @@ static void test_reaction_create_dislike(void)
 static void test_reaction_create_emoji(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "\xF0\x9F\x94\xA5",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, "\xF0\x9F\x94\xA5", TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL_STRING("\xF0\x9F\x94\xA5", event->content);
@@ -110,10 +105,7 @@ static void test_reaction_create_emoji(void)
 static void test_reaction_create_default(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, NULL,
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, NULL, TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL_STRING("+", event->content);
@@ -124,10 +116,7 @@ static void test_reaction_create_default(void)
 static void test_reaction_parse(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "+",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        "wss://relay.example.com", 1);
+    nostr_error_t err = nostr_reaction_create(&event, "+", TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     char content[32];
@@ -135,11 +124,12 @@ static void test_reaction_parse(void)
     char pubkey[65];
     uint16_t kind = 0;
 
-    err = nostr_reaction_parse(event, content, sizeof(content), event_id, sizeof(event_id), pubkey, sizeof(pubkey), &kind);
+    err = nostr_reaction_parse(event, content, sizeof(content), event_id, sizeof(event_id),
+                               pubkey, sizeof(pubkey), &kind);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_EQUAL_STRING("+", content);
-    TEST_ASSERT_EQUAL_STRING("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", event_id);
-    TEST_ASSERT_EQUAL_STRING("bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222", pubkey);
+    TEST_ASSERT_EQUAL_STRING(TEST_EVENT_ID, event_id);
+    TEST_ASSERT_EQUAL_STRING(TEST_PUBKEY, pubkey);
     TEST_ASSERT_EQUAL(1, kind);
 
     nostr_event_destroy(event);
@@ -148,10 +138,7 @@ static void test_reaction_parse(void)
 static void test_reaction_is_like(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "+",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, "+", TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     int is_like = 0;
@@ -165,10 +152,7 @@ static void test_reaction_is_like(void)
 static void test_reaction_is_like_empty(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, "", TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     int is_like = 0;
@@ -182,10 +166,7 @@ static void test_reaction_is_like_empty(void)
 static void test_reaction_is_dislike(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "-",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, "-", TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     int is_dislike = 0;
@@ -204,10 +185,7 @@ static void test_reaction_is_dislike(void)
 static void test_reaction_emoji_not_like(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_reaction_create(&event, "\xF0\x9F\x94\xA5",
-        "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
-        "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
-        NULL, 0);
+    nostr_error_t err = nostr_reaction_create(&event, "\xF0\x9F\x94\xA5", TEST_EVENT_ID, TEST_PUBKEY, NULL, 0);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     int is_like = 0;
