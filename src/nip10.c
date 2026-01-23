@@ -79,6 +79,13 @@ static nostr_error_t collect_e_tags(const nostr_event* event, e_tag_info** out_t
             idx++;
     }
 
+    if (idx == 0) {
+        free(tags);
+        *out_tags = NULL;
+        *out_count = 0;
+        return NOSTR_ERR_NOT_FOUND;
+    }
+
     *out_tags = tags;
     *out_count = idx;
     return NOSTR_OK;
@@ -127,7 +134,7 @@ static nostr_error_t find_e_tag_by_marker(const nostr_event* event, const char* 
         return NOSTR_OK;
     }
 
-    if (use_positional_fallback == 1 && e_tag_count >= 2) {
+    if (use_positional_fallback == 1 && e_tag_count >= 1) {
         copy_id_and_relay(&e_tags[e_tag_count - 1], out_id, id_size, relay_hint, relay_hint_size);
         free(e_tags);
         return NOSTR_OK;
@@ -206,16 +213,10 @@ nostr_error_t nostr_event_is_reply(const nostr_event* event, int* is_reply)
 
     *is_reply = 0;
 
-    if (!event->tags && event->tags_count > 0)
-        return NOSTR_OK;
-
-    for (size_t i = 0; i < event->tags_count; i++) {
-        if (event->tags[i].count >= 2 && event->tags[i].values[0] &&
-            strcmp(event->tags[i].values[0], "e") == 0) {
-            *is_reply = 1;
-            return NOSTR_OK;
-        }
-    }
+    char reply_id[65];
+    nostr_error_t err = nostr_event_get_reply_id(event, reply_id, sizeof(reply_id), NULL, 0);
+    if (err == NOSTR_OK && reply_id[0] != '\0')
+        *is_reply = 1;
 
     return NOSTR_OK;
 }
