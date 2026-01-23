@@ -1136,6 +1136,80 @@ nostr_error_t nostr_reaction_is_like(const nostr_event* event, int* is_like);
  */
 nostr_error_t nostr_reaction_is_dislike(const nostr_event* event, int* is_dislike);
 
+#define NOSTR_URI_MAX_RELAYS 16
+#define NOSTR_URI_MAX_RELAY_LEN 256
+#define NOSTR_URI_MAX_IDENTIFIER_LEN 256
+
+typedef enum {
+    NOSTR_URI_NPUB,
+    NOSTR_URI_NSEC,
+    NOSTR_URI_NOTE,
+    NOSTR_URI_NPROFILE,
+    NOSTR_URI_NEVENT,
+    NOSTR_URI_NADDR,
+    NOSTR_URI_NRELAY
+} nostr_uri_type;
+
+typedef struct nostr_nprofile {
+    nostr_key pubkey;
+    char* relays[NOSTR_URI_MAX_RELAYS];
+    size_t relay_count;
+} nostr_nprofile;
+
+typedef struct nostr_nevent {
+    uint8_t id[NOSTR_ID_SIZE];
+    char* relays[NOSTR_URI_MAX_RELAYS];
+    size_t relay_count;
+    nostr_key author;
+    int has_author;
+    uint32_t kind;
+    int has_kind;
+} nostr_nevent;
+
+typedef struct nostr_naddr {
+    char identifier[NOSTR_URI_MAX_IDENTIFIER_LEN];
+    nostr_key pubkey;
+    uint32_t kind;
+    char* relays[NOSTR_URI_MAX_RELAYS];
+    size_t relay_count;
+} nostr_naddr;
+
+typedef struct nostr_nrelay {
+    char url[NOSTR_URI_MAX_RELAY_LEN];
+} nostr_nrelay;
+
+typedef struct nostr_uri {
+    nostr_uri_type type;
+    union {
+        nostr_key npub;
+        nostr_privkey nsec;
+        uint8_t note[NOSTR_ID_SIZE];
+        nostr_nprofile nprofile;
+        nostr_nevent nevent;
+        nostr_naddr naddr;
+        nostr_nrelay nrelay;
+    } data;
+} nostr_uri;
+
+nostr_error_t nostr_uri_parse(const char* uri, nostr_uri* result);
+nostr_error_t nostr_uri_encode(const nostr_uri* uri, char* output, size_t output_size);
+void nostr_uri_free(nostr_uri* uri);
+
+nostr_error_t nostr_nprofile_encode(const nostr_nprofile* profile, char* bech32, size_t bech32_size);
+nostr_error_t nostr_nprofile_decode(const char* bech32, nostr_nprofile* profile);
+void nostr_nprofile_free(nostr_nprofile* profile);
+
+nostr_error_t nostr_nevent_encode(const nostr_nevent* event, char* bech32, size_t bech32_size);
+nostr_error_t nostr_nevent_decode(const char* bech32, nostr_nevent* nevent);
+void nostr_nevent_free(nostr_nevent* nevent);
+
+nostr_error_t nostr_naddr_encode(const nostr_naddr* addr, char* bech32, size_t bech32_size);
+nostr_error_t nostr_naddr_decode(const char* bech32, nostr_naddr* addr);
+void nostr_naddr_free(nostr_naddr* addr);
+
+nostr_error_t nostr_nrelay_encode(const nostr_nrelay* relay, char* bech32, size_t bech32_size);
+nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay);
+
 #ifdef __cplusplus
 }
 #endif

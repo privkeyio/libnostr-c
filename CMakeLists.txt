@@ -8,6 +8,7 @@ if(ESP_PLATFORM)
         "src/config.c"
         "src/features.c"
         "src/bech32.c"
+        "src/nip21.c"
         "src/nip13.c"
         "src/nip44.c"
     )
@@ -613,7 +614,7 @@ set(NOSTR_CORE_SOURCES
 set(NOSTR_SOURCES ${NOSTR_CORE_SOURCES})
 
 if(NOSTR_FEATURE_ENCODING)
-    list(APPEND NOSTR_SOURCES src/bech32.c)
+    list(APPEND NOSTR_SOURCES src/bech32.c src/nip21.c)
 endif()
 
 if(NOSTR_FEATURE_RELAY)
