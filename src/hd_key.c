@@ -324,7 +324,7 @@ nostr_error_t nostr_mnemonic_generate(int word_count, char* mnemonic, size_t mne
 
     uint8_t entropy[32];
     uint8_t hash[SHA256_DIGEST_LENGTH];
-    uint8_t combined[34];
+    uint8_t combined[34] = {0};
 
     if (nostr_random_bytes(entropy, entropy_bytes) != 1) {
         return NOSTR_ERR_MEMORY;
@@ -397,6 +397,12 @@ nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
         }
         indices[word_count++] = idx;
         word = strtok_r(NULL, " ", &saveptr);
+    }
+
+    if (word != NULL) {
+        secure_wipe(mnemonic_copy, mnemonic_len);
+        free(mnemonic_copy);
+        return NOSTR_ERR_INVALID_PARAM;
     }
 
     secure_wipe(mnemonic_copy, mnemonic_len);
