@@ -13,11 +13,25 @@ add_executable(test_runner
     test_bech32.c
     test_relay.c
     test_zap.c
+    test_nip10.c
+    test_nip25.c
     test_utils.c
     test_runner.c
 )
 
 # Conditionally build tests based on enabled features
+if(NOSTR_FEATURE_NIP10)
+    add_executable(test_nip10 test_nip10.c)
+    target_link_libraries(test_nip10 nostr_static)
+    add_test(NAME nip10_tests COMMAND test_nip10)
+endif()
+
+if(NOSTR_FEATURE_NIP25)
+    add_executable(test_nip25 test_nip25.c)
+    target_link_libraries(test_nip25 nostr_static)
+    add_test(NAME nip25_tests COMMAND test_nip25)
+endif()
+
 if(NOSTR_FEATURE_NIP59)
     add_executable(test_nip59 test_nip59.c)
     target_link_libraries(test_nip59 nostr_static)
@@ -73,6 +87,7 @@ if(NOSTR_FEATURE_RELAY_PROTOCOL)
 endif()
 
 target_link_libraries(test_runner nostr_static)
+target_compile_definitions(test_runner PRIVATE TEST_RUNNER_INCLUDED)
 if(UNITY_FOUND)
     target_link_libraries(test_runner ${UNITY_LIBRARIES})
     target_include_directories(test_runner PRIVATE ${UNITY_INCLUDE_DIRS})

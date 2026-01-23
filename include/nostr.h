@@ -1033,6 +1033,109 @@ nostr_error_t nostr_nip13_add_nonce_tag(nostr_event* event, uint64_t nonce_value
  */
 nostr_error_t nostr_nip13_mine_event_threaded(nostr_event* event, int target_difficulty, int num_threads, uint64_t max_iterations);
 
+/**
+ * @brief Get the root event ID from a threaded event (NIP-10)
+ * @param event Event to extract root from
+ * @param root_id Output buffer for root event ID (at least 65 bytes)
+ * @param root_id_size Size of root_id buffer
+ * @param relay_hint Output buffer for relay hint (optional, can be NULL)
+ * @param relay_hint_size Size of relay_hint buffer
+ * @return NOSTR_OK on success, NOSTR_ERR_NOT_FOUND if no root found
+ */
+nostr_error_t nostr_event_get_root_id(const nostr_event* event, char* root_id, size_t root_id_size,
+                                      char* relay_hint, size_t relay_hint_size);
+
+/**
+ * @brief Get the direct reply event ID from a threaded event (NIP-10)
+ * @param event Event to extract reply from
+ * @param reply_id Output buffer for reply event ID (at least 65 bytes)
+ * @param reply_id_size Size of reply_id buffer
+ * @param relay_hint Output buffer for relay hint (optional, can be NULL)
+ * @param relay_hint_size Size of relay_hint buffer
+ * @return NOSTR_OK on success, NOSTR_ERR_NOT_FOUND if no reply found
+ */
+nostr_error_t nostr_event_get_reply_id(const nostr_event* event, char* reply_id, size_t reply_id_size,
+                                       char* relay_hint, size_t relay_hint_size);
+
+/**
+ * @brief Add threading tags to an event (NIP-10)
+ * @param event Event to add tags to
+ * @param root_id Root event ID (NULL if replying to root directly)
+ * @param root_relay Relay hint for root event (optional)
+ * @param root_pubkey Author pubkey of root event (optional)
+ * @param reply_id Reply event ID (NULL if this is a direct reply to root)
+ * @param reply_relay Relay hint for reply event (optional)
+ * @param reply_pubkey Author pubkey of reply event (optional)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_event_add_reply_tags(nostr_event* event, const char* root_id, const char* root_relay,
+                                         const char* root_pubkey, const char* reply_id,
+                                         const char* reply_relay, const char* reply_pubkey);
+
+/**
+ * @brief Add a mention p-tag to an event (NIP-10)
+ * @param event Event to add mention to
+ * @param pubkey Pubkey to mention
+ * @param relay_hint Relay hint for the mentioned pubkey (optional)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_event_add_mention_tag(nostr_event* event, const char* pubkey, const char* relay_hint);
+
+/**
+ * @brief Check if an event is a reply to another event (NIP-10)
+ * @param event Event to check
+ * @param is_reply Output: 1 if event is a reply, 0 otherwise
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_event_is_reply(const nostr_event* event, int* is_reply);
+
+/**
+ * @brief Create a reaction event (NIP-25)
+ * @param event Output event pointer
+ * @param reaction_content Reaction content ("+", "-", or emoji; NULL defaults to "+")
+ * @param target_event_id ID of event being reacted to
+ * @param target_pubkey Pubkey of event author being reacted to
+ * @param relay_hint Relay hint for target event (optional)
+ * @param target_kind Kind of target event (0 to omit k tag)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_reaction_create(nostr_event** event, const char* reaction_content,
+                                    const char* target_event_id, const char* target_pubkey,
+                                    const char* relay_hint, uint16_t target_kind);
+
+/**
+ * @brief Parse a reaction event (NIP-25)
+ * @param event Input reaction event (must be kind 7)
+ * @param reaction_content Output buffer for reaction content (optional)
+ * @param content_size Size of reaction_content buffer
+ * @param target_event_id Output buffer for target event ID (optional)
+ * @param event_id_size Size of target_event_id buffer
+ * @param target_pubkey Output buffer for target pubkey (optional)
+ * @param pubkey_size Size of target_pubkey buffer
+ * @param target_kind Output for target event kind (optional)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_reaction_parse(const nostr_event* event, char* reaction_content, size_t content_size,
+                                   char* target_event_id, size_t event_id_size,
+                                   char* target_pubkey, size_t pubkey_size,
+                                   uint16_t* target_kind);
+
+/**
+ * @brief Check if a reaction event is a like/upvote (NIP-25)
+ * @param event Reaction event to check
+ * @param is_like Output: 1 if reaction is a like, 0 otherwise
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_reaction_is_like(const nostr_event* event, int* is_like);
+
+/**
+ * @brief Check if a reaction event is a dislike/downvote (NIP-25)
+ * @param event Reaction event to check
+ * @param is_dislike Output: 1 if reaction is a dislike, 0 otherwise
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_reaction_is_dislike(const nostr_event* event, int* is_dislike);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,5 +1,6 @@
 #include "nostr_features.h"
 #include <string.h>
+#include <stdio.h>
 
 int nostr_feature_nip_supported(int nip_number)
 {
@@ -8,12 +9,20 @@ int nostr_feature_nip_supported(int nip_number)
         case 4:
             return 1;
 #endif
+#ifdef NOSTR_FEATURE_NIP10
+        case 10:
+            return 1;
+#endif
 #ifdef NOSTR_FEATURE_NIP13
         case 13:
             return 1;
 #endif
 #ifdef NOSTR_FEATURE_NIP17
         case 17:
+            return 1;
+#endif
+#ifdef NOSTR_FEATURE_NIP25
+        case 25:
             return 1;
 #endif
 #ifdef NOSTR_FEATURE_NIP44
@@ -79,57 +88,74 @@ int nostr_feature_relay_protocol_available(void)
 
 const char* nostr_feature_list_enabled(void)
 {
-    static char feature_list[512] = "std,events,keys";
+    static char feature_list[512];
     static int initialized = 0;
-    
+
     if (!initialized) {
-        
+        size_t pos = 0;
+        size_t remaining = sizeof(feature_list);
+
+#define APPEND_FEATURE(str) do { \
+    int n = snprintf(feature_list + pos, remaining, str); \
+    if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; } \
+} while(0)
+
+        APPEND_FEATURE("std,events,keys");
 #ifdef NOSTR_FEATURE_ENCODING
-        strcat(feature_list, ",encoding");
+        APPEND_FEATURE(",encoding");
 #endif
 #ifdef NOSTR_FEATURE_NIP04
-        strcat(feature_list, ",nip04");
+        APPEND_FEATURE(",nip04");
+#endif
+#ifdef NOSTR_FEATURE_NIP10
+        APPEND_FEATURE(",nip10");
 #endif
 #ifdef NOSTR_FEATURE_NIP13
-        strcat(feature_list, ",nip13");
+        APPEND_FEATURE(",nip13");
 #endif
 #ifdef NOSTR_FEATURE_NIP17
-        strcat(feature_list, ",nip17");
+        APPEND_FEATURE(",nip17");
+#endif
+#ifdef NOSTR_FEATURE_NIP25
+        APPEND_FEATURE(",nip25");
 #endif
 #ifdef NOSTR_FEATURE_NIP44
-        strcat(feature_list, ",nip44");
+        APPEND_FEATURE(",nip44");
 #endif
 #ifdef NOSTR_FEATURE_NIP46
-        strcat(feature_list, ",nip46");
+        APPEND_FEATURE(",nip46");
 #endif
 #ifdef NOSTR_FEATURE_NIP47
-        strcat(feature_list, ",nip47");
+        APPEND_FEATURE(",nip47");
 #endif
 #ifdef NOSTR_FEATURE_NIP57
-        strcat(feature_list, ",nip57");
+        APPEND_FEATURE(",nip57");
 #endif
 #ifdef NOSTR_FEATURE_NIP59
-        strcat(feature_list, ",nip59");
+        APPEND_FEATURE(",nip59");
 #endif
 #ifdef NOSTR_FEATURE_RELAY
-        strcat(feature_list, ",relay");
+        APPEND_FEATURE(",relay");
 #endif
 #ifdef NOSTR_FEATURE_RELAY_PROTOCOL
-        strcat(feature_list, ",relay-protocol");
+        APPEND_FEATURE(",relay-protocol");
 #endif
 #ifdef NOSTR_FEATURE_HD_KEYS
-        strcat(feature_list, ",hd-keys");
+        APPEND_FEATURE(",hd-keys");
 #endif
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
-        strcat(feature_list, ",json-enhanced");
+        APPEND_FEATURE(",json-enhanced");
 #endif
 #ifdef NOSTR_FEATURE_THREADING
-        strcat(feature_list, ",threading");
+        APPEND_FEATURE(",threading");
 #endif
-        
+#undef APPEND_FEATURE
+
+        (void)pos;
+        (void)remaining;
         initialized = 1;
     }
-    
+
     return feature_list;
 }
 
