@@ -113,8 +113,12 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
 #endif
 #else
 #ifdef _WIN32
-    NTSTATUS status = BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-    return status >= 0 ? 1 : 0;
+    /* BCryptGenRandom returns NTSTATUS - use LONG explicitly for portability.
+       Success codes (including STATUS_SUCCESS=0) have the high bit clear (>= 0).
+       Error codes have the high bit set (< 0). */
+    LONG status = (LONG)BCryptGenRandom(NULL, buf, (ULONG)len,
+                                         BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    return (status >= 0) ? 1 : 0;
 #else
     return RAND_bytes(buf, len);
 #endif

@@ -370,6 +370,10 @@ nostr_error_t nostr_ncryptsec_decrypt(const char *ncryptsec,
     const uint8_t *salt = p; p += NIP49_SALT_SIZE;
     const uint8_t *nonce = p; p += NIP49_NONCE_SIZE;
     uint8_t key_security = *p++;
+    if (key_security > 0x02) {
+        secure_wipe(payload, sizeof(payload));
+        return NOSTR_ERR_INVALID_PARAM;
+    }
     const uint8_t *ciphertext = p; p += NIP49_PRIVKEY_SIZE;
     const uint8_t *mac = p;
 
