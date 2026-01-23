@@ -1296,6 +1296,39 @@ void nostr_naddr_free(nostr_naddr* addr);
 nostr_error_t nostr_nrelay_encode(const nostr_nrelay* relay, char* bech32, size_t bech32_size);
 nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay);
 
+/**
+ * @brief Encrypt a private key with a password (NIP-49)
+ * @param privkey Private key to encrypt
+ * @param password Password for encryption
+ * @param log_n Scrypt log_n parameter (16-22, higher = more secure but slower)
+ * @param ncryptsec Output buffer for ncryptsec string
+ * @param ncryptsec_size Size of output buffer (at least 160 bytes)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey* privkey,
+                                       const char* password,
+                                       uint8_t log_n,
+                                       char* ncryptsec,
+                                       size_t ncryptsec_size);
+
+/**
+ * @brief Decrypt an ncryptsec string to recover the private key (NIP-49)
+ * @param ncryptsec Encrypted key string (ncryptsec1...)
+ * @param password Password for decryption
+ * @param privkey Output private key
+ * @return NOSTR_OK on success, NOSTR_ERR_INVALID_SIGNATURE if password wrong
+ */
+nostr_error_t nostr_ncryptsec_decrypt(const char* ncryptsec,
+                                       const char* password,
+                                       nostr_privkey* privkey);
+
+/**
+ * @brief Validate an ncryptsec string format (NIP-49)
+ * @param ncryptsec String to validate
+ * @return NOSTR_OK if valid format, error code otherwise
+ */
+nostr_error_t nostr_ncryptsec_validate(const char* ncryptsec);
+
 /*
  * NIP-65: Relay List Metadata
  *
