@@ -1302,7 +1302,7 @@ nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay);
  * @param password Password for encryption
  * @param log_n Scrypt log_n parameter (16-22, higher = more secure but slower)
  * @param ncryptsec Output buffer for ncryptsec string
- * @param ncryptsec_size Size of output buffer (at least 160 bytes)
+ * @param ncryptsec_size Size of ncryptsec buffer (at least 163 bytes: 162 chars + NUL)
  * @return NOSTR_OK on success, error code otherwise
  */
 nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey* privkey,

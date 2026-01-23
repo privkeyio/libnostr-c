@@ -9,6 +9,7 @@
     do { \
         if ((expected) != (actual)) { \
             printf("Assertion failed: %s != %s at %s:%d\n", #expected, #actual, __FILE__, __LINE__); \
+            tests_failed++; \
             return; \
         } \
     } while(0)
@@ -17,6 +18,7 @@
     do { \
         if (memcmp(expected, actual, len) != 0) { \
             printf("Memory comparison failed at %s:%d\n", __FILE__, __LINE__); \
+            tests_failed++; \
             return; \
         } \
     } while(0)
@@ -25,6 +27,7 @@
     do { \
         if (!(condition)) { \
             printf("Condition failed: %s at %s:%d\n", #condition, __FILE__, __LINE__); \
+            tests_failed++; \
             return; \
         } \
     } while(0)
@@ -34,6 +37,7 @@
         if (strcmp(expected, actual) != 0) { \
             printf("String mismatch at %s:%d:\n  expected: %s\n  actual: %s\n", \
                    __FILE__, __LINE__, expected, actual); \
+            tests_failed++; \
             return; \
         } \
     } while(0)

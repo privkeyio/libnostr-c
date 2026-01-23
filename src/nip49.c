@@ -16,6 +16,9 @@
 #define NIP49_MAC_SIZE          16
 #define NIP49_PAYLOAD_SIZE      91
 
+#define NIP49_DATA5BIT_LEN      ((NIP49_PAYLOAD_SIZE * 8 + 4) / 5)
+#define NIP49_NCRYPTSEC_SIZE    (10 + NIP49_DATA5BIT_LEN + 6 + 1)
+
 #define NIP49_KEY_SECURITY_UNKNOWN  0x02
 
 static uint32_t load32_le(const uint8_t *p)
@@ -192,7 +195,8 @@ static int derive_key_scrypt(
     uint8_t *key_out)
 {
     uint64_t N = (uint64_t)1 << log_n;
-    size_t maxmem = (size_t)256 * N * 8;
+    uint64_t maxmem64 = (uint64_t)256 * N * 8;
+    size_t maxmem = (maxmem64 > SIZE_MAX) ? SIZE_MAX : (size_t)maxmem64;
 
     return EVP_PBE_scrypt(password, strlen(password),
                           salt, NIP49_SALT_SIZE,
@@ -265,7 +269,7 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    if (ncryptsec_size < 160) {
+    if (ncryptsec_size < NIP49_NCRYPTSEC_SIZE) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
