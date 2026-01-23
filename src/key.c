@@ -27,6 +27,7 @@
 #else
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#include <openssl/err.h>
 #endif
 
 #ifdef HAVE_NOSCRYPT
@@ -83,6 +84,8 @@ static volatile int rng_initialized = 0;
 #endif
 #endif
 
+static int openssl_rng_seeded = 0;
+
 int nostr_random_bytes(uint8_t *buf, size_t len) {
 #ifdef HAVE_MBEDTLS
 #ifdef ESP_PLATFORM
@@ -105,7 +108,15 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-    return RAND_bytes(buf, len);
+    if (!openssl_rng_seeded) {
+        RAND_poll();
+        openssl_rng_seeded = 1;
+    }
+    int result = RAND_bytes(buf, len);
+    if (result != 1) {
+        ERR_clear_error();
+    }
+    return result;
 #endif
 }
 
