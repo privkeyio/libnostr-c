@@ -1241,6 +1241,34 @@ nostr_error_t nostr_relay_list_get_read_relays(const nostr_relay_list* list, cha
 nostr_error_t nostr_relay_list_get_write_relays(const nostr_relay_list* list, char*** urls, size_t* count);
 void nostr_relay_list_free_urls(char** urls, size_t count);
 
+/**
+ * @brief HTTP callback for fetching .well-known/nostr.json
+ * @note Callers MUST NOT follow HTTP redirects per NIP-05 security constraints
+ */
+typedef nostr_error_t (*nostr_nip05_http_callback)(const char* url, char** response,
+                                                    size_t* response_len, void* user_data);
+
+/** @brief Parse NIP-05 identifier into name and domain components */
+nostr_error_t nostr_nip05_parse(const char* identifier, char* name, size_t name_size,
+                                char* domain, size_t domain_size);
+
+/** @brief Build .well-known/nostr.json verification URL from name and domain */
+nostr_error_t nostr_nip05_build_url(const char* name, const char* domain,
+                                    char* url, size_t url_size);
+
+/** @brief Parse JSON response, extract pubkey and optional relays */
+nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
+                                         char* pubkey_hex, size_t pubkey_size,
+                                         char*** relays, size_t* relay_count);
+
+/** @brief Free relay array returned by nostr_nip05_parse_response */
+void nostr_nip05_free_relays(char** relays, size_t count);
+
+/** @brief Full NIP-05 verification flow: parse, fetch, and verify pubkey */
+nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pubkey,
+                                 nostr_nip05_http_callback http_callback, void* user_data,
+                                 char*** relays_out, size_t* relay_count_out);
+
 #ifdef __cplusplus
 }
 #endif

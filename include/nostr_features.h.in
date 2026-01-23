@@ -32,6 +32,7 @@ extern "C" {
  * ============================================================================= */
 
 #cmakedefine NOSTR_FEATURE_NIP04
+#cmakedefine NOSTR_FEATURE_NIP05
 #cmakedefine NOSTR_FEATURE_NIP10
 #cmakedefine NOSTR_FEATURE_NIP13
 #cmakedefine NOSTR_FEATURE_NIP17

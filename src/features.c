@@ -9,6 +9,10 @@ int nostr_feature_nip_supported(int nip_number)
         case 4:
             return 1;
 #endif
+#ifdef NOSTR_FEATURE_NIP05
+        case 5:
+            return 1;
+#endif
 #ifdef NOSTR_FEATURE_NIP10
         case 10:
             return 1;
@@ -43,6 +47,10 @@ int nostr_feature_nip_supported(int nip_number)
 #endif
 #ifdef NOSTR_FEATURE_NIP59
         case 59:
+            return 1;
+#endif
+#ifdef NOSTR_FEATURE_NIP65
+        case 65:
             return 1;
 #endif
         default:
@@ -107,6 +115,9 @@ const char* nostr_feature_list_enabled(void)
 #ifdef NOSTR_FEATURE_NIP04
         APPEND_FEATURE(",nip04");
 #endif
+#ifdef NOSTR_FEATURE_NIP05
+        APPEND_FEATURE(",nip05");
+#endif
 #ifdef NOSTR_FEATURE_NIP10
         APPEND_FEATURE(",nip10");
 #endif
@@ -133,6 +144,9 @@ const char* nostr_feature_list_enabled(void)
 #endif
 #ifdef NOSTR_FEATURE_NIP59
         APPEND_FEATURE(",nip59");
+#endif
+#ifdef NOSTR_FEATURE_NIP65
+        APPEND_FEATURE(",nip65");
 #endif
 #ifdef NOSTR_FEATURE_RELAY
         APPEND_FEATURE(",relay");
