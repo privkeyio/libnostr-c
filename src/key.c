@@ -27,7 +27,8 @@
 #else
 #ifdef _WIN32
 #include <windows.h>
-#include <bcrypt.h>
+#define RtlGenRandom SystemFunction036
+BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
 #else
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -112,8 +113,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
 #endif
 #else
 #ifdef _WIN32
-    return BCryptGenRandom(NULL, buf, (ULONG)len,
-                           BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0 ? 1 : 0;
+    return RtlGenRandom(buf, (ULONG)len) ? 1 : 0;
 #else
     static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
