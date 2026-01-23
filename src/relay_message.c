@@ -15,8 +15,6 @@
 
 nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, nostr_client_msg_t* msg)
 {
-    (void)json_len;
-
     if (!json || !msg) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
@@ -24,7 +22,7 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
     memset(msg, 0, sizeof(nostr_client_msg_t));
     msg->type = NOSTR_CLIENT_MSG_UNKNOWN;
 
-    cJSON* root = cJSON_Parse(json);
+    cJSON* root = (json_len > 0) ? cJSON_ParseWithLength(json, json_len) : cJSON_Parse(json);
     if (!root || !cJSON_IsArray(root)) {
         if (root) cJSON_Delete(root);
         return NOSTR_RELAY_ERR_INVALID_JSON;
@@ -113,6 +111,14 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
                                                              &msg->data.req.filters[msg->data.req.filters_count]);
                 free(filter_str);
 
+                if (err != NOSTR_RELAY_OK) {
+                    nostr_client_msg_free(msg);
+                    cJSON_Delete(root);
+                    return err;
+                }
+
+                nostr_validation_result_t validation;
+                err = nostr_filter_validate(&msg->data.req.filters[msg->data.req.filters_count], &validation);
                 if (err != NOSTR_RELAY_OK) {
                     nostr_client_msg_free(msg);
                     cJSON_Delete(root);
@@ -216,6 +222,14 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
                                                              &msg->data.count.filters[msg->data.count.filters_count]);
                 free(filter_str);
 
+                if (err != NOSTR_RELAY_OK) {
+                    nostr_client_msg_free(msg);
+                    cJSON_Delete(root);
+                    return err;
+                }
+
+                nostr_validation_result_t validation;
+                err = nostr_filter_validate(&msg->data.count.filters[msg->data.count.filters_count], &validation);
                 if (err != NOSTR_RELAY_OK) {
                     nostr_client_msg_free(msg);
                     cJSON_Delete(root);

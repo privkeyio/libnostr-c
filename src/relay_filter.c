@@ -30,7 +30,11 @@ static nostr_relay_error_t parse_string_array(cJSON* arr, char*** out_arr, size_
         return NOSTR_RELAY_OK;
     }
 
-    *out_arr = malloc(sizeof(char*) * count);
+    if (count > NOSTR_MAX_TAG_FILTER_VALUES) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    *out_arr = calloc((size_t)count, sizeof(char*));
     if (!*out_arr) {
         return NOSTR_RELAY_ERR_MEMORY;
     }
@@ -71,7 +75,11 @@ static nostr_relay_error_t parse_int_array(cJSON* arr, int32_t** out_arr, size_t
         return NOSTR_RELAY_OK;
     }
 
-    *out_arr = malloc(sizeof(int32_t) * count);
+    if (count > NOSTR_MAX_TAG_FILTER_VALUES) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    *out_arr = calloc((size_t)count, sizeof(int32_t));
     if (!*out_arr) {
         return NOSTR_RELAY_ERR_MEMORY;
     }
@@ -89,15 +97,13 @@ static nostr_relay_error_t parse_int_array(cJSON* arr, int32_t** out_arr, size_t
 
 nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_filter_t* filter)
 {
-    (void)json_len;
-
     if (!json || !filter) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
     memset(filter, 0, sizeof(nostr_filter_t));
 
-    cJSON* root = cJSON_Parse(json);
+    cJSON* root = (json_len > 0) ? cJSON_ParseWithLength(json, json_len) : cJSON_Parse(json);
     if (!root) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
