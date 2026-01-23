@@ -120,12 +120,14 @@ static nostr_error_t decode_bech32_to_bytes(const char* bech32, const char* expe
     size_t len = strlen(bech32);
     size_t hrp_len = strlen(expected_hrp);
 
-    if (len < hrp_len + 8 || len > 1024) return NOSTR_ERR_ENCODING;
+    size_t max_data_chars = ((out_size * 8 + 4) / 5) + 6;
+    if (len < hrp_len + 8 || len > hrp_len + 1 + max_data_chars) return NOSTR_ERR_ENCODING;
     if (strncmp(bech32, expected_hrp, hrp_len) != 0 || bech32[hrp_len] != '1') {
         return NOSTR_ERR_ENCODING;
     }
 
-    uint8_t* data = malloc(len);
+    size_t data_alloc = len - hrp_len - 1;
+    uint8_t* data = malloc(data_alloc);
     if (!data) return NOSTR_ERR_MEMORY;
 
     size_t data_pos = 0;
