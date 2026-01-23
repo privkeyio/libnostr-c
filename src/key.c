@@ -26,6 +26,9 @@
 #endif
 #else
 #ifdef _WIN32
+#ifndef NOSTR_FEATURE_THREADING
+#include <windows.h>
+#endif
 #include <bcrypt.h>
 #else
 #include <openssl/rand.h>
