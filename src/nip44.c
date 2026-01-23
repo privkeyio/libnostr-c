@@ -77,16 +77,18 @@ static int pad_plaintext(const uint8_t* plaintext, size_t plaintext_len,
         return -1;
     }
     
-    pad_len = calc_padded_len(plaintext_len + 2);
+    /* NIP-44 spec: padded output = 2-byte length + plaintext + zeros
+     * Total size = 2 + calc_padded_len(plaintext_len) */
+    pad_len = 2 + calc_padded_len(plaintext_len);
     result = calloc(1, pad_len);
     if (!result) {
         return -1;
     }
-    
+
     result[0] = (plaintext_len >> 8) & 0xFF;
     result[1] = plaintext_len & 0xFF;
     memcpy(result + 2, plaintext, plaintext_len);
-    
+
     *padded = result;
     *padded_len = pad_len;
     
@@ -113,8 +115,9 @@ static int unpad_plaintext(const uint8_t* padded, size_t padded_len,
         return -1;
     }
 
-    /* NIP-44 padding: calc_padded_len(plaintext_len + 2) includes length prefix */
-    expected_pad_len = calc_padded_len(unpadded_len + 2);
+    /* NIP-44 spec: padded output = 2-byte length + plaintext + zeros
+     * Total size = 2 + calc_padded_len(plaintext_len) */
+    expected_pad_len = 2 + calc_padded_len(unpadded_len);
     if (padded_len != expected_pad_len) {
         return -1;
     }
