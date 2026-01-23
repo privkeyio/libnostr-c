@@ -140,9 +140,17 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    const nostr_config* config = nostr_config_get_current();
+    if (config && event->tags_count >= config->max_tags) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+
     size_t values_size = sizeof(char*) * count;
     size_t strings_size = 0;
     for (size_t i = 0; i < count; i++) {
+        if (!values[i]) {
+            return NOSTR_ERR_INVALID_PARAM;
+        }
         strings_size += strlen(values[i]) + 1;
     }
     
@@ -489,8 +497,14 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
     cJSON* tags_json = cJSON_GetObjectItem(root, "tags");
     if (tags_json && cJSON_IsArray(tags_json)) {
         int tags_count = cJSON_GetArraySize(tags_json);
+        const nostr_config* config = nostr_config_get_current();
+        if (config && tags_count > (int)config->max_tags) {
+            nostr_event_destroy(*event);
+            cJSON_Delete(root);
+            return NOSTR_ERR_INVALID_PARAM;
+        }
         if (tags_count > 0) {
-            (*event)->tags = malloc(sizeof(nostr_tag) * tags_count);
+            (*event)->tags = calloc(tags_count, sizeof(nostr_tag));
             if (!(*event)->tags) {
                 nostr_event_destroy(*event);
                 cJSON_Delete(root);

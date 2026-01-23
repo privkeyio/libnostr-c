@@ -1,5 +1,6 @@
 #include "nostr_features.h"
 #include <string.h>
+#include <stdio.h>
 
 int nostr_feature_nip_supported(int nip_number)
 {
@@ -87,63 +88,86 @@ int nostr_feature_relay_protocol_available(void)
 
 const char* nostr_feature_list_enabled(void)
 {
-    static char feature_list[512] = "std,events,keys";
+    static char feature_list[512];
     static int initialized = 0;
-    
+
     if (!initialized) {
-        
+        size_t pos = 0;
+        size_t remaining = sizeof(feature_list);
+
+        int n = snprintf(feature_list + pos, remaining, "std,events,keys");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+
 #ifdef NOSTR_FEATURE_ENCODING
-        strcat(feature_list, ",encoding");
+        n = snprintf(feature_list + pos, remaining, ",encoding");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP04
-        strcat(feature_list, ",nip04");
+        n = snprintf(feature_list + pos, remaining, ",nip04");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP10
-        strcat(feature_list, ",nip10");
+        n = snprintf(feature_list + pos, remaining, ",nip10");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP13
-        strcat(feature_list, ",nip13");
+        n = snprintf(feature_list + pos, remaining, ",nip13");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP17
-        strcat(feature_list, ",nip17");
+        n = snprintf(feature_list + pos, remaining, ",nip17");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP25
-        strcat(feature_list, ",nip25");
+        n = snprintf(feature_list + pos, remaining, ",nip25");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP44
-        strcat(feature_list, ",nip44");
+        n = snprintf(feature_list + pos, remaining, ",nip44");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP46
-        strcat(feature_list, ",nip46");
+        n = snprintf(feature_list + pos, remaining, ",nip46");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP47
-        strcat(feature_list, ",nip47");
+        n = snprintf(feature_list + pos, remaining, ",nip47");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP57
-        strcat(feature_list, ",nip57");
+        n = snprintf(feature_list + pos, remaining, ",nip57");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_NIP59
-        strcat(feature_list, ",nip59");
+        n = snprintf(feature_list + pos, remaining, ",nip59");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_RELAY
-        strcat(feature_list, ",relay");
+        n = snprintf(feature_list + pos, remaining, ",relay");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_RELAY_PROTOCOL
-        strcat(feature_list, ",relay-protocol");
+        n = snprintf(feature_list + pos, remaining, ",relay-protocol");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_HD_KEYS
-        strcat(feature_list, ",hd-keys");
+        n = snprintf(feature_list + pos, remaining, ",hd-keys");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
-        strcat(feature_list, ",json-enhanced");
+        n = snprintf(feature_list + pos, remaining, ",json-enhanced");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
 #ifdef NOSTR_FEATURE_THREADING
-        strcat(feature_list, ",threading");
+        n = snprintf(feature_list + pos, remaining, ",threading");
+        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
 #endif
-        
+        (void)pos;
+        (void)remaining;
+
         initialized = 1;
     }
-    
+
     return feature_list;
 }
 

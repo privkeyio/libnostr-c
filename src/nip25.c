@@ -6,8 +6,24 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <ctype.h>
+#include <errno.h>
 
 #define REACTION_KIND 7
+
+static int is_valid_hex_string(const char* str, size_t expected_len)
+{
+    if (!str)
+        return 0;
+    size_t len = strlen(str);
+    if (len != expected_len)
+        return 0;
+    for (size_t i = 0; i < len; i++) {
+        if (!isxdigit((unsigned char)str[i]))
+            return 0;
+    }
+    return 1;
+}
 
 static void cleanup_event(nostr_event** event)
 {
@@ -20,6 +36,9 @@ nostr_error_t nostr_reaction_create(nostr_event** event, const char* reaction_co
                                     const char* relay_hint, uint16_t target_kind)
 {
     if (!event || !target_event_id || !target_pubkey)
+        return NOSTR_ERR_INVALID_PARAM;
+
+    if (!is_valid_hex_string(target_event_id, 64) || !is_valid_hex_string(target_pubkey, 64))
         return NOSTR_ERR_INVALID_PARAM;
 
     nostr_error_t err = nostr_event_create(event);
@@ -111,8 +130,12 @@ nostr_error_t nostr_reaction_parse(const nostr_event* event, char* reaction_cont
         } else if (strcmp(name, "p") == 0) {
             last_p_key = value;
         } else if (strcmp(name, "k") == 0 && target_kind) {
-            unsigned long kind_val = strtoul(value, NULL, 10);
-            *target_kind = (kind_val > UINT16_MAX) ? UINT16_MAX : (uint16_t)kind_val;
+            char* endptr;
+            errno = 0;
+            unsigned long kind_val = strtoul(value, &endptr, 10);
+            if (errno == 0 && endptr != value && *endptr == '\0') {
+                *target_kind = (kind_val > UINT16_MAX) ? UINT16_MAX : (uint16_t)kind_val;
+            }
         }
     }
 
