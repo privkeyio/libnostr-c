@@ -407,25 +407,28 @@ nostr_error_t nostr_nip17_unwrap_dm(const nostr_event* wrap, const nostr_privkey
         return err;
     }
     
+    nostr_key seal_pubkey;
+    memcpy(&seal_pubkey, &seal->pubkey, sizeof(nostr_key));
+
     if (sender_pubkey) {
-        memcpy(sender_pubkey, &seal->pubkey, sizeof(nostr_key));
+        memcpy(sender_pubkey, &seal_pubkey, sizeof(nostr_key));
     }
-    
-    err = nostr_nip44_decrypt(recipient_privkey, &seal->pubkey, seal->content,
+
+    err = nostr_nip44_decrypt(recipient_privkey, &seal_pubkey, seal->content,
                              &decrypted_rumor_json, &decrypted_rumor_len);
     nostr_event_destroy(seal);
     if (err != NOSTR_OK) {
         return err;
     }
-    
+
     err = nostr_event_from_json(decrypted_rumor_json, rumor);
     secure_wipe(decrypted_rumor_json, decrypted_rumor_len);
     free(decrypted_rumor_json);
     if (err != NOSTR_OK) {
         return err;
     }
-    
-    if (memcmp(&(*rumor)->pubkey, sender_pubkey ? sender_pubkey : &seal->pubkey, sizeof(nostr_key)) != 0) {
+
+    if (memcmp(&(*rumor)->pubkey, &seal_pubkey, sizeof(nostr_key)) != 0) {
         nostr_event_destroy(*rumor);
         *rumor = NULL;
         return NOSTR_ERR_INVALID_EVENT;
