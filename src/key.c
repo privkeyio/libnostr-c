@@ -25,14 +25,8 @@
 #include <esp_random.h>
 #endif
 #else
-#ifdef _WIN32
-#include <windows.h>
-#define RtlGenRandom SystemFunction036
-BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
-#else
 #include <openssl/rand.h>
 #include <openssl/err.h>
-#endif
 #include <openssl/sha.h>
 #endif
 
@@ -112,20 +106,16 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-#ifdef _WIN32
-    return RtlGenRandom(buf, (ULONG)len) ? 1 : 0;
-#else
     static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
         RAND_poll();
         openssl_rng_seeded = 1;
     }
-    int result = RAND_bytes(buf, len);
+    int result = RAND_bytes(buf, (int)len);
     if (result != 1) {
         ERR_clear_error();
     }
     return result;
-#endif
 #endif
 }
 
