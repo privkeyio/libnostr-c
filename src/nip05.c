@@ -11,6 +11,7 @@
 #define NIP05_MAX_DOMAIN_LEN 256
 #define NIP05_MAX_URL_LEN 512
 #define NIP05_MAX_RELAYS 100
+#define NIP05_MAX_RESPONSE_SIZE (1024 * 1024)
 
 static void str_tolower(char* s, size_t len) {
     for (size_t i = 0; i < len; i++) {
@@ -55,6 +56,53 @@ static const char* skip_json_whitespace(const char* p) {
     if (!p) return p;
     while (*p == ' ' || *p == ':' || *p == '\n' || *p == '\t' || *p == '\r') p++;
     return p;
+}
+
+static const char* json_strstr(const char* json, const char* needle) {
+    if (!json || !needle) return NULL;
+
+    int in_string = 0;
+    const char* p = json;
+    size_t needle_len = strlen(needle);
+
+    while (*p) {
+        if (*p == '"') {
+            if (p == json || *(p - 1) != '\\') {
+                in_string = !in_string;
+            } else {
+                int backslash_count = 0;
+                const char* bp = p - 1;
+                while (bp >= json && *bp == '\\') {
+                    backslash_count++;
+                    bp--;
+                }
+                if (backslash_count % 2 == 0) {
+                    in_string = !in_string;
+                }
+            }
+        }
+
+        if (!in_string && strncmp(p, needle, needle_len) == 0) {
+            return p;
+        }
+        p++;
+    }
+    return NULL;
+}
+
+static int contains_unicode_escape(const char* s, size_t len) {
+    for (size_t i = 0; i + 1 < len; i++) {
+        if (s[i] == '\\' && s[i + 1] == 'u') return 1;
+    }
+    return 0;
+}
+
+static int is_valid_relay_url(const char* url, size_t len) {
+    if (len < 6) return 0;
+    if (contains_unicode_escape(url, len)) return 0;
+    if (strncmp(url, "wss://", 6) == 0) return 1;
+    if (len >= 5 && strncmp(url, "ws://", 5) == 0) return 1;
+    return 0;
 }
 
 nostr_error_t nostr_nip05_parse(const char* identifier, char* name, size_t name_size,
@@ -138,13 +186,16 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     if (relays) *relays = NULL;
     if (relay_count) *relay_count = 0;
 
+    size_t json_len = strlen(json);
+    if (json_len > NIP05_MAX_RESPONSE_SIZE) return NOSTR_ERR_INVALID_PARAM;
+
     size_t name_len = strlen(name);
     if (name_len == 0 || name_len > NIP05_MAX_NAME_LEN) return NOSTR_ERR_INVALID_PARAM;
     for (size_t i = 0; i < name_len; i++) {
         if (name[i] == '"' || name[i] == '\\') return NOSTR_ERR_INVALID_PARAM;
     }
 
-    const char* names_pos = strstr(json, "\"names\"");
+    const char* names_pos = json_strstr(json, "\"names\"");
     if (!names_pos) return NOSTR_ERR_NOT_FOUND;
 
     names_pos = skip_json_whitespace(names_pos + 7);
@@ -153,7 +204,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     char search_name[NIP05_MAX_NAME_LEN + 4];
     snprintf(search_name, sizeof(search_name), "\"%s\"", name);
 
-    const char* name_pos = strstr(names_pos, search_name);
+    const char* name_pos = json_strstr(names_pos, search_name);
     if (!name_pos) return NOSTR_ERR_NOT_FOUND;
 
     name_pos = skip_json_whitespace(name_pos + strlen(search_name));
@@ -172,7 +223,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
 
     if (!relays || !relay_count) return NOSTR_OK;
 
-    const char* relays_pos = strstr(json, "\"relays\"");
+    const char* relays_pos = json_strstr(json, "\"relays\"");
     if (!relays_pos) return NOSTR_OK;
 
     relays_pos = skip_json_whitespace(relays_pos + 8);
@@ -181,7 +232,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     char pubkey_search[68];
     snprintf(pubkey_search, sizeof(pubkey_search), "\"%s\"", pubkey_hex);
 
-    const char* pubkey_relays = strstr(relays_pos, pubkey_search);
+    const char* pubkey_relays = json_strstr(relays_pos, pubkey_search);
     if (!pubkey_relays) return NOSTR_OK;
 
     pubkey_relays = skip_json_whitespace(pubkey_relays + strlen(pubkey_search));
@@ -217,6 +268,10 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
         if (*p != '"') break;
 
         size_t relay_len = p - relay_start;
+        if (!is_valid_relay_url(relay_start, relay_len)) {
+            p++;
+            continue;
+        }
         relay_array[idx] = malloc(relay_len + 1);
         if (!relay_array[idx]) {
             nostr_nip05_free_relays(relay_array, idx);
@@ -268,6 +323,11 @@ nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pu
     if (!response || response_len == 0) {
         free(response);
         return NOSTR_ERR_NOT_FOUND;
+    }
+
+    if (response_len > NIP05_MAX_RESPONSE_SIZE) {
+        free(response);
+        return NOSTR_ERR_INVALID_PARAM;
     }
 
     char pubkey_hex[65];

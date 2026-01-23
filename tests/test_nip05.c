@@ -240,6 +240,47 @@ static void test_nip05_free_relays_null(void) {
     nostr_nip05_free_relays(NULL, 5);
 }
 
+static void test_nip05_parse_response_invalid_relay_url(void) {
+    const char* json = "{"
+        "\"names\":{\"bob\":\"" TEST_PUBKEY "\"},"
+        "\"relays\":{\"" TEST_PUBKEY "\":[\"https://not-a-relay.com\",\"wss://valid.relay.com\",\"ftp://bad.com\"]}"
+        "}";
+    char pubkey[65];
+    char** relays = NULL;
+    size_t relay_count = 0;
+
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_parse_response(json, "bob", pubkey, sizeof(pubkey), &relays, &relay_count));
+    TEST_ASSERT_EQUAL(1, relay_count);
+    TEST_ASSERT_NOT_NULL(relays);
+    TEST_ASSERT_EQUAL_STRING("wss://valid.relay.com", relays[0]);
+
+    nostr_nip05_free_relays(relays, relay_count);
+}
+
+static void test_nip05_parse_response_json_injection(void) {
+    const char* json = "{\"comment\":\"fake \\\"names\\\":{\\\"bob\\\":\\\"0000000000000000000000000000000000000000000000000000000000000000\\\"}\",\"names\":{\"bob\":\"" TEST_PUBKEY "\"}}";
+    char pubkey[65];
+
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_parse_response(json, "bob", pubkey, sizeof(pubkey), NULL, NULL));
+    TEST_ASSERT_EQUAL_STRING(TEST_PUBKEY, pubkey);
+}
+
+static void test_nip05_parse_response_ws_relay(void) {
+    const char* json = "{"
+        "\"names\":{\"bob\":\"" TEST_PUBKEY "\"},"
+        "\"relays\":{\"" TEST_PUBKEY "\":[\"ws://insecure.relay.com\"]}"
+        "}";
+    char pubkey[65];
+    char** relays = NULL;
+    size_t relay_count = 0;
+
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_parse_response(json, "bob", pubkey, sizeof(pubkey), &relays, &relay_count));
+    TEST_ASSERT_EQUAL(1, relay_count);
+    TEST_ASSERT_EQUAL_STRING("ws://insecure.relay.com", relays[0]);
+
+    nostr_nip05_free_relays(relays, relay_count);
+}
+
 void run_nip05_tests(void) {
     printf("   Running NIP-05 DNS identity verification tests...\n");
 
@@ -273,6 +314,9 @@ void run_nip05_tests(void) {
     RUN_TEST(test_nip05_verify_invalid_identifier);
     RUN_TEST(test_nip05_verify_null_params);
     RUN_TEST(test_nip05_free_relays_null);
+    RUN_TEST(test_nip05_parse_response_invalid_relay_url);
+    RUN_TEST(test_nip05_parse_response_json_injection);
+    RUN_TEST(test_nip05_parse_response_ws_relay);
 
     UNITY_END();
 
