@@ -69,7 +69,7 @@ Automated builds and releases are available through GitHub Actions CI/CD.
 
 #### Features
 libnostr-c supports modular compilation - build only what you need:
-- Core NIPs (01, 02, 10, 13, 19, 21, 25, 57, 65) enabled by default
+- Core NIPs (01, 02, 05, 10, 13, 19, 21, 25, 57, 65) enabled by default
 - Optional NIPs (04, 09, 11, 17, 40, 44, 45, 46, 47, 59) via feature flags
 - NIP-11 relay information document for serving relay metadata
 - Relay protocol support for building relay implementations

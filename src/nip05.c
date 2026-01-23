@@ -52,40 +52,34 @@ static int is_valid_domain(const char* s, size_t len) {
     return has_dot;
 }
 
-static const char* skip_json_whitespace(const char* p) {
+static const char* skip_ws_and_colon(const char* p) {
     if (!p) return p;
     while (*p == ' ' || *p == ':' || *p == '\n' || *p == '\t' || *p == '\r') p++;
     return p;
+}
+
+static int is_escaped_quote(const char* json, const char* p) {
+    if (p == json) return 0;
+    int backslashes = 0;
+    for (const char* bp = p - 1; bp >= json && *bp == '\\'; bp--) {
+        backslashes++;
+    }
+    return backslashes % 2 == 1;
 }
 
 static const char* json_strstr(const char* json, const char* needle) {
     if (!json || !needle) return NULL;
 
     int in_string = 0;
-    const char* p = json;
     size_t needle_len = strlen(needle);
 
-    while (*p) {
-        if (*p == '"') {
-            if (p == json || *(p - 1) != '\\') {
-                in_string = !in_string;
-            } else {
-                int backslash_count = 0;
-                const char* bp = p - 1;
-                while (bp >= json && *bp == '\\') {
-                    backslash_count++;
-                    bp--;
-                }
-                if (backslash_count % 2 == 0) {
-                    in_string = !in_string;
-                }
-            }
-        }
-
+    for (const char* p = json; *p; p++) {
         if (!in_string && strncmp(p, needle, needle_len) == 0) {
             return p;
         }
-        p++;
+        if (*p == '"' && !is_escaped_quote(json, p)) {
+            in_string = !in_string;
+        }
     }
     return NULL;
 }
@@ -98,11 +92,8 @@ static int contains_unicode_escape(const char* s, size_t len) {
 }
 
 static int is_valid_relay_url(const char* url, size_t len) {
-    if (len < 6) return 0;
-    if (contains_unicode_escape(url, len)) return 0;
-    if (strncmp(url, "wss://", 6) == 0) return 1;
-    if (len >= 5 && strncmp(url, "ws://", 5) == 0) return 1;
-    return 0;
+    if (len < 6 || contains_unicode_escape(url, len)) return 0;
+    return strncmp(url, "wss://", 6) == 0 || strncmp(url, "ws://", 5) == 0;
 }
 
 nostr_error_t nostr_nip05_parse(const char* identifier, char* name, size_t name_size,
@@ -152,17 +143,8 @@ nostr_error_t nostr_nip05_build_url(const char* name, const char* domain,
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    /* Overflow-safe required size calculation: "https://" (8) + domain + "/.well-known/nostr.json?name=" (29) + name + '\0' (1) */
-    size_t required = 8;
-    if (required > SIZE_MAX - domain_len) return NOSTR_ERR_INVALID_PARAM;
-    required += domain_len;
-    if (required > SIZE_MAX - 29) return NOSTR_ERR_INVALID_PARAM;
-    required += 29;
-    if (required > SIZE_MAX - name_len) return NOSTR_ERR_INVALID_PARAM;
-    required += name_len;
-    if (required > SIZE_MAX - 1) return NOSTR_ERR_INVALID_PARAM;
-    required += 1;
-
+    /* "https://" (8) + domain + "/.well-known/nostr.json?name=" (29) + name + '\0' (1) = 38 + name + domain */
+    size_t required = 38 + name_len + domain_len;
     if (url_size < required) return NOSTR_ERR_INVALID_PARAM;
 
     char* p = url;
@@ -198,7 +180,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     const char* names_pos = json_strstr(json, "\"names\"");
     if (!names_pos) return NOSTR_ERR_NOT_FOUND;
 
-    names_pos = skip_json_whitespace(names_pos + 7);
+    names_pos = skip_ws_and_colon(names_pos + 7);
     if (*names_pos != '{') return NOSTR_ERR_JSON_PARSE;
 
     char search_name[NIP05_MAX_NAME_LEN + 4];
@@ -207,7 +189,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     const char* name_pos = json_strstr(names_pos, search_name);
     if (!name_pos) return NOSTR_ERR_NOT_FOUND;
 
-    name_pos = skip_json_whitespace(name_pos + strlen(search_name));
+    name_pos = skip_ws_and_colon(name_pos + strlen(search_name));
     if (*name_pos != '"') return NOSTR_ERR_JSON_PARSE;
     name_pos++;
 
@@ -226,7 +208,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     const char* relays_pos = json_strstr(json, "\"relays\"");
     if (!relays_pos) return NOSTR_OK;
 
-    relays_pos = skip_json_whitespace(relays_pos + 8);
+    relays_pos = skip_ws_and_colon(relays_pos + 8);
     if (*relays_pos != '{') return NOSTR_OK;
 
     char pubkey_search[68];
@@ -235,7 +217,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     const char* pubkey_relays = json_strstr(relays_pos, pubkey_search);
     if (!pubkey_relays) return NOSTR_OK;
 
-    pubkey_relays = skip_json_whitespace(pubkey_relays + strlen(pubkey_search));
+    pubkey_relays = skip_ws_and_colon(pubkey_relays + strlen(pubkey_search));
     if (*pubkey_relays != '[') return NOSTR_OK;
     pubkey_relays++;
 
