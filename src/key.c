@@ -2,11 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 #include <windows.h>
-#endif
-#ifdef NOSTR_FEATURE_THREADING
-#ifndef _WIN32
+#else
 #include <pthread.h>
 #endif
 #endif
@@ -107,28 +106,6 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-#ifdef _WIN32
-    typedef long NTSTATUS;
-    typedef NTSTATUS (WINAPI *BCryptGenRandomFn)(void*, unsigned char*, unsigned long, unsigned long);
-    static BCryptGenRandomFn pBCryptGenRandom = NULL;
-    static int bcrypt_init = 0;
-
-    if (!bcrypt_init) {
-        HMODULE hBcrypt = LoadLibraryA("bcrypt.dll");
-        if (hBcrypt) {
-            pBCryptGenRandom = (BCryptGenRandomFn)GetProcAddress(hBcrypt, "BCryptGenRandom");
-        }
-        bcrypt_init = 1;
-    }
-
-    if (pBCryptGenRandom) {
-        NTSTATUS status = pBCryptGenRandom(NULL, buf, (unsigned long)len, 0x00000002);
-        if (status == 0) {
-            return 1;
-        }
-    }
-    return 0;
-#else
     static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
         RAND_poll();
@@ -139,7 +116,6 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
         ERR_clear_error();
     }
     return result;
-#endif
 #endif
 }
 
