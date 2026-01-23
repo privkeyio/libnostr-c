@@ -176,6 +176,10 @@ nostr_error_t nostr_relay_list_from_event(const nostr_event* event, nostr_relay_
             continue;
         }
 
+        if (!event->tags[i].values[0]) {
+            continue;
+        }
+
         if (strcmp(event->tags[i].values[0], "r") != 0) {
             continue;
         }
