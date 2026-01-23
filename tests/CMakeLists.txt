@@ -11,6 +11,7 @@ add_executable(test_runner
     test_event.c
     test_key.c
     test_bech32.c
+    test_nip05.c
     test_nip21.c
     test_relay.c
     test_zap.c
@@ -21,6 +22,12 @@ add_executable(test_runner
 )
 
 # Conditionally build tests based on enabled features
+if(NOSTR_FEATURE_NIP05)
+    add_executable(test_nip05 test_nip05.c)
+    target_link_libraries(test_nip05 nostr_static)
+    add_test(NAME nip05_tests COMMAND test_nip05)
+endif()
+
 if(NOSTR_FEATURE_NIP10)
     add_executable(test_nip10 test_nip10.c)
     target_link_libraries(test_nip10 nostr_static)

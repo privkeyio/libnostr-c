@@ -93,6 +93,7 @@ set(NOSTR_FEATURE_ENCODING ON CACHE BOOL "Enable bech32/hex encoding (always on)
 # NIP features (optional)
 option(NOSTR_FEATURE_ALL_NIPS "Enable all NIPs" OFF)
 option(NOSTR_FEATURE_NIP04 "Enable NIP-04: Legacy Encrypted Direct Messages (deprecated)" OFF)
+option(NOSTR_FEATURE_NIP05 "Enable NIP-05: DNS-Based Identity Verification" ON)
 option(NOSTR_FEATURE_NIP10 "Enable NIP-10: Text Note Threading" ON)
 option(NOSTR_FEATURE_NIP13 "Enable NIP-13: Proof of Work" ON)
 option(NOSTR_FEATURE_NIP17 "Enable NIP-17: Private Direct Messages" OFF)
@@ -133,6 +134,7 @@ option(NOSTR_FEATURE_CRYPTO_SECP256K1 "Use secp256k1 for basic cryptography (fal
 # Handle all-nips flag
 if(NOSTR_FEATURE_ALL_NIPS)
     set(NOSTR_FEATURE_NIP04 ON)
+    set(NOSTR_FEATURE_NIP05 ON)
     set(NOSTR_FEATURE_NIP10 ON)
     set(NOSTR_FEATURE_NIP13 ON)
     set(NOSTR_FEATURE_NIP17 ON)
@@ -621,6 +623,10 @@ endif()
 
 if(NOSTR_FEATURE_RELAY)
     list(APPEND NOSTR_SOURCES src/relay.c)
+endif()
+
+if(NOSTR_FEATURE_NIP05)
+    list(APPEND NOSTR_SOURCES src/nip05.c)
 endif()
 
 if(NOSTR_FEATURE_NIP10)

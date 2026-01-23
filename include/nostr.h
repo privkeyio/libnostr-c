@@ -1241,6 +1241,25 @@ nostr_error_t nostr_relay_list_get_read_relays(const nostr_relay_list* list, cha
 nostr_error_t nostr_relay_list_get_write_relays(const nostr_relay_list* list, char*** urls, size_t* count);
 void nostr_relay_list_free_urls(char** urls, size_t count);
 
+typedef nostr_error_t (*nostr_nip05_http_callback)(const char* url, char** response,
+                                                    size_t* response_len, void* user_data);
+
+nostr_error_t nostr_nip05_parse(const char* identifier, char* name, size_t name_size,
+                                char* domain, size_t domain_size);
+
+nostr_error_t nostr_nip05_build_url(const char* name, const char* domain,
+                                    char* url, size_t url_size);
+
+nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
+                                         char* pubkey_hex, size_t pubkey_size,
+                                         char*** relays, size_t* relay_count);
+
+void nostr_nip05_free_relays(char** relays, size_t count);
+
+nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pubkey,
+                                 nostr_nip05_http_callback http_callback, void* user_data,
+                                 char*** relays_out, size_t* relay_count_out);
+
 #ifdef __cplusplus
 }
 #endif
