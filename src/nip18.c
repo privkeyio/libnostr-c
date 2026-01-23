@@ -114,11 +114,7 @@ nostr_error_t nostr_repost_parse(const nostr_event* event, char* reposted_event_
     const char* found_relay = NULL;
     const char* found_p_key = NULL;
 
-    if (!event->tags && event->tags_count > 0) {
-        return NOSTR_ERR_NOT_FOUND;
-    }
-
-    for (size_t i = 0; i < event->tags_count; i++) {
+    for (size_t i = 0; i < event->tags_count && event->tags; i++) {
         const nostr_tag* tag = &event->tags[i];
         if (tag->count < 2 || !tag->values || !tag->values[0] || !tag->values[1])
             continue;
@@ -133,7 +129,7 @@ nostr_error_t nostr_repost_parse(const nostr_event* event, char* reposted_event_
             }
         } else if (strcmp(name, "p") == 0) {
             found_p_key = value;
-        } else if (strcmp(name, "k") == 0 && reposted_kind) {
+        } else if (reposted_kind && strcmp(name, "k") == 0) {
             char* endptr;
             errno = 0;
             unsigned long kind_val = strtoul(value, &endptr, 10);

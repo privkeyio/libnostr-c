@@ -29,15 +29,6 @@ static int g_tests_failed_count = 0;
         } \
     } while(0)
 
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
 #define TEST_ASSERT_TRUE(condition) \
     do { \
         if (!(condition)) { \
