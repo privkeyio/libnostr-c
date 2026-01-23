@@ -11,6 +11,12 @@
 #define MAX_RELAY_COUNT 256
 #define MAX_URL_LENGTH 2048
 
+static void cleanup_event(nostr_event** event)
+{
+    nostr_event_destroy(*event);
+    *event = NULL;
+}
+
 nostr_error_t nostr_relay_list_create(nostr_relay_list** list)
 {
     if (!list) {
@@ -150,32 +156,23 @@ nostr_error_t nostr_relay_list_to_event(const nostr_relay_list* list, nostr_even
 
     err = nostr_event_set_content(*event, "");
     if (err != NOSTR_OK) {
-        nostr_event_destroy(*event);
-        *event = NULL;
+        cleanup_event(event);
         return err;
     }
 
     for (size_t i = 0; i < list->count; i++) {
-        const char* tag_values[3];
-        size_t tag_count;
+        const nostr_relay_list_entry* entry = &list->relays[i];
+        const char* tag_values[3] = {"r", entry->url, NULL};
+        size_t tag_count = 2;
 
-        tag_values[0] = "r";
-        tag_values[1] = list->relays[i].url;
-
-        if (list->relays[i].read && list->relays[i].write) {
-            tag_count = 2;
-        } else if (list->relays[i].read) {
-            tag_values[2] = "read";
-            tag_count = 3;
-        } else {
-            tag_values[2] = "write";
+        if (!entry->read || !entry->write) {
+            tag_values[2] = entry->read ? "read" : "write";
             tag_count = 3;
         }
 
         err = nostr_event_add_tag(*event, tag_values, tag_count);
         if (err != NOSTR_OK) {
-            nostr_event_destroy(*event);
-            *event = NULL;
+            cleanup_event(event);
             return err;
         }
     }
@@ -199,31 +196,22 @@ nostr_error_t nostr_relay_list_from_event(const nostr_event* event, nostr_relay_
     }
 
     for (size_t i = 0; i < event->tags_count; i++) {
-        if (event->tags[i].count < 2) {
+        const nostr_tag* tag = &event->tags[i];
+
+        if (tag->count < 2 || !tag->values || !tag->values[0] || !tag->values[1]) {
             continue;
         }
 
-        if (!event->tags[i].values) {
+        if (strcmp(tag->values[0], "r") != 0) {
             continue;
         }
 
-        if (!event->tags[i].values[0]) {
-            continue;
-        }
-
-        if (strcmp(event->tags[i].values[0], "r") != 0) {
-            continue;
-        }
-
-        const char* url = event->tags[i].values[1];
-        if (!url) {
-            continue;
-        }
+        const char* url = tag->values[1];
         bool read = true;
         bool write = true;
 
-        if (event->tags[i].count >= 3 && event->tags[i].values[2]) {
-            const char* marker = event->tags[i].values[2];
+        if (tag->count >= 3 && tag->values[2]) {
+            const char* marker = tag->values[2];
             if (strcmp(marker, "read") == 0) {
                 write = false;
             } else if (strcmp(marker, "write") == 0) {
