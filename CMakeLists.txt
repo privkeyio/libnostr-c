@@ -543,12 +543,17 @@ if(NOT HAVE_CRYPTO_BACKEND)
 endif()
 
 # Validate feature dependencies
-set(FEATURES_REQUIRING_NOSCRYPT "NIP04;NIP17;NIP44;NIP46;NIP47;NIP59;HD_KEYS")
+set(FEATURES_REQUIRING_NOSCRYPT "NIP04;NIP17;NIP44;NIP46;NIP47;NIP59")
 foreach(FEATURE ${FEATURES_REQUIRING_NOSCRYPT})
     if(NOSTR_FEATURE_${FEATURE} AND NOT HAVE_NOSCRYPT)
         message(FATAL_ERROR "Feature ${FEATURE} requires noscrypt but it's not available")
     endif()
 endforeach()
+
+# HD_KEYS requires any crypto backend (noscrypt or secp256k1)
+if(NOSTR_FEATURE_HD_KEYS AND NOT HAVE_CRYPTO_BACKEND)
+    message(FATAL_ERROR "Feature HD_KEYS requires a crypto backend (noscrypt or secp256k1)")
+endif()
 
 # Auto-disable RELAY on Windows if libwebsockets not found (following noscrypt pattern)
 if(WIN32 AND NOSTR_FEATURE_RELAY AND NOT (LIBWEBSOCKETS_FOUND OR LIBWEBSOCKETS_LIBRARIES))

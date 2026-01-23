@@ -452,6 +452,42 @@ nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* master, const char* p
 nostr_error_t nostr_hd_key_to_keypair(const nostr_hd_key* hd_key, nostr_keypair* keypair);
 
 /**
+ * @brief Generate a BIP39 mnemonic phrase (NIP-06)
+ * @param word_count Number of words (12 or 24)
+ * @param mnemonic Output buffer for mnemonic phrase
+ * @param mnemonic_size Size of output buffer
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_mnemonic_generate(int word_count, char* mnemonic, size_t mnemonic_size);
+
+/**
+ * @brief Validate a BIP39 mnemonic phrase checksum (NIP-06)
+ * @param mnemonic Mnemonic phrase to validate
+ * @return NOSTR_OK if valid, NOSTR_ERR_INVALID_PARAM if invalid
+ */
+nostr_error_t nostr_mnemonic_validate(const char* mnemonic);
+
+/**
+ * @brief Derive seed from BIP39 mnemonic (NIP-06)
+ * @param mnemonic Mnemonic phrase
+ * @param passphrase Optional passphrase (NULL for none)
+ * @param seed Output 64-byte seed buffer
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_mnemonic_to_seed(const char* mnemonic, const char* passphrase, uint8_t seed[64]);
+
+/**
+ * @brief Derive Nostr keypair from mnemonic using NIP-06 path
+ * @param mnemonic Mnemonic phrase
+ * @param passphrase Optional passphrase (NULL for none)
+ * @param account Account index (typically 0)
+ * @param keypair Output keypair
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_mnemonic_to_keypair(const char* mnemonic, const char* passphrase,
+                                        uint32_t account, nostr_keypair* keypair);
+
+/**
  * @brief Convert public key to bech32 format
  * @param key Input public key
  * @param prefix Bech32 prefix (e.g., "npub")
