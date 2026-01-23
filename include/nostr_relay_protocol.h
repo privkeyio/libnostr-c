@@ -272,6 +272,15 @@ nostr_relay_error_t nostr_filter_validate(const nostr_filter_t* filter, nostr_va
  */
 void nostr_filter_free(nostr_filter_t* filter);
 
+/**
+ * @brief Deep copy a filter
+ * @param dst Destination filter (must be uninitialized or zeroed)
+ * @param src Source filter to copy
+ * @return NOSTR_RELAY_OK on success, error code otherwise
+ * @note Caller must call nostr_filter_free() on dst when done
+ */
+nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t* src);
+
 /* ============================================================================
  * Client Message Parsing (NIP-01)
  * ============================================================================ */

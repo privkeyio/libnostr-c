@@ -534,3 +534,101 @@ int32_t nostr_filter_get_limit(const nostr_filter_t* filter)
     if (!filter) return 0;
     return filter->limit;
 }
+
+static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
+                                               char** src, size_t src_count)
+{
+    if (src_count == 0 || !src) {
+        *dst = NULL;
+        *dst_count = 0;
+        return NOSTR_RELAY_OK;
+    }
+
+    *dst = calloc(src_count, sizeof(char*));
+    if (!*dst) {
+        *dst_count = 0;
+        return NOSTR_RELAY_ERR_MEMORY;
+    }
+
+    for (size_t i = 0; i < src_count; i++) {
+        if (src[i]) {
+            (*dst)[i] = strdup(src[i]);
+            if (!(*dst)[i]) {
+                for (size_t j = 0; j < i; j++) {
+                    free((*dst)[j]);
+                }
+                free(*dst);
+                *dst = NULL;
+                *dst_count = 0;
+                return NOSTR_RELAY_ERR_MEMORY;
+            }
+        }
+    }
+
+    *dst_count = src_count;
+    return NOSTR_RELAY_OK;
+}
+
+nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t* src)
+{
+    if (!dst || !src) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    memset(dst, 0, sizeof(nostr_filter_t));
+
+    nostr_relay_error_t err;
+
+    err = clone_string_array(&dst->ids, &dst->ids_count, src->ids, src->ids_count);
+    if (err != NOSTR_RELAY_OK) goto cleanup;
+
+    err = clone_string_array(&dst->authors, &dst->authors_count, src->authors, src->authors_count);
+    if (err != NOSTR_RELAY_OK) goto cleanup;
+
+    if (src->kinds_count > 0 && src->kinds) {
+        dst->kinds = calloc(src->kinds_count, sizeof(int32_t));
+        if (!dst->kinds) {
+            err = NOSTR_RELAY_ERR_MEMORY;
+            goto cleanup;
+        }
+        memcpy(dst->kinds, src->kinds, src->kinds_count * sizeof(int32_t));
+        dst->kinds_count = src->kinds_count;
+    }
+
+    err = clone_string_array(&dst->e_tags, &dst->e_tags_count, src->e_tags, src->e_tags_count);
+    if (err != NOSTR_RELAY_OK) goto cleanup;
+
+    err = clone_string_array(&dst->p_tags, &dst->p_tags_count, src->p_tags, src->p_tags_count);
+    if (err != NOSTR_RELAY_OK) goto cleanup;
+
+    if (src->generic_tags_count > 0 && src->generic_tags) {
+        dst->generic_tags = calloc(src->generic_tags_count, sizeof(nostr_generic_tag_filter_t));
+        if (!dst->generic_tags) {
+            err = NOSTR_RELAY_ERR_MEMORY;
+            goto cleanup;
+        }
+
+        for (size_t i = 0; i < src->generic_tags_count; i++) {
+            dst->generic_tags[i].tag_name = src->generic_tags[i].tag_name;
+            err = clone_string_array(&dst->generic_tags[i].values,
+                                     &dst->generic_tags[i].values_count,
+                                     src->generic_tags[i].values,
+                                     src->generic_tags[i].values_count);
+            if (err != NOSTR_RELAY_OK) {
+                dst->generic_tags_count = i;
+                goto cleanup;
+            }
+        }
+        dst->generic_tags_count = src->generic_tags_count;
+    }
+
+    dst->since = src->since;
+    dst->until = src->until;
+    dst->limit = src->limit;
+
+    return NOSTR_RELAY_OK;
+
+cleanup:
+    nostr_filter_free(dst);
+    return err;
+}
