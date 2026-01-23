@@ -1210,6 +1210,14 @@ void nostr_naddr_free(nostr_naddr* addr);
 nostr_error_t nostr_nrelay_encode(const nostr_nrelay* relay, char* bech32, size_t bech32_size);
 nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay);
 
+/*
+ * NIP-65: Relay List Metadata
+ *
+ * Thread safety: nostr_relay_list is NOT thread-safe. Callers must provide
+ * external synchronization if a list is accessed from multiple threads.
+ * Invalid URLs in from_event are silently skipped to allow partial parsing.
+ */
+
 typedef struct nostr_relay_list_entry {
     char* url;
     bool read;

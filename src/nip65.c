@@ -57,7 +57,27 @@ static bool is_valid_relay_url(const char* url)
     if (len == 0 || len > MAX_URL_LENGTH) {
         return false;
     }
-    return strncmp(url, "wss://", 6) == 0 || strncmp(url, "ws://", 5) == 0;
+
+    size_t prefix_len;
+    if (strncmp(url, "wss://", 6) == 0) {
+        prefix_len = 6;
+    } else if (strncmp(url, "ws://", 5) == 0) {
+        prefix_len = 5;
+    } else {
+        return false;
+    }
+
+    if (len <= prefix_len) {
+        return false;
+    }
+
+    char first_host_char = url[prefix_len];
+    if (first_host_char == '/' || first_host_char == ':' || first_host_char == '?' ||
+        first_host_char == '#' || first_host_char == '@' || first_host_char == ' ') {
+        return false;
+    }
+
+    return true;
 }
 
 nostr_error_t nostr_relay_list_add(nostr_relay_list* list, const char* url, bool read, bool write)
@@ -74,6 +94,12 @@ nostr_error_t nostr_relay_list_add(nostr_relay_list* list, const char* url, bool
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    for (size_t i = 0; i < list->count; i++) {
+        if (strcmp(list->relays[i].url, url) == 0) {
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+    }
+
     if (list->count >= list->capacity) {
         size_t new_capacity = list->capacity * 2;
         if (new_capacity < list->capacity || new_capacity > MAX_RELAY_COUNT) {
@@ -82,11 +108,16 @@ nostr_error_t nostr_relay_list_add(nostr_relay_list* list, const char* url, bool
         if (new_capacity <= list->count) {
             return NOSTR_ERR_MEMORY;
         }
-        nostr_relay_list_entry* new_relays = realloc(list->relays,
-            new_capacity * sizeof(nostr_relay_list_entry));
+        size_t alloc_size = new_capacity * sizeof(nostr_relay_list_entry);
+        if (alloc_size / sizeof(nostr_relay_list_entry) != new_capacity) {
+            return NOSTR_ERR_MEMORY;
+        }
+        nostr_relay_list_entry* new_relays = realloc(list->relays, alloc_size);
         if (!new_relays) {
             return NOSTR_ERR_MEMORY;
         }
+        memset(&new_relays[list->capacity], 0,
+               (new_capacity - list->capacity) * sizeof(nostr_relay_list_entry));
         list->relays = new_relays;
         list->capacity = new_capacity;
     }

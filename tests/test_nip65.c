@@ -298,6 +298,42 @@ static int test_relay_list_capacity_growth(void)
     return 0;
 }
 
+static int test_relay_list_duplicate_url(void)
+{
+    nostr_relay_list* list = NULL;
+    nostr_relay_list_create(&list);
+
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_relay_list_add(list, "wss://relay.example.com", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://relay.example.com", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://relay.example.com", true, false));
+    TEST_ASSERT_EQUAL(1, nostr_relay_list_count(list));
+
+    nostr_relay_list_free(list);
+    return 0;
+}
+
+static int test_relay_list_url_validation(void)
+{
+    nostr_relay_list* list = NULL;
+    nostr_relay_list_create(&list);
+
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "ws://", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss:///path", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://:8080", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://?query", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://#fragment", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss://@host", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_relay_list_add(list, "wss:// space", true, true));
+
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_relay_list_add(list, "wss://relay.example.com", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_relay_list_add(list, "wss://relay.example.com:8080", true, true));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_relay_list_add(list, "wss://192.168.1.1", true, true));
+
+    nostr_relay_list_free(list);
+    return 0;
+}
+
 int main(void)
 {
     int failures = 0;
@@ -316,6 +352,8 @@ int main(void)
     RUN_TEST(test_relay_list_get_write_relays);
     RUN_TEST(test_relay_list_get_out_of_bounds);
     RUN_TEST(test_relay_list_capacity_growth);
+    RUN_TEST(test_relay_list_duplicate_url);
+    RUN_TEST(test_relay_list_url_validation);
 
     printf("\n");
     if (failures == 0) {
