@@ -59,10 +59,13 @@ static const char* skip_ws_and_colon(const char* p) {
 }
 
 static int is_escaped_quote(const char* json, const char* p) {
-    if (p == json) return 0;
+    if (p <= json) return 0;
+    size_t idx = (size_t)(p - json) - 1;
     int backslashes = 0;
-    for (const char* bp = p - 1; bp >= json && *bp == '\\'; bp--) {
+    while (json[idx] == '\\') {
         backslashes++;
+        if (idx == 0) break;
+        idx--;
     }
     return backslashes % 2 == 1;
 }
@@ -225,7 +228,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     const char* p = pubkey_relays;
     int in_string = 0;
     while (*p && *p != ']') {
-        if (*p == '"' && (p == pubkey_relays || *(p - 1) != '\\')) {
+        if (*p == '"' && !is_escaped_quote(pubkey_relays, p)) {
             in_string = !in_string;
             if (!in_string) count++;
         }
@@ -246,7 +249,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
         p++;
 
         const char* relay_start = p;
-        while (*p && (*p != '"' || (p > relay_start && *(p - 1) == '\\'))) p++;
+        while (*p && (*p != '"' || is_escaped_quote(pubkey_relays, p))) p++;
         if (*p != '"') break;
 
         size_t relay_len = p - relay_start;
