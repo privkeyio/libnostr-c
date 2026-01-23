@@ -385,7 +385,6 @@ nostr_error_t nostr_nip17_unwrap_dm(const nostr_event* wrap, const nostr_privkey
     err = nostr_nip44_decrypt(recipient_privkey, &wrap->pubkey, wrap->content,
                              &decrypted_seal_json, &decrypted_seal_len);
     if (err != NOSTR_OK) {
-        fprintf(stderr, "[nip17] gift wrap decrypt failed: %s\n", nostr_error_string(err));
         return err;
     }
 

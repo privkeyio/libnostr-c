@@ -470,6 +470,7 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     mac_args.payloadSize = (uint32_t)(NIP44_NONCE_SIZE + encrypted_len);
 
     result = NCVerifyMac(nc_ctx, &nc_secret, &nc_public, &mac_args);
+    secure_wipe(mac_payload, NIP44_NONCE_SIZE + encrypted_len);
     free(mac_payload);
     if (result != NC_SUCCESS) {
         free(payload);
