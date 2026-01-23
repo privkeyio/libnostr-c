@@ -674,6 +674,146 @@ void test_filter_has_tag_filters_null(void)
     TEST_ASSERT_FALSE(nostr_filter_has_tag_filters(NULL));
 }
 
+void test_client_msg_parse_count(void)
+{
+    const char* json = "[\"COUNT\",\"query1\",{\"kinds\":[3],\"#p\":[\"0000000000000000000000000000000000000000000000000000000000000001\"]}]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_EQUAL(NOSTR_CLIENT_MSG_COUNT, msg.type);
+    TEST_ASSERT_EQUAL_STRING("query1", msg.data.count.query_id);
+    TEST_ASSERT_EQUAL(1, msg.data.count.filters_count);
+    TEST_ASSERT_EQUAL(1, msg.data.count.filters[0].kinds_count);
+    TEST_ASSERT_EQUAL(3, msg.data.count.filters[0].kinds[0]);
+    TEST_ASSERT_EQUAL(1, msg.data.count.filters[0].p_tags_count);
+
+    nostr_client_msg_free(&msg);
+}
+
+void test_client_msg_parse_count_multiple_filters(void)
+{
+    const char* json = "[\"COUNT\",\"query2\",{\"kinds\":[0]},{\"kinds\":[1,7]}]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_EQUAL(NOSTR_CLIENT_MSG_COUNT, msg.type);
+    TEST_ASSERT_EQUAL_STRING("query2", msg.data.count.query_id);
+    TEST_ASSERT_EQUAL(2, msg.data.count.filters_count);
+    TEST_ASSERT_EQUAL(0, msg.data.count.filters[0].kinds[0]);
+    TEST_ASSERT_EQUAL(2, msg.data.count.filters[1].kinds_count);
+
+    nostr_client_msg_free(&msg);
+}
+
+void test_client_msg_parse_count_empty_filters(void)
+{
+    const char* json = "[\"COUNT\",\"query3\"]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_EQUAL(NOSTR_CLIENT_MSG_COUNT, msg.type);
+    TEST_ASSERT_EQUAL_STRING("query3", msg.data.count.query_id);
+    TEST_ASSERT_EQUAL(0, msg.data.count.filters_count);
+
+    nostr_client_msg_free(&msg);
+}
+
+void test_relay_msg_serialize_count_exact(void)
+{
+    nostr_relay_msg_t msg;
+    nostr_relay_msg_count(&msg, "sub1", 42, false);
+
+    char buf[256];
+    size_t len;
+    nostr_relay_error_t err = nostr_relay_msg_serialize(&msg, buf, sizeof(buf), &len);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_TRUE(strstr(buf, "\"COUNT\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buf, "\"sub1\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buf, "\"count\":42") != NULL);
+    TEST_ASSERT_TRUE(strstr(buf, "approximate") == NULL);
+}
+
+void test_relay_msg_serialize_count_approximate(void)
+{
+    nostr_relay_msg_t msg;
+    nostr_relay_msg_count(&msg, "sub2", 1000000, true);
+
+    char buf[256];
+    size_t len;
+    nostr_relay_error_t err = nostr_relay_msg_serialize(&msg, buf, sizeof(buf), &len);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+    TEST_ASSERT_TRUE(strstr(buf, "\"COUNT\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buf, "\"sub2\"") != NULL);
+    TEST_ASSERT_TRUE(strstr(buf, "\"count\":1000000") != NULL);
+    TEST_ASSERT_TRUE(strstr(buf, "\"approximate\":true") != NULL);
+}
+
+void test_count_msg_get_subscription_id(void)
+{
+    const char* json = "[\"COUNT\",\"count-query-123\",{\"kinds\":[1]}]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+
+    const char* sub_id = nostr_client_msg_get_subscription_id(&msg);
+    TEST_ASSERT_NOT_NULL(sub_id);
+    TEST_ASSERT_EQUAL_STRING("count-query-123", sub_id);
+
+    nostr_client_msg_free(&msg);
+}
+
+void test_count_msg_get_filters(void)
+{
+    const char* json = "[\"COUNT\",\"query\",{\"kinds\":[1]},{\"kinds\":[7]}]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, err);
+
+    size_t count = 0;
+    const nostr_filter_t* filters = nostr_client_msg_get_filters(&msg, &count);
+
+    TEST_ASSERT_NOT_NULL(filters);
+    TEST_ASSERT_EQUAL(2, count);
+    TEST_ASSERT_EQUAL(1, filters[0].kinds[0]);
+    TEST_ASSERT_EQUAL(7, filters[1].kinds[0]);
+
+    nostr_client_msg_free(&msg);
+}
+
+void test_count_too_many_filters(void)
+{
+    const char* json = "[\"COUNT\",\"q\","
+        "{\"kinds\":[1]},{\"kinds\":[2]},{\"kinds\":[3]},{\"kinds\":[4]},{\"kinds\":[5]},"
+        "{\"kinds\":[6]},{\"kinds\":[7]},{\"kinds\":[8]},{\"kinds\":[9]},{\"kinds\":[10]},"
+        "{\"kinds\":[11]}]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_TOO_MANY_FILTERS, err);
+}
+
+void test_req_too_many_filters(void)
+{
+    const char* json = "[\"REQ\",\"sub\","
+        "{\"kinds\":[1]},{\"kinds\":[2]},{\"kinds\":[3]},{\"kinds\":[4]},{\"kinds\":[5]},"
+        "{\"kinds\":[6]},{\"kinds\":[7]},{\"kinds\":[8]},{\"kinds\":[9]},{\"kinds\":[10]},"
+        "{\"kinds\":[11]}]";
+    nostr_client_msg_t msg;
+
+    nostr_relay_error_t err = nostr_client_msg_parse(json, strlen(json), &msg);
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_TOO_MANY_FILTERS, err);
+}
+
 int run_relay_protocol_json_tests(void)
 {
 #ifndef HAVE_UNITY
@@ -718,6 +858,15 @@ int run_relay_protocol_json_tests(void)
     RUN_TEST(test_filter_get_tag_values_not_found);
     RUN_TEST(test_filter_has_tag_filters);
     RUN_TEST(test_filter_has_tag_filters_null);
+    RUN_TEST(test_client_msg_parse_count);
+    RUN_TEST(test_client_msg_parse_count_multiple_filters);
+    RUN_TEST(test_client_msg_parse_count_empty_filters);
+    RUN_TEST(test_relay_msg_serialize_count_exact);
+    RUN_TEST(test_relay_msg_serialize_count_approximate);
+    RUN_TEST(test_count_msg_get_subscription_id);
+    RUN_TEST(test_count_msg_get_filters);
+    RUN_TEST(test_count_too_many_filters);
+    RUN_TEST(test_req_too_many_filters);
 #else
     RUN_TEST(test_filter_parse_empty, "filter_parse_empty");
     RUN_TEST(test_filter_parse_kinds, "filter_parse_kinds");
@@ -754,6 +903,15 @@ int run_relay_protocol_json_tests(void)
     RUN_TEST(test_filter_get_tag_values_not_found, "filter_get_tag_values_not_found");
     RUN_TEST(test_filter_has_tag_filters, "filter_has_tag_filters");
     RUN_TEST(test_filter_has_tag_filters_null, "filter_has_tag_filters_null");
+    RUN_TEST(test_client_msg_parse_count, "client_msg_parse_count");
+    RUN_TEST(test_client_msg_parse_count_multiple_filters, "client_msg_parse_count_multiple_filters");
+    RUN_TEST(test_client_msg_parse_count_empty_filters, "client_msg_parse_count_empty_filters");
+    RUN_TEST(test_relay_msg_serialize_count_exact, "relay_msg_serialize_count_exact");
+    RUN_TEST(test_relay_msg_serialize_count_approximate, "relay_msg_serialize_count_approximate");
+    RUN_TEST(test_count_msg_get_subscription_id, "count_msg_get_subscription_id");
+    RUN_TEST(test_count_msg_get_filters, "count_msg_get_filters");
+    RUN_TEST(test_count_too_many_filters, "count_too_many_filters");
+    RUN_TEST(test_req_too_many_filters, "req_too_many_filters");
 #endif
 
 #ifndef HAVE_UNITY

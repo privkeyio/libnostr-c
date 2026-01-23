@@ -13,10 +13,74 @@
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
+static nostr_relay_error_t parse_filters(cJSON* root, int start_idx, int arr_size,
+                                          nostr_filter_t** out_filters, size_t* out_count)
+{
+    size_t filter_count = (size_t)(arr_size - start_idx);
+    if (filter_count > NOSTR_DEFAULT_MAX_FILTERS) {
+        return NOSTR_RELAY_ERR_TOO_MANY_FILTERS;
+    }
+
+    if (filter_count == 0) {
+        *out_filters = NULL;
+        *out_count = 0;
+        return NOSTR_RELAY_OK;
+    }
+
+    *out_filters = calloc(filter_count, sizeof(nostr_filter_t));
+    if (!*out_filters) {
+        return NOSTR_RELAY_ERR_MEMORY;
+    }
+
+    *out_count = 0;
+    for (int i = start_idx; i < arr_size; i++) {
+        cJSON* filter_json = cJSON_GetArrayItem(root, i);
+        char* filter_str = cJSON_PrintUnformatted(filter_json);
+        if (!filter_str) {
+            for (size_t j = 0; j < *out_count; j++) {
+                nostr_filter_free(&(*out_filters)[j]);
+            }
+            free(*out_filters);
+            *out_filters = NULL;
+            *out_count = 0;
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+
+        nostr_relay_error_t err = nostr_filter_parse(filter_str, strlen(filter_str),
+                                                      &(*out_filters)[*out_count]);
+        free(filter_str);
+
+        if (err != NOSTR_RELAY_OK) {
+            for (size_t j = 0; j < *out_count; j++) {
+                nostr_filter_free(&(*out_filters)[j]);
+            }
+            free(*out_filters);
+            *out_filters = NULL;
+            *out_count = 0;
+            return err;
+        }
+
+        nostr_validation_result_t validation;
+        err = nostr_filter_validate(&(*out_filters)[*out_count], &validation);
+        if (err != NOSTR_RELAY_OK) {
+            nostr_filter_free(&(*out_filters)[*out_count]);
+            for (size_t j = 0; j < *out_count; j++) {
+                nostr_filter_free(&(*out_filters)[j]);
+            }
+            free(*out_filters);
+            *out_filters = NULL;
+            *out_count = 0;
+            return err;
+        }
+
+        (*out_count)++;
+    }
+
+    return NOSTR_RELAY_OK;
+}
+
 nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, nostr_client_msg_t* msg)
 {
-    (void)json_len;
-
     if (!json || !msg) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
@@ -24,7 +88,7 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
     memset(msg, 0, sizeof(nostr_client_msg_t));
     msg->type = NOSTR_CLIENT_MSG_UNKNOWN;
 
-    cJSON* root = cJSON_Parse(json);
+    cJSON* root = (json_len > 0) ? cJSON_ParseWithLength(json, json_len) : cJSON_Parse(json);
     if (!root || !cJSON_IsArray(root)) {
         if (root) cJSON_Delete(root);
         return NOSTR_RELAY_ERR_INVALID_JSON;
@@ -87,35 +151,11 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
         strncpy(msg->data.req.subscription_id, sub_id->valuestring, 64);
         msg->data.req.subscription_id[64] = '\0';
 
-        size_t filter_count = arr_size - 2;
-        if (filter_count > 0) {
-            msg->data.req.filters = calloc(filter_count, sizeof(nostr_filter_t));
-            if (!msg->data.req.filters) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-
-            msg->data.req.filters_count = 0;
-            for (int i = 2; i < arr_size; i++) {
-                cJSON* filter_json = cJSON_GetArrayItem(root, i);
-                char* filter_str = cJSON_PrintUnformatted(filter_json);
-                if (!filter_str) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return NOSTR_RELAY_ERR_MEMORY;
-                }
-
-                nostr_relay_error_t err = nostr_filter_parse(filter_str, strlen(filter_str),
-                                                             &msg->data.req.filters[msg->data.req.filters_count]);
-                free(filter_str);
-
-                if (err != NOSTR_RELAY_OK) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return err;
-                }
-                msg->data.req.filters_count++;
-            }
+        nostr_relay_error_t err = parse_filters(root, 2, arr_size,
+                                                 &msg->data.req.filters, &msg->data.req.filters_count);
+        if (err != NOSTR_RELAY_OK) {
+            cJSON_Delete(root);
+            return err;
         }
 
         msg->type = NOSTR_CLIENT_MSG_REQ;
@@ -165,6 +205,35 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
 
         msg->type = NOSTR_CLIENT_MSG_AUTH;
     }
+    else if (strcmp(type_str, "COUNT") == 0) {
+        if (arr_size < 2) {
+            cJSON_Delete(root);
+            return NOSTR_RELAY_ERR_MISSING_FIELD;
+        }
+
+        cJSON* query_id = cJSON_GetArrayItem(root, 1);
+        if (!cJSON_IsString(query_id)) {
+            cJSON_Delete(root);
+            return NOSTR_RELAY_ERR_INVALID_SUBSCRIPTION_ID;
+        }
+
+        if (!nostr_validate_subscription_id(query_id->valuestring)) {
+            cJSON_Delete(root);
+            return NOSTR_RELAY_ERR_INVALID_SUBSCRIPTION_ID;
+        }
+
+        strncpy(msg->data.count.query_id, query_id->valuestring, 64);
+        msg->data.count.query_id[64] = '\0';
+
+        nostr_relay_error_t err = parse_filters(root, 2, arr_size,
+                                                 &msg->data.count.filters, &msg->data.count.filters_count);
+        if (err != NOSTR_RELAY_OK) {
+            cJSON_Delete(root);
+            return err;
+        }
+
+        msg->type = NOSTR_CLIENT_MSG_COUNT;
+    }
     else {
         cJSON_Delete(root);
         return NOSTR_RELAY_ERR_UNKNOWN_MESSAGE_TYPE;
@@ -207,6 +276,14 @@ void nostr_client_msg_free(nostr_client_msg_t* msg)
         case NOSTR_CLIENT_MSG_AUTH:
             if (msg->data.auth.event) {
                 nostr_event_destroy(msg->data.auth.event);
+            }
+            break;
+        case NOSTR_CLIENT_MSG_COUNT:
+            if (msg->data.count.filters) {
+                for (size_t i = 0; i < msg->data.count.filters_count; i++) {
+                    nostr_filter_free(&msg->data.count.filters[i]);
+                }
+                free(msg->data.count.filters);
             }
             break;
         case NOSTR_CLIENT_MSG_CLOSE:
@@ -293,6 +370,19 @@ void nostr_relay_msg_auth(nostr_relay_msg_t* msg, const char* challenge)
     }
 }
 
+void nostr_relay_msg_count(nostr_relay_msg_t* msg, const char* query_id, int64_t count, bool approximate)
+{
+    if (!msg) return;
+    memset(msg, 0, sizeof(nostr_relay_msg_t));
+    msg->type = NOSTR_RELAY_MSG_COUNT;
+    if (query_id) {
+        strncpy(msg->data.count.query_id, query_id, 64);
+        msg->data.count.query_id[64] = '\0';
+    }
+    msg->data.count.count = (count < 0) ? 0 : count;
+    msg->data.count.approximate = approximate;
+}
+
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
 nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char* buf, size_t buf_size, size_t* out_len)
@@ -357,6 +447,22 @@ nostr_relay_error_t nostr_relay_msg_serialize(const nostr_relay_msg_t* msg, char
             cJSON_AddItemToArray(root, cJSON_CreateString("AUTH"));
             cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.auth.challenge));
             break;
+
+        case NOSTR_RELAY_MSG_COUNT: {
+            cJSON_AddItemToArray(root, cJSON_CreateString("COUNT"));
+            cJSON_AddItemToArray(root, cJSON_CreateString(msg->data.count.query_id));
+            cJSON* count_obj = cJSON_CreateObject();
+            if (!count_obj) {
+                cJSON_Delete(root);
+                return NOSTR_RELAY_ERR_MEMORY;
+            }
+            cJSON_AddNumberToObject(count_obj, "count", (double)msg->data.count.count);
+            if (msg->data.count.approximate) {
+                cJSON_AddBoolToObject(count_obj, "approximate", cJSON_True);
+            }
+            cJSON_AddItemToArray(root, count_obj);
+            break;
+        }
 
         default:
             cJSON_Delete(root);
@@ -426,6 +532,8 @@ const char* nostr_client_msg_get_subscription_id(const nostr_client_msg_t* msg)
             return msg->data.req.subscription_id;
         case NOSTR_CLIENT_MSG_CLOSE:
             return msg->data.close.subscription_id;
+        case NOSTR_CLIENT_MSG_COUNT:
+            return msg->data.count.query_id;
         default:
             return NULL;
     }
@@ -433,10 +541,20 @@ const char* nostr_client_msg_get_subscription_id(const nostr_client_msg_t* msg)
 
 const nostr_filter_t* nostr_client_msg_get_filters(const nostr_client_msg_t* msg, size_t* out_count)
 {
-    if (!msg || msg->type != NOSTR_CLIENT_MSG_REQ) {
+    if (!msg) {
         if (out_count) *out_count = 0;
         return NULL;
     }
-    if (out_count) *out_count = msg->data.req.filters_count;
-    return msg->data.req.filters;
+
+    switch (msg->type) {
+        case NOSTR_CLIENT_MSG_REQ:
+            if (out_count) *out_count = msg->data.req.filters_count;
+            return msg->data.req.filters;
+        case NOSTR_CLIENT_MSG_COUNT:
+            if (out_count) *out_count = msg->data.count.filters_count;
+            return msg->data.count.filters;
+        default:
+            if (out_count) *out_count = 0;
+            return NULL;
+    }
 }
