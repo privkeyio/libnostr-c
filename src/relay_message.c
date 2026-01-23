@@ -13,6 +13,72 @@
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
+static nostr_relay_error_t parse_filters(cJSON* root, int start_idx, int arr_size,
+                                          nostr_filter_t** out_filters, size_t* out_count)
+{
+    size_t filter_count = (size_t)(arr_size - start_idx);
+    if (filter_count > NOSTR_DEFAULT_MAX_FILTERS) {
+        return NOSTR_RELAY_ERR_TOO_MANY_FILTERS;
+    }
+
+    if (filter_count == 0) {
+        *out_filters = NULL;
+        *out_count = 0;
+        return NOSTR_RELAY_OK;
+    }
+
+    *out_filters = calloc(filter_count, sizeof(nostr_filter_t));
+    if (!*out_filters) {
+        return NOSTR_RELAY_ERR_MEMORY;
+    }
+
+    *out_count = 0;
+    for (int i = start_idx; i < arr_size; i++) {
+        cJSON* filter_json = cJSON_GetArrayItem(root, i);
+        char* filter_str = cJSON_PrintUnformatted(filter_json);
+        if (!filter_str) {
+            for (size_t j = 0; j < *out_count; j++) {
+                nostr_filter_free(&(*out_filters)[j]);
+            }
+            free(*out_filters);
+            *out_filters = NULL;
+            *out_count = 0;
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+
+        nostr_relay_error_t err = nostr_filter_parse(filter_str, strlen(filter_str),
+                                                      &(*out_filters)[*out_count]);
+        free(filter_str);
+
+        if (err != NOSTR_RELAY_OK) {
+            for (size_t j = 0; j < *out_count; j++) {
+                nostr_filter_free(&(*out_filters)[j]);
+            }
+            free(*out_filters);
+            *out_filters = NULL;
+            *out_count = 0;
+            return err;
+        }
+
+        nostr_validation_result_t validation;
+        err = nostr_filter_validate(&(*out_filters)[*out_count], &validation);
+        if (err != NOSTR_RELAY_OK) {
+            nostr_filter_free(&(*out_filters)[*out_count]);
+            for (size_t j = 0; j < *out_count; j++) {
+                nostr_filter_free(&(*out_filters)[j]);
+            }
+            free(*out_filters);
+            *out_filters = NULL;
+            *out_count = 0;
+            return err;
+        }
+
+        (*out_count)++;
+    }
+
+    return NOSTR_RELAY_OK;
+}
+
 nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, nostr_client_msg_t* msg)
 {
     if (!json || !msg) {
@@ -85,47 +151,11 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
         strncpy(msg->data.req.subscription_id, sub_id->valuestring, 64);
         msg->data.req.subscription_id[64] = '\0';
 
-        size_t filter_count = arr_size - 2;
-        if (filter_count > NOSTR_DEFAULT_MAX_FILTERS) {
+        nostr_relay_error_t err = parse_filters(root, 2, arr_size,
+                                                 &msg->data.req.filters, &msg->data.req.filters_count);
+        if (err != NOSTR_RELAY_OK) {
             cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_TOO_MANY_FILTERS;
-        }
-        if (filter_count > 0) {
-            msg->data.req.filters = calloc(filter_count, sizeof(nostr_filter_t));
-            if (!msg->data.req.filters) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-
-            msg->data.req.filters_count = 0;
-            for (int i = 2; i < arr_size; i++) {
-                cJSON* filter_json = cJSON_GetArrayItem(root, i);
-                char* filter_str = cJSON_PrintUnformatted(filter_json);
-                if (!filter_str) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return NOSTR_RELAY_ERR_MEMORY;
-                }
-
-                nostr_relay_error_t err = nostr_filter_parse(filter_str, strlen(filter_str),
-                                                             &msg->data.req.filters[msg->data.req.filters_count]);
-                free(filter_str);
-
-                if (err != NOSTR_RELAY_OK) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return err;
-                }
-
-                nostr_validation_result_t validation;
-                err = nostr_filter_validate(&msg->data.req.filters[msg->data.req.filters_count], &validation);
-                if (err != NOSTR_RELAY_OK) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return err;
-                }
-                msg->data.req.filters_count++;
-            }
+            return err;
         }
 
         msg->type = NOSTR_CLIENT_MSG_REQ;
@@ -195,49 +225,14 @@ nostr_relay_error_t nostr_client_msg_parse(const char* json, size_t json_len, no
         strncpy(msg->data.count.query_id, query_id->valuestring, 64);
         msg->data.count.query_id[64] = '\0';
 
-        size_t filter_count = arr_size - 2;
-        if (filter_count > NOSTR_DEFAULT_MAX_FILTERS) {
+        nostr_relay_error_t err = parse_filters(root, 2, arr_size,
+                                                 &msg->data.count.filters, &msg->data.count.filters_count);
+        if (err != NOSTR_RELAY_OK) {
             cJSON_Delete(root);
-            return NOSTR_RELAY_ERR_TOO_MANY_FILTERS;
+            return err;
         }
+
         msg->type = NOSTR_CLIENT_MSG_COUNT;
-        if (filter_count > 0) {
-            msg->data.count.filters = calloc(filter_count, sizeof(nostr_filter_t));
-            if (!msg->data.count.filters) {
-                cJSON_Delete(root);
-                return NOSTR_RELAY_ERR_MEMORY;
-            }
-
-            msg->data.count.filters_count = 0;
-            for (int i = 2; i < arr_size; i++) {
-                cJSON* filter_json = cJSON_GetArrayItem(root, i);
-                char* filter_str = cJSON_PrintUnformatted(filter_json);
-                if (!filter_str) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return NOSTR_RELAY_ERR_MEMORY;
-                }
-
-                nostr_relay_error_t err = nostr_filter_parse(filter_str, strlen(filter_str),
-                                                             &msg->data.count.filters[msg->data.count.filters_count]);
-                free(filter_str);
-
-                if (err != NOSTR_RELAY_OK) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return err;
-                }
-
-                nostr_validation_result_t validation;
-                err = nostr_filter_validate(&msg->data.count.filters[msg->data.count.filters_count], &validation);
-                if (err != NOSTR_RELAY_OK) {
-                    nostr_client_msg_free(msg);
-                    cJSON_Delete(root);
-                    return err;
-                }
-                msg->data.count.filters_count++;
-            }
-        }
     }
     else {
         cJSON_Delete(root);
