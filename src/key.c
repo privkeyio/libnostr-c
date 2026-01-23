@@ -2,10 +2,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 #include <windows.h>
-#else
+#endif
+#ifdef NOSTR_FEATURE_THREADING
+#ifndef _WIN32
 #include <pthread.h>
 #endif
 #endif
@@ -28,6 +29,9 @@
 #include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/sha.h>
+#ifdef _WIN32
+#include <wincrypt.h>
+#endif
 #endif
 
 #ifdef HAVE_NOSCRYPT
@@ -109,6 +113,18 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
         RAND_poll();
+#ifdef _WIN32
+        if (RAND_status() != 1) {
+            uint8_t seed_buf[32];
+            HCRYPTPROV hProvider = 0;
+            if (CryptAcquireContextW(&hProvider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT)) {
+                if (CryptGenRandom(hProvider, sizeof(seed_buf), seed_buf)) {
+                    RAND_seed(seed_buf, sizeof(seed_buf));
+                }
+                CryptReleaseContext(hProvider, 0);
+            }
+        }
+#endif
         openssl_rng_seeded = 1;
     }
     int result = RAND_bytes(buf, (int)len);
