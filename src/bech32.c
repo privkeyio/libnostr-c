@@ -22,8 +22,12 @@ static uint32_t bech32_polymod(const uint8_t* values, size_t len) {
     return chk;
 }
 
-static int bech32_hrp_expand(const char* hrp, uint8_t* ret) {
+static int bech32_hrp_expand(const char* hrp, uint8_t* ret, size_t ret_size) {
     size_t hrp_len = strlen(hrp);
+    if (hrp_len > (SIZE_MAX - 1) / 2) return -1;
+    size_t expanded_len = hrp_len * 2 + 1;
+    if (expanded_len > ret_size) return -1;
+
     for (size_t i = 0; i < hrp_len; i++) {
         ret[i] = hrp[i] >> 5;
     }
@@ -31,36 +35,40 @@ static int bech32_hrp_expand(const char* hrp, uint8_t* ret) {
     for (size_t i = 0; i < hrp_len; i++) {
         ret[hrp_len + 1 + i] = hrp[i] & 31;
     }
-    return hrp_len * 2 + 1;
+    return (int)expanded_len;
 }
 
 static int bech32_verify_checksum(const char* hrp, const uint8_t* data, size_t data_len) {
     uint8_t hrp_expanded[84];
-    int hrp_len = bech32_hrp_expand(hrp, hrp_expanded);
-    
-    uint8_t* combined = malloc(hrp_len + data_len);
+    int hrp_len = bech32_hrp_expand(hrp, hrp_expanded, sizeof(hrp_expanded));
+    if (hrp_len < 0) return 0;
+
+    if ((size_t)hrp_len > SIZE_MAX - data_len) return 0;
+    uint8_t* combined = malloc((size_t)hrp_len + data_len);
     if (!combined) return 0;
-    
+
     memcpy(combined, hrp_expanded, hrp_len);
     memcpy(combined + hrp_len, data, data_len);
-    
-    int result = bech32_polymod(combined, hrp_len + data_len) == 1;
+
+    int result = bech32_polymod(combined, (size_t)hrp_len + data_len) == 1;
     free(combined);
     return result;
 }
 
 static int bech32_create_checksum(const char* hrp, const uint8_t* data, size_t data_len, uint8_t* checksum) {
     uint8_t hrp_expanded[84];
-    int hrp_len = bech32_hrp_expand(hrp, hrp_expanded);
-    
-    uint8_t* combined = malloc(hrp_len + data_len + 6);
+    int hrp_len = bech32_hrp_expand(hrp, hrp_expanded, sizeof(hrp_expanded));
+    if (hrp_len < 0) return 0;
+
+    if ((size_t)hrp_len > SIZE_MAX - data_len - 6) return 0;
+    uint8_t* combined = malloc((size_t)hrp_len + data_len + 6);
     if (!combined) return 0;
-    
+
     memcpy(combined, hrp_expanded, hrp_len);
     memcpy(combined + hrp_len, data, data_len);
     memset(combined + hrp_len + data_len, 0, 6);
-    
-    uint32_t polymod = bech32_polymod(combined, hrp_len + data_len + 6) ^ 1;
+
+    uint32_t polymod = bech32_polymod(combined, (size_t)hrp_len + data_len + 6) ^ 1;
     for (int i = 0; i < 6; i++) {
         checksum[i] = (polymod >> (5 * (5 - i))) & 31;
     }
@@ -122,11 +130,13 @@ nostr_error_t nostr_key_to_bech32(const nostr_key* key, const char* prefix, char
     }
     
     uint8_t checksum[6];
-    bech32_create_checksum(prefix, data, data_len, checksum);
-    
-    strcpy(bech32, prefix);
-    strcat(bech32, "1");
-    
+    if (!bech32_create_checksum(prefix, data, data_len, checksum)) {
+        return NOSTR_ERR_ENCODING;
+    }
+
+    memcpy(bech32, prefix, prefix_len);
+    bech32[prefix_len] = '1';
+
     char* pos = bech32 + prefix_len + 1;
     for (int i = 0; i < data_len; i++) {
         *pos++ = CHARSET[data[i]];
@@ -207,10 +217,12 @@ nostr_error_t nostr_privkey_to_bech32(const nostr_privkey* privkey, char* bech32
     }
     
     uint8_t checksum[6];
-    bech32_create_checksum("nsec", data, data_len, checksum);
-    
-    strcpy(bech32, "nsec1");
-    
+    if (!bech32_create_checksum("nsec", data, data_len, checksum)) {
+        return NOSTR_ERR_ENCODING;
+    }
+
+    memcpy(bech32, "nsec1", 5);
+
     char* pos = bech32 + 5;
     for (int i = 0; i < data_len; i++) {
         *pos++ = CHARSET[data[i]];
@@ -276,10 +288,12 @@ nostr_error_t nostr_event_id_to_bech32(const uint8_t* id, char* bech32, size_t b
     }
     
     uint8_t checksum[6];
-    bech32_create_checksum("note", data, data_len, checksum);
-    
-    strcpy(bech32, "note1");
-    
+    if (!bech32_create_checksum("note", data, data_len, checksum)) {
+        return NOSTR_ERR_ENCODING;
+    }
+
+    memcpy(bech32, "note1", 5);
+
     char* pos = bech32 + 5;
     for (int i = 0; i < data_len; i++) {
         *pos++ = CHARSET[data[i]];

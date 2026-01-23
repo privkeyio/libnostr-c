@@ -28,6 +28,7 @@ static uint32_t bech32_polymod(const uint8_t* values, size_t len) {
 
 static int bech32_hrp_expand(const char* hrp, uint8_t* ret, size_t ret_size) {
     size_t hrp_len = strlen(hrp);
+    if (hrp_len > (SIZE_MAX - 1) / 2) return -1;
     size_t expanded_len = hrp_len * 2 + 1;
     if (expanded_len > ret_size) return -1;
 
@@ -45,7 +46,8 @@ static int bech32_verify_checksum(const char* hrp, const uint8_t* data, size_t d
     int hrp_len = bech32_hrp_expand(hrp, hrp_expanded, sizeof(hrp_expanded));
     if (hrp_len < 0) return 0;
 
-    uint8_t* combined = malloc(hrp_len + data_len);
+    if ((size_t)hrp_len > SIZE_MAX - data_len) return 0;
+    uint8_t* combined = malloc((size_t)hrp_len + data_len);
     if (!combined) return 0;
 
     memcpy(combined, hrp_expanded, hrp_len);
@@ -61,7 +63,8 @@ static int bech32_create_checksum(const char* hrp, const uint8_t* data, size_t d
     int hrp_len = bech32_hrp_expand(hrp, hrp_expanded, sizeof(hrp_expanded));
     if (hrp_len < 0) return 0;
 
-    uint8_t* combined = malloc(hrp_len + data_len + 6);
+    if ((size_t)hrp_len > SIZE_MAX - data_len - 6) return 0;
+    uint8_t* combined = malloc((size_t)hrp_len + data_len + 6);
     if (!combined) return 0;
 
     memcpy(combined, hrp_expanded, hrp_len);
@@ -145,6 +148,10 @@ static nostr_error_t decode_bech32_to_bytes(const char* bech32, const char* expe
         return NOSTR_ERR_ENCODING;
     }
 
+    if (data_pos < 7) {
+        free(data);
+        return NOSTR_ERR_ENCODING;
+    }
     int decoded_len = convert_bits(data, data_pos - 6, out, out_size, 5, 8, 0);
     free(data);
 
@@ -194,6 +201,17 @@ static nostr_error_t encode_bytes_to_bech32(const uint8_t* data, size_t data_len
     return NOSTR_OK;
 }
 
+static int is_valid_relay_url(const char* url, size_t len) {
+    if (len < 6) return 0;
+    if (len >= NOSTR_URI_MAX_RELAY_LEN) return 0;
+    if (strncmp(url, "wss://", 6) != 0 && strncmp(url, "ws://", 5) != 0) return 0;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)url[i];
+        if (c < 0x21 || c > 0x7e) return 0;
+    }
+    return 1;
+}
+
 static nostr_error_t parse_tlv(const uint8_t* data, size_t data_len,
                                uint8_t* special, size_t special_size, size_t* special_len,
                                char** relays, size_t* relay_count, size_t max_relays,
@@ -208,20 +226,23 @@ static nostr_error_t parse_tlv(const uint8_t* data, size_t data_len,
         uint8_t type = data[pos++];
         uint8_t len = data[pos++];
 
-        if (pos + len > data_len) return NOSTR_ERR_ENCODING;
+        if (pos + len > data_len) goto cleanup_error;
 
         switch (type) {
             case TLV_SPECIAL:
                 if (special && special_len) {
-                    if (len > special_size) return NOSTR_ERR_ENCODING;
+                    if (len > special_size) goto cleanup_error;
                     memcpy(special, data + pos, len);
                     *special_len = len;
                 }
                 break;
             case TLV_RELAY:
                 if (relays && *relay_count < max_relays) {
+                    if (!is_valid_relay_url((const char*)(data + pos), len)) {
+                        break;
+                    }
                     relays[*relay_count] = malloc(len + 1);
-                    if (!relays[*relay_count]) return NOSTR_ERR_MEMORY;
+                    if (!relays[*relay_count]) goto cleanup_error;
                     memcpy(relays[*relay_count], data + pos, len);
                     relays[*relay_count][len] = '\0';
                     (*relay_count)++;
@@ -247,6 +268,16 @@ static nostr_error_t parse_tlv(const uint8_t* data, size_t data_len,
     }
 
     return NOSTR_OK;
+
+cleanup_error:
+    if (relays) {
+        for (size_t i = 0; i < *relay_count; i++) {
+            free(relays[i]);
+            relays[i] = NULL;
+        }
+        *relay_count = 0;
+    }
+    return NOSTR_ERR_ENCODING;
 }
 
 static size_t build_tlv(uint8_t* out, size_t out_size,
@@ -397,7 +428,7 @@ nostr_error_t nostr_naddr_encode(const nostr_naddr* addr, char* bech32, size_t b
     if (!addr || !bech32) return NOSTR_ERR_INVALID_PARAM;
 
     uint8_t tlv[4096];
-    size_t id_len = strlen(addr->identifier);
+    size_t id_len = strnlen(addr->identifier, NOSTR_URI_MAX_IDENTIFIER_LEN);
     size_t tlv_len = build_tlv(tlv, sizeof(tlv),
                                (const uint8_t*)addr->identifier, id_len,
                                addr->relays, addr->relay_count,
@@ -572,9 +603,6 @@ void nostr_uri_free(nostr_uri* uri) {
     if (!uri) return;
 
     switch (uri->type) {
-        case NOSTR_URI_NSEC:
-            secure_wipe(uri->data.nsec.data, sizeof(uri->data.nsec.data));
-            break;
         case NOSTR_URI_NPROFILE:
             nostr_nprofile_free(&uri->data.nprofile);
             break;
@@ -587,6 +615,7 @@ void nostr_uri_free(nostr_uri* uri) {
         default:
             break;
     }
+    secure_wipe(&uri->data, sizeof(uri->data));
 }
 
 #else
