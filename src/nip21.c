@@ -1,4 +1,5 @@
 #include "nostr.h"
+#include "bech32_internal.h"
 
 #ifdef NOSTR_FEATURE_ENCODING
 
@@ -10,111 +11,6 @@
 #define TLV_RELAY   1
 #define TLV_AUTHOR  2
 #define TLV_KIND    3
-
-static const char CHARSET[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-static const uint32_t GENERATOR[] = {0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3};
-
-static uint32_t bech32_polymod(const uint8_t* values, size_t len) {
-    uint32_t chk = 1;
-    for (size_t i = 0; i < len; i++) {
-        uint32_t top = chk >> 25;
-        chk = ((chk & 0x1ffffff) << 5) ^ values[i];
-        for (int j = 0; j < 5; j++) {
-            chk ^= ((top >> j) & 1) ? GENERATOR[j] : 0;
-        }
-    }
-    return chk;
-}
-
-static int bech32_hrp_expand(const char* hrp, uint8_t* ret, size_t ret_size) {
-    size_t hrp_len = strlen(hrp);
-    if (hrp_len > (SIZE_MAX - 1) / 2) return -1;
-    size_t expanded_len = hrp_len * 2 + 1;
-    if (expanded_len > ret_size) return -1;
-
-    for (size_t i = 0; i < hrp_len; i++) {
-        ret[i] = hrp[i] >> 5;
-        ret[hrp_len + 1 + i] = hrp[i] & 31;
-    }
-    ret[hrp_len] = 0;
-
-    return (int)expanded_len;
-}
-
-static int bech32_verify_checksum(const char* hrp, const uint8_t* data, size_t data_len) {
-    uint8_t hrp_expanded[84];
-    int hrp_len = bech32_hrp_expand(hrp, hrp_expanded, sizeof(hrp_expanded));
-    if (hrp_len < 0) return 0;
-
-    if ((size_t)hrp_len > SIZE_MAX - data_len) return 0;
-    uint8_t* combined = malloc((size_t)hrp_len + data_len);
-    if (!combined) return 0;
-
-    memcpy(combined, hrp_expanded, hrp_len);
-    memcpy(combined + hrp_len, data, data_len);
-
-    int result = bech32_polymod(combined, hrp_len + data_len) == 1;
-    free(combined);
-    return result;
-}
-
-static int bech32_create_checksum(const char* hrp, const uint8_t* data, size_t data_len, uint8_t* checksum) {
-    uint8_t hrp_expanded[84];
-    int hrp_len = bech32_hrp_expand(hrp, hrp_expanded, sizeof(hrp_expanded));
-    if (hrp_len < 0) return 0;
-
-    if ((size_t)hrp_len > SIZE_MAX - data_len - 6) return 0;
-    uint8_t* combined = malloc((size_t)hrp_len + data_len + 6);
-    if (!combined) return 0;
-
-    memcpy(combined, hrp_expanded, hrp_len);
-    memcpy(combined + hrp_len, data, data_len);
-    memset(combined + hrp_len + data_len, 0, 6);
-
-    uint32_t polymod = bech32_polymod(combined, hrp_len + data_len + 6) ^ 1;
-    for (int i = 0; i < 6; i++) {
-        checksum[i] = (polymod >> (5 * (5 - i))) & 31;
-    }
-    free(combined);
-    return 6;
-}
-
-static int convert_bits(const uint8_t* in, size_t inlen, uint8_t* out, size_t outlen, int frombits, int tobits, int pad) {
-    uint32_t acc = 0;
-    int bits = 0;
-    size_t ret = 0;
-    uint32_t maxv = (1 << tobits) - 1;
-    uint32_t max_acc = (1 << (frombits + tobits - 1)) - 1;
-
-    for (size_t i = 0; i < inlen; i++) {
-        if (in[i] >> frombits) return 0;
-        acc = ((acc << frombits) | in[i]) & max_acc;
-        bits += frombits;
-        while (bits >= tobits) {
-            bits -= tobits;
-            if (ret >= outlen) return 0;
-            out[ret++] = (acc >> bits) & maxv;
-        }
-    }
-
-    if (pad) {
-        if (bits) {
-            if (ret >= outlen) return 0;
-            out[ret++] = (acc << (tobits - bits)) & maxv;
-        }
-    } else if (bits >= frombits || ((acc << (tobits - bits)) & maxv)) {
-        return 0;
-    }
-
-    return ret;
-}
-
-static int charset_decode(char c) {
-    for (int i = 0; i < 32; i++) {
-        if (CHARSET[i] == c) return i;
-    }
-    return -1;
-}
 
 static nostr_error_t decode_bech32_to_bytes(const char* bech32, const char* expected_hrp,
                                             uint8_t* out, size_t out_size, size_t* out_len) {
@@ -135,7 +31,7 @@ static nostr_error_t decode_bech32_to_bytes(const char* bech32, const char* expe
 
     size_t data_pos = 0;
     for (size_t i = hrp_len + 1; i < len; i++) {
-        int val = charset_decode(bech32[i]);
+        int val = bech32_charset_decode(bech32[i]);
         if (val == -1) {
             free(data);
             return NOSTR_ERR_ENCODING;
@@ -152,7 +48,7 @@ static nostr_error_t decode_bech32_to_bytes(const char* bech32, const char* expe
         free(data);
         return NOSTR_ERR_ENCODING;
     }
-    int decoded_len = convert_bits(data, data_pos - 6, out, out_size, 5, 8, 0);
+    int decoded_len = bech32_convert_bits(data, data_pos - 6, out, out_size, 5, 8, 0);
     free(data);
 
     if (decoded_len <= 0) return NOSTR_ERR_ENCODING;
@@ -171,7 +67,7 @@ static nostr_error_t encode_bytes_to_bech32(const uint8_t* data, size_t data_len
     uint8_t* conv = malloc(max_conv_len);
     if (!conv) return NOSTR_ERR_MEMORY;
 
-    int conv_len = convert_bits(data, data_len, conv, max_conv_len, 8, 5, 1);
+    int conv_len = bech32_convert_bits(data, data_len, conv, max_conv_len, 8, 5, 1);
     if (conv_len <= 0) {
         free(conv);
         return NOSTR_ERR_ENCODING;
@@ -190,10 +86,10 @@ static nostr_error_t encode_bytes_to_bech32(const uint8_t* data, size_t data_len
 
     char* pos = out + hrp_len + 1;
     for (int i = 0; i < conv_len; i++) {
-        *pos++ = CHARSET[conv[i]];
+        *pos++ = BECH32_CHARSET[conv[i]];
     }
     for (int i = 0; i < 6; i++) {
-        *pos++ = CHARSET[checksum[i]];
+        *pos++ = BECH32_CHARSET[checksum[i]];
     }
     *pos = '\0';
 
