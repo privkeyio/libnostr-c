@@ -25,7 +25,11 @@
 #include <esp_random.h>
 #endif
 #else
+#ifdef _WIN32
+#include <bcrypt.h>
+#else
 #include <openssl/rand.h>
+#endif
 #include <openssl/sha.h>
 #endif
 
@@ -105,7 +109,11 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
+#ifdef _WIN32
+    return BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0 ? 1 : 0;
+#else
     return RAND_bytes(buf, len);
+#endif
 #endif
 }
 
