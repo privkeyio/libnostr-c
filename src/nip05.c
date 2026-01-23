@@ -99,7 +99,22 @@ nostr_error_t nostr_nip05_build_url(const char* name, const char* domain,
 
     size_t name_len = strlen(name);
     size_t domain_len = strlen(domain);
-    size_t required = 8 + domain_len + 29 + name_len + 1;
+
+    if (name_len > NIP05_MAX_NAME_LEN || domain_len > NIP05_MAX_DOMAIN_LEN) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+
+    /* Overflow-safe required size calculation: "https://" (8) + domain + "/.well-known/nostr.json?name=" (29) + name + '\0' (1) */
+    size_t required = 8;
+    if (required > SIZE_MAX - domain_len) return NOSTR_ERR_INVALID_PARAM;
+    required += domain_len;
+    if (required > SIZE_MAX - 29) return NOSTR_ERR_INVALID_PARAM;
+    required += 29;
+    if (required > SIZE_MAX - name_len) return NOSTR_ERR_INVALID_PARAM;
+    required += name_len;
+    if (required > SIZE_MAX - 1) return NOSTR_ERR_INVALID_PARAM;
+    required += 1;
+
     if (url_size < required) return NOSTR_ERR_INVALID_PARAM;
 
     char* p = url;
@@ -246,8 +261,14 @@ nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pu
     char* response = NULL;
     size_t response_len = 0;
     err = http_callback(url, &response, &response_len, user_data);
-    if (err != NOSTR_OK) return err;
-    if (!response || response_len == 0) return NOSTR_ERR_NOT_FOUND;
+    if (err != NOSTR_OK) {
+        free(response);
+        return err;
+    }
+    if (!response || response_len == 0) {
+        free(response);
+        return NOSTR_ERR_NOT_FOUND;
+    }
 
     char pubkey_hex[65];
     char** relays = NULL;
