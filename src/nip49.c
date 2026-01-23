@@ -18,22 +18,35 @@
 
 #define NIP49_KEY_SECURITY_UNKNOWN  0x02
 
+static uint32_t load32_le(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static void store32_le(uint8_t *p, uint32_t v)
+{
+    p[0] = v & 0xff;
+    p[1] = (v >> 8) & 0xff;
+    p[2] = (v >> 16) & 0xff;
+    p[3] = (v >> 24) & 0xff;
+}
+
 static void hchacha20(const uint8_t key[32], const uint8_t nonce[16], uint8_t subkey[32])
 {
-    static const uint8_t sigma[16] = "expand 32-byte k";
+    static const uint32_t sigma[4] = {0x61707865, 0x3320646e, 0x79622d32, 0x6b206574};
     uint32_t state[16];
 
-    state[0]  = sigma[0]  | (sigma[1]  << 8) | (sigma[2]  << 16) | (sigma[3]  << 24);
-    state[1]  = sigma[4]  | (sigma[5]  << 8) | (sigma[6]  << 16) | (sigma[7]  << 24);
-    state[2]  = sigma[8]  | (sigma[9]  << 8) | (sigma[10] << 16) | (sigma[11] << 24);
-    state[3]  = sigma[12] | (sigma[13] << 8) | (sigma[14] << 16) | (sigma[15] << 24);
+    state[0] = sigma[0];
+    state[1] = sigma[1];
+    state[2] = sigma[2];
+    state[3] = sigma[3];
 
     for (int i = 0; i < 8; i++) {
-        state[4 + i] = key[i*4] | (key[i*4+1] << 8) | (key[i*4+2] << 16) | (key[i*4+3] << 24);
+        state[4 + i] = load32_le(key + i * 4);
     }
 
     for (int i = 0; i < 4; i++) {
-        state[12 + i] = nonce[i*4] | (nonce[i*4+1] << 8) | (nonce[i*4+2] << 16) | (nonce[i*4+3] << 24);
+        state[12 + i] = load32_le(nonce + i * 4);
     }
 
 #define ROTL32(v, n) (((v) << (n)) | ((v) >> (32 - (n))))
@@ -58,16 +71,10 @@ static void hchacha20(const uint8_t key[32], const uint8_t nonce[16], uint8_t su
 #undef ROTL32
 
     for (int i = 0; i < 4; i++) {
-        subkey[i*4]     = state[i] & 0xff;
-        subkey[i*4 + 1] = (state[i] >> 8) & 0xff;
-        subkey[i*4 + 2] = (state[i] >> 16) & 0xff;
-        subkey[i*4 + 3] = (state[i] >> 24) & 0xff;
+        store32_le(subkey + i * 4, state[i]);
     }
     for (int i = 0; i < 4; i++) {
-        subkey[16 + i*4]     = state[12 + i] & 0xff;
-        subkey[16 + i*4 + 1] = (state[12 + i] >> 8) & 0xff;
-        subkey[16 + i*4 + 2] = (state[12 + i] >> 16) & 0xff;
-        subkey[16 + i*4 + 3] = (state[12 + i] >> 24) & 0xff;
+        store32_le(subkey + 16 + i * 4, state[12 + i]);
     }
 
     secure_wipe(state, sizeof(state));
@@ -245,7 +252,6 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
     uint8_t ciphertext[NIP49_PRIVKEY_SIZE];
     uint8_t mac[NIP49_MAC_SIZE];
     uint8_t payload[NIP49_PAYLOAD_SIZE];
-    uint8_t key_security = NIP49_KEY_SECURITY_UNKNOWN;
 
     if (!privkey || !password || !ncryptsec) {
         return NOSTR_ERR_INVALID_PARAM;
@@ -275,27 +281,25 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
         return NOSTR_ERR_ENCODING;
     }
 
+    uint8_t key_security = NIP49_KEY_SECURITY_UNKNOWN;
     if (!xchacha20_poly1305_encrypt(symmetric_key, nonce,
-                                     &key_security, 1,
-                                     privkey->data, NIP49_PRIVKEY_SIZE,
-                                     ciphertext, mac)) {
+                                    &key_security, 1,
+                                    privkey->data, NIP49_PRIVKEY_SIZE,
+                                    ciphertext, mac)) {
         secure_wipe(symmetric_key, sizeof(symmetric_key));
         return NOSTR_ERR_ENCODING;
     }
 
     secure_wipe(symmetric_key, sizeof(symmetric_key));
 
-    size_t offset = 0;
-    payload[offset++] = NIP49_VERSION;
-    payload[offset++] = log_n;
-    memcpy(payload + offset, salt, NIP49_SALT_SIZE);
-    offset += NIP49_SALT_SIZE;
-    memcpy(payload + offset, nonce, NIP49_NONCE_SIZE);
-    offset += NIP49_NONCE_SIZE;
-    payload[offset++] = key_security;
-    memcpy(payload + offset, ciphertext, NIP49_PRIVKEY_SIZE);
-    offset += NIP49_PRIVKEY_SIZE;
-    memcpy(payload + offset, mac, NIP49_MAC_SIZE);
+    uint8_t *p = payload;
+    *p++ = NIP49_VERSION;
+    *p++ = log_n;
+    memcpy(p, salt, NIP49_SALT_SIZE); p += NIP49_SALT_SIZE;
+    memcpy(p, nonce, NIP49_NONCE_SIZE); p += NIP49_NONCE_SIZE;
+    *p++ = key_security;
+    memcpy(p, ciphertext, NIP49_PRIVKEY_SIZE); p += NIP49_PRIVKEY_SIZE;
+    memcpy(p, mac, NIP49_MAC_SIZE);
 
     uint8_t data5bit[146];
     int data5bit_len = bech32_convert_bits(payload, NIP49_PAYLOAD_SIZE,
@@ -358,11 +362,12 @@ nostr_error_t nostr_ncryptsec_decrypt(const char *ncryptsec,
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    const uint8_t *salt = payload + 2;
-    const uint8_t *nonce = payload + 2 + NIP49_SALT_SIZE;
-    uint8_t key_security = payload[2 + NIP49_SALT_SIZE + NIP49_NONCE_SIZE];
-    const uint8_t *ciphertext = payload + 2 + NIP49_SALT_SIZE + NIP49_NONCE_SIZE + 1;
-    const uint8_t *mac = payload + 2 + NIP49_SALT_SIZE + NIP49_NONCE_SIZE + 1 + NIP49_PRIVKEY_SIZE;
+    const uint8_t *p = payload + 2;
+    const uint8_t *salt = p; p += NIP49_SALT_SIZE;
+    const uint8_t *nonce = p; p += NIP49_NONCE_SIZE;
+    uint8_t key_security = *p++;
+    const uint8_t *ciphertext = p; p += NIP49_PRIVKEY_SIZE;
+    const uint8_t *mac = p;
 
     if (!derive_key_scrypt(password, salt, log_n, symmetric_key)) {
         secure_wipe(payload, sizeof(payload));
