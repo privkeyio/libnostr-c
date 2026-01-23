@@ -4,6 +4,8 @@
 #include "../include/nostr.h"
 #include "unity.h"
 
+#define TEST_PUBKEY "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9"
+
 static void test_nip05_parse_basic(void) {
     char name[65], domain[257];
 
@@ -112,24 +114,24 @@ static void test_nip05_build_url_buffer_too_small(void) {
 }
 
 static void test_nip05_parse_response_basic(void) {
-    const char* json = "{\"names\":{\"bob\":\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\"}}";
+    const char* json = "{\"names\":{\"bob\":\"" TEST_PUBKEY "\"}}";
     char pubkey[65];
 
     TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_parse_response(json, "bob", pubkey, sizeof(pubkey), NULL, NULL));
-    TEST_ASSERT_EQUAL_STRING("b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9", pubkey);
+    TEST_ASSERT_EQUAL_STRING(TEST_PUBKEY, pubkey);
 }
 
 static void test_nip05_parse_response_with_relays(void) {
     const char* json = "{"
-        "\"names\":{\"bob\":\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\"},"
-        "\"relays\":{\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\":[\"wss://relay.example.com\",\"wss://relay2.example.com\"]}"
+        "\"names\":{\"bob\":\"" TEST_PUBKEY "\"},"
+        "\"relays\":{\"" TEST_PUBKEY "\":[\"wss://relay.example.com\",\"wss://relay2.example.com\"]}"
         "}";
     char pubkey[65];
     char** relays = NULL;
     size_t relay_count = 0;
 
     TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_parse_response(json, "bob", pubkey, sizeof(pubkey), &relays, &relay_count));
-    TEST_ASSERT_EQUAL_STRING("b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9", pubkey);
+    TEST_ASSERT_EQUAL_STRING(TEST_PUBKEY, pubkey);
     TEST_ASSERT_EQUAL(2, relay_count);
     TEST_ASSERT_NOT_NULL(relays);
     TEST_ASSERT_EQUAL_STRING("wss://relay.example.com", relays[0]);
@@ -139,7 +141,7 @@ static void test_nip05_parse_response_with_relays(void) {
 }
 
 static void test_nip05_parse_response_name_not_found(void) {
-    const char* json = "{\"names\":{\"alice\":\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\"}}";
+    const char* json = "{\"names\":{\"alice\":\"" TEST_PUBKEY "\"}}";
     char pubkey[65];
 
     TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_FOUND, nostr_nip05_parse_response(json, "bob", pubkey, sizeof(pubkey), NULL, NULL));
@@ -160,7 +162,7 @@ static void test_nip05_parse_response_no_names(void) {
 }
 
 static void test_nip05_parse_response_null_params(void) {
-    const char* json = "{\"names\":{\"bob\":\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\"}}";
+    const char* json = "{\"names\":{\"bob\":\"" TEST_PUBKEY "\"}}";
     char pubkey[65];
 
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_parse_response(NULL, "bob", pubkey, sizeof(pubkey), NULL, NULL));
@@ -171,7 +173,7 @@ static void test_nip05_parse_response_null_params(void) {
 static nostr_error_t mock_http_success(const char* url, char** response, size_t* response_len, void* user_data) {
     (void)url;
     (void)user_data;
-    const char* json = "{\"names\":{\"bob\":\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\"}}";
+    const char* json = "{\"names\":{\"bob\":\"" TEST_PUBKEY "\"}}";
     *response = strdup(json);
     *response_len = strlen(json);
     return NOSTR_OK;
@@ -181,8 +183,8 @@ static nostr_error_t mock_http_with_relays(const char* url, char** response, siz
     (void)url;
     (void)user_data;
     const char* json = "{"
-        "\"names\":{\"bob\":\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\"},"
-        "\"relays\":{\"b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9\":[\"wss://relay.example.com\"]}"
+        "\"names\":{\"bob\":\"" TEST_PUBKEY "\"},"
+        "\"relays\":{\"" TEST_PUBKEY "\":[\"wss://relay.example.com\"]}"
         "}";
     *response = strdup(json);
     *response_len = strlen(json);
@@ -198,19 +200,14 @@ static nostr_error_t mock_http_fail(const char* url, char** response, size_t* re
 }
 
 static void test_nip05_verify_success(void) {
-    const char* identifier = "bob@example.com";
-    const char* pubkey = "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9";
-
-    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_verify(identifier, pubkey, mock_http_success, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_verify("bob@example.com", TEST_PUBKEY, mock_http_success, NULL, NULL, NULL));
 }
 
 static void test_nip05_verify_with_relays(void) {
-    const char* identifier = "bob@example.com";
-    const char* pubkey = "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9";
     char** relays = NULL;
     size_t relay_count = 0;
 
-    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_verify(identifier, pubkey, mock_http_with_relays, NULL, &relays, &relay_count));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip05_verify("bob@example.com", TEST_PUBKEY, mock_http_with_relays, NULL, &relays, &relay_count));
     TEST_ASSERT_EQUAL(1, relay_count);
     TEST_ASSERT_NOT_NULL(relays);
     TEST_ASSERT_EQUAL_STRING("wss://relay.example.com", relays[0]);
@@ -219,32 +216,23 @@ static void test_nip05_verify_with_relays(void) {
 }
 
 static void test_nip05_verify_wrong_pubkey(void) {
-    const char* identifier = "bob@example.com";
-    const char* pubkey = "0000000000000000000000000000000000000000000000000000000000000000";
+    const char* wrong_pubkey = "0000000000000000000000000000000000000000000000000000000000000000";
 
-    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_KEY, nostr_nip05_verify(identifier, pubkey, mock_http_success, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_KEY, nostr_nip05_verify("bob@example.com", wrong_pubkey, mock_http_success, NULL, NULL, NULL));
 }
 
 static void test_nip05_verify_http_failure(void) {
-    const char* identifier = "bob@example.com";
-    const char* pubkey = "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9";
-
-    TEST_ASSERT_EQUAL(NOSTR_ERR_CONNECTION, nostr_nip05_verify(identifier, pubkey, mock_http_fail, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_CONNECTION, nostr_nip05_verify("bob@example.com", TEST_PUBKEY, mock_http_fail, NULL, NULL, NULL));
 }
 
 static void test_nip05_verify_invalid_identifier(void) {
-    const char* pubkey = "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9";
-
-    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify("invalid", pubkey, mock_http_success, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify("invalid", TEST_PUBKEY, mock_http_success, NULL, NULL, NULL));
 }
 
 static void test_nip05_verify_null_params(void) {
-    const char* identifier = "bob@example.com";
-    const char* pubkey = "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9";
-
-    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify(NULL, pubkey, mock_http_success, NULL, NULL, NULL));
-    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify(identifier, NULL, mock_http_success, NULL, NULL, NULL));
-    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify(identifier, pubkey, NULL, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify(NULL, TEST_PUBKEY, mock_http_success, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify("bob@example.com", NULL, mock_http_success, NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_nip05_verify("bob@example.com", TEST_PUBKEY, NULL, NULL, NULL, NULL));
 }
 
 static void test_nip05_free_relays_null(void) {

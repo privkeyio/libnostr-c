@@ -12,6 +12,16 @@
 #define NIP05_MAX_URL_LEN 512
 #define NIP05_MAX_RELAYS 100
 
+static void str_tolower(char* s, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        s[i] = tolower((unsigned char)s[i]);
+    }
+}
+
+static int is_hex_char(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
 static int is_valid_local_part(const char* s, size_t len) {
     if (len == 0 || len > NIP05_MAX_NAME_LEN) return 0;
     for (size_t i = 0; i < len; i++) {
@@ -65,16 +75,11 @@ nostr_error_t nostr_nip05_parse(const char* identifier, char* name, size_t name_
 
     memcpy(name, identifier, name_len);
     name[name_len] = '\0';
+    str_tolower(name, name_len);
 
     memcpy(domain, at + 1, domain_len);
     domain[domain_len] = '\0';
-
-    for (size_t i = 0; i < name_len; i++) {
-        name[i] = tolower((unsigned char)name[i]);
-    }
-    for (size_t i = 0; i < domain_len; i++) {
-        domain[i] = tolower((unsigned char)domain[i]);
-    }
+    str_tolower(domain, domain_len);
 
     return NOSTR_OK;
 }
@@ -144,13 +149,11 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
     if (!pubkey_end || pubkey_end - name_pos != 64) return NOSTR_ERR_INVALID_KEY;
 
     for (size_t i = 0; i < 64; i++) {
-        char c = name_pos[i];
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
-            return NOSTR_ERR_INVALID_KEY;
-        }
-        pubkey_hex[i] = tolower((unsigned char)c);
+        if (!is_hex_char(name_pos[i])) return NOSTR_ERR_INVALID_KEY;
     }
+    memcpy(pubkey_hex, name_pos, 64);
     pubkey_hex[64] = '\0';
+    str_tolower(pubkey_hex, 64);
 
     if (!relays || !relay_count) return NOSTR_OK;
 
@@ -183,11 +186,9 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
 
     if (count == 0) return NOSTR_OK;
     if (count > NIP05_MAX_RELAYS) return NOSTR_ERR_INVALID_PARAM;
-    if (count > SIZE_MAX / sizeof(char*)) return NOSTR_ERR_INVALID_PARAM;
 
-    char** relay_array = malloc(count * sizeof(char*));
+    char** relay_array = calloc(count, sizeof(char*));
     if (!relay_array) return NOSTR_ERR_MEMORY;
-    for (size_t i = 0; i < count; i++) relay_array[i] = NULL;
 
     size_t idx = 0;
     p = pubkey_relays;
@@ -203,8 +204,7 @@ nostr_error_t nostr_nip05_parse_response(const char* json, const char* name,
         size_t relay_len = p - relay_start;
         relay_array[idx] = malloc(relay_len + 1);
         if (!relay_array[idx]) {
-            for (size_t i = 0; i < idx; i++) free(relay_array[i]);
-            free(relay_array);
+            nostr_nip05_free_relays(relay_array, idx);
             return NOSTR_ERR_MEMORY;
         }
         memcpy(relay_array[idx], relay_start, relay_len);
@@ -260,16 +260,15 @@ nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pu
 
     if (err != NOSTR_OK) return err;
 
-    char expected_lower[65];
-    size_t expected_len = strlen(expected_pubkey);
-    if (expected_len != 64) {
+    if (strlen(expected_pubkey) != 64) {
         nostr_nip05_free_relays(relays, relay_count);
         return NOSTR_ERR_INVALID_KEY;
     }
-    for (size_t i = 0; i < 64; i++) {
-        expected_lower[i] = tolower((unsigned char)expected_pubkey[i]);
-    }
+
+    char expected_lower[65];
+    memcpy(expected_lower, expected_pubkey, 64);
     expected_lower[64] = '\0';
+    str_tolower(expected_lower, 64);
 
     if (memcmp(pubkey_hex, expected_lower, 64) != 0) {
         nostr_nip05_free_relays(relays, relay_count);
