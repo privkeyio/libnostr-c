@@ -538,10 +538,14 @@ int32_t nostr_filter_get_limit(const nostr_filter_t* filter)
 static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
                                                char** src, size_t src_count)
 {
-    if (src_count == 0 || !src) {
+    if (src_count == 0) {
         *dst = NULL;
         *dst_count = 0;
         return NOSTR_RELAY_OK;
+    }
+
+    if (!src) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
     *dst = calloc(src_count, sizeof(char*));
@@ -576,6 +580,14 @@ nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t
     }
 
     memset(dst, 0, sizeof(nostr_filter_t));
+
+    if (src->kinds_count > 0 && !src->kinds) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    if (src->generic_tags_count > 0 && !src->generic_tags) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
 
     nostr_relay_error_t err;
 
