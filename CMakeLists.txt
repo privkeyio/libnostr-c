@@ -197,7 +197,8 @@ if(PkgConfig_FOUND AND NOT (CJSON_FOUND AND LIBWEBSOCKETS_FOUND))
         pkg_check_modules(LIBWEBSOCKETS libwebsockets)
     endif()
     pkg_check_modules(NOSCRYPT noscrypt)
-    
+    pkg_check_modules(UTF8PROC libutf8proc)
+
     # Check for noscrypt in common development locations
     if(NOT NOSCRYPT_FOUND)
         # Check environment variable first
@@ -497,6 +498,25 @@ if(NOT NOSCRYPT_FOUND)
     endif()
 endif()
 
+if(NOT UTF8PROC_FOUND)
+    find_library(UTF8PROC_LIBRARIES utf8proc PATHS /usr/local/lib NO_DEFAULT_PATH)
+    if(NOT UTF8PROC_LIBRARIES)
+        find_library(UTF8PROC_LIBRARIES utf8proc)
+    endif()
+    if(UTF8PROC_LIBRARIES AND NOT UTF8PROC_LIBRARIES MATCHES "-NOTFOUND$")
+        find_path(UTF8PROC_INCLUDE_DIRS utf8proc.h PATHS /usr/local/include NO_DEFAULT_PATH)
+        if(NOT UTF8PROC_INCLUDE_DIRS)
+            find_path(UTF8PROC_INCLUDE_DIRS utf8proc.h)
+        endif()
+        if(UTF8PROC_INCLUDE_DIRS)
+            set(UTF8PROC_FOUND TRUE)
+            message(STATUS "Found utf8proc: ${UTF8PROC_LIBRARIES}")
+        else()
+            unset(UTF8PROC_LIBRARIES)
+        endif()
+    endif()
+endif()
+
 # =============================================================================
 # Feature Validation and Dependency Enforcement
 # =============================================================================
@@ -543,12 +563,17 @@ if(NOT HAVE_CRYPTO_BACKEND)
 endif()
 
 # Validate feature dependencies
-set(FEATURES_REQUIRING_NOSCRYPT "NIP04;NIP17;NIP44;NIP46;NIP47;NIP59;HD_KEYS")
+set(FEATURES_REQUIRING_NOSCRYPT "NIP04;NIP17;NIP44;NIP46;NIP47;NIP59")
 foreach(FEATURE ${FEATURES_REQUIRING_NOSCRYPT})
     if(NOSTR_FEATURE_${FEATURE} AND NOT HAVE_NOSCRYPT)
         message(FATAL_ERROR "Feature ${FEATURE} requires noscrypt but it's not available")
     endif()
 endforeach()
+
+# HD_KEYS requires any crypto backend (noscrypt or secp256k1)
+if(NOSTR_FEATURE_HD_KEYS AND NOT HAVE_CRYPTO_BACKEND)
+    message(FATAL_ERROR "Feature HD_KEYS requires a crypto backend (noscrypt or secp256k1)")
+endif()
 
 # Auto-disable RELAY on Windows if libwebsockets not found (following noscrypt pattern)
 if(WIN32 AND NOSTR_FEATURE_RELAY AND NOT (LIBWEBSOCKETS_FOUND OR LIBWEBSOCKETS_LIBRARIES))
@@ -593,6 +618,14 @@ endif()
 set(HAVE_LIBWEBSOCKETS OFF)
 if((LIBWEBSOCKETS_FOUND OR LIBWEBSOCKETS_LIBRARIES) AND NOSTR_FEATURE_RELAY)
     set(HAVE_LIBWEBSOCKETS ON)
+endif()
+
+set(HAVE_UTF8PROC OFF)
+if(UTF8PROC_FOUND OR UTF8PROC_LIBRARIES)
+    set(HAVE_UTF8PROC ON)
+    message(STATUS "utf8proc support enabled for BIP-39 NFKD normalization")
+else()
+    message(STATUS "utf8proc not found - BIP-39 will reject non-ASCII input")
 endif()
 
 # =============================================================================
@@ -722,6 +755,11 @@ if(NOSCRYPT_FOUND)
     target_include_directories(nostr_static PRIVATE ${NOSCRYPT_INCLUDE_DIRS})
 endif()
 
+if(UTF8PROC_FOUND AND UTF8PROC_INCLUDE_DIRS)
+    target_include_directories(nostr PRIVATE ${UTF8PROC_INCLUDE_DIRS})
+    target_include_directories(nostr_static PRIVATE ${UTF8PROC_INCLUDE_DIRS})
+endif()
+
 # Link required libraries
 set(NOSTR_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 
@@ -805,6 +843,16 @@ endif()
 
 if(NOSCRYPT_LIBRARIES AND NOT NOSCRYPT_LIBRARIES STREQUAL "NOTFOUND")
     list(APPEND NOSTR_LINK_LIBRARIES ${NOSCRYPT_LIBRARIES})
+endif()
+
+if(HAVE_UTF8PROC)
+    if(UTF8PROC_LINK_LIBRARIES)
+        list(APPEND NOSTR_LINK_LIBRARIES ${UTF8PROC_LINK_LIBRARIES})
+    elseif(UTF8PROC_LIBRARIES AND NOT UTF8PROC_LIBRARIES STREQUAL "NOTFOUND")
+        list(APPEND NOSTR_LINK_LIBRARIES ${UTF8PROC_LIBRARIES})
+    else()
+        list(APPEND NOSTR_LINK_LIBRARIES utf8proc)
+    endif()
 endif()
 
 if(HAVE_SECP256K1)

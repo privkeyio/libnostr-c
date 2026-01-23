@@ -119,32 +119,37 @@ nostr_error_t nostr_init(void)
     }
 
 #ifdef HAVE_NOSCRYPT
-    // Get shared context
     nc_ctx = NCGetSharedContext();
     if (!nc_ctx) {
         unlock_ctx_init();
         return NOSTR_ERR_MEMORY;
     }
-    
-    // Generate entropy for initialization
+
     uint8_t entropy[NC_CONTEXT_ENTROPY_SIZE];
     if (nostr_random_bytes(entropy, NC_CONTEXT_ENTROPY_SIZE) != 1) {
         unlock_ctx_init();
         return NOSTR_ERR_MEMORY;
     }
-    
+
     if (NCInitContext(nc_ctx, entropy) != NC_SUCCESS) {
         unlock_ctx_init();
         return NOSTR_ERR_MEMORY;
     }
-#elif defined(HAVE_SECP256K1)
+#endif
+
+#ifdef HAVE_SECP256K1
     secp256k1_ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
     if (!secp256k1_ctx) {
+#ifdef HAVE_NOSCRYPT
+        NCDestroyContext(nc_ctx);
+        nc_ctx = NULL;
+#endif
         unlock_ctx_init();
         return NOSTR_ERR_MEMORY;
     }
-#else
-    // No crypto backend available
+#endif
+
+#if !defined(HAVE_NOSCRYPT) && !defined(HAVE_SECP256K1)
     unlock_ctx_init();
     return NOSTR_ERR_NOT_SUPPORTED;
 #endif
@@ -162,15 +167,15 @@ void nostr_cleanup(void)
     if (nc_ctx) {
         NCDestroyContext(nc_ctx);
         nc_ctx = NULL;
-        ctx_initialized = 0;
     }
-#elif defined(HAVE_SECP256K1)
+#endif
+#ifdef HAVE_SECP256K1
     if (secp256k1_ctx) {
         secp256k1_context_destroy(secp256k1_ctx);
         secp256k1_ctx = NULL;
-        ctx_initialized = 0;
     }
 #endif
+    ctx_initialized = 0;
     
     unlock_ctx_init();
 }
