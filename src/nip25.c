@@ -53,8 +53,8 @@ nostr_error_t nostr_reaction_create(nostr_event** event, const char* reaction_co
         return err;
     }
 
-    const char* e_tag[4] = {"e", target_event_id, relay_hint, target_pubkey};
-    err = nostr_event_add_tag(*event, e_tag, relay_hint ? 4 : 2);
+    const char* e_tag[4] = {"e", target_event_id, relay_hint ? relay_hint : "", target_pubkey};
+    err = nostr_event_add_tag(*event, e_tag, 4);
     if (err != NOSTR_OK) {
         cleanup_event(event);
         return err;

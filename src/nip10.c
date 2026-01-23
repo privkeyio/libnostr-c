@@ -95,13 +95,15 @@ static void copy_id_and_relay(const e_tag_info* info, char* id, size_t id_size,
     }
 }
 
-nostr_error_t nostr_event_get_root_id(const nostr_event* event, char* root_id, size_t root_id_size,
-                                      char* relay_hint, size_t relay_hint_size)
+static nostr_error_t find_e_tag_by_marker(const nostr_event* event, const char* marker,
+                                          int use_positional_fallback,
+                                          char* out_id, size_t id_size,
+                                          char* relay_hint, size_t relay_hint_size)
 {
-    if (!event || !root_id || root_id_size < 65)
+    if (!event || !out_id || id_size < 65)
         return NOSTR_ERR_INVALID_PARAM;
 
-    root_id[0] = '\0';
+    out_id[0] = '\0';
     if (relay_hint && relay_hint_size > 0)
         relay_hint[0] = '\0';
 
@@ -112,50 +114,39 @@ nostr_error_t nostr_event_get_root_id(const nostr_event* event, char* root_id, s
         return err;
 
     for (size_t i = 0; i < e_tag_count; i++) {
-        if (strcmp(e_tags[i].marker, "root") == 0) {
-            copy_id_and_relay(&e_tags[i], root_id, root_id_size, relay_hint, relay_hint_size);
+        if (strcmp(e_tags[i].marker, marker) == 0) {
+            copy_id_and_relay(&e_tags[i], out_id, id_size, relay_hint, relay_hint_size);
             free(e_tags);
             return NOSTR_OK;
         }
     }
 
-    copy_id_and_relay(&e_tags[0], root_id, root_id_size, relay_hint, relay_hint_size);
-    free(e_tags);
-    return NOSTR_OK;
-}
-
-nostr_error_t nostr_event_get_reply_id(const nostr_event* event, char* reply_id, size_t reply_id_size,
-                                       char* relay_hint, size_t relay_hint_size)
-{
-    if (!event || !reply_id || reply_id_size < 65)
-        return NOSTR_ERR_INVALID_PARAM;
-
-    reply_id[0] = '\0';
-    if (relay_hint && relay_hint_size > 0)
-        relay_hint[0] = '\0';
-
-    e_tag_info* e_tags = NULL;
-    size_t e_tag_count = 0;
-    nostr_error_t err = collect_e_tags(event, &e_tags, &e_tag_count);
-    if (err != NOSTR_OK)
-        return err;
-
-    for (size_t i = 0; i < e_tag_count; i++) {
-        if (strcmp(e_tags[i].marker, "reply") == 0) {
-            copy_id_and_relay(&e_tags[i], reply_id, reply_id_size, relay_hint, relay_hint_size);
-            free(e_tags);
-            return NOSTR_OK;
-        }
+    if (use_positional_fallback == 0) {
+        copy_id_and_relay(&e_tags[0], out_id, id_size, relay_hint, relay_hint_size);
+        free(e_tags);
+        return NOSTR_OK;
     }
 
-    if (e_tag_count >= 2) {
-        copy_id_and_relay(&e_tags[e_tag_count - 1], reply_id, reply_id_size, relay_hint, relay_hint_size);
+    if (use_positional_fallback == 1 && e_tag_count >= 2) {
+        copy_id_and_relay(&e_tags[e_tag_count - 1], out_id, id_size, relay_hint, relay_hint_size);
         free(e_tags);
         return NOSTR_OK;
     }
 
     free(e_tags);
     return NOSTR_ERR_NOT_FOUND;
+}
+
+nostr_error_t nostr_event_get_root_id(const nostr_event* event, char* root_id, size_t root_id_size,
+                                      char* relay_hint, size_t relay_hint_size)
+{
+    return find_e_tag_by_marker(event, "root", 0, root_id, root_id_size, relay_hint, relay_hint_size);
+}
+
+nostr_error_t nostr_event_get_reply_id(const nostr_event* event, char* reply_id, size_t reply_id_size,
+                                       char* relay_hint, size_t relay_hint_size)
+{
+    return find_e_tag_by_marker(event, "reply", 1, reply_id, reply_id_size, relay_hint, relay_hint_size);
 }
 
 static nostr_error_t add_e_tag(nostr_event* event, const char* id, const char* relay,

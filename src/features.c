@@ -95,76 +95,64 @@ const char* nostr_feature_list_enabled(void)
         size_t pos = 0;
         size_t remaining = sizeof(feature_list);
 
-        int n = snprintf(feature_list + pos, remaining, "std,events,keys");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+#define APPEND_FEATURE(str) do { \
+    int n = snprintf(feature_list + pos, remaining, str); \
+    if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; } \
+} while(0)
 
+        APPEND_FEATURE("std,events,keys");
 #ifdef NOSTR_FEATURE_ENCODING
-        n = snprintf(feature_list + pos, remaining, ",encoding");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",encoding");
 #endif
 #ifdef NOSTR_FEATURE_NIP04
-        n = snprintf(feature_list + pos, remaining, ",nip04");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip04");
 #endif
 #ifdef NOSTR_FEATURE_NIP10
-        n = snprintf(feature_list + pos, remaining, ",nip10");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip10");
 #endif
 #ifdef NOSTR_FEATURE_NIP13
-        n = snprintf(feature_list + pos, remaining, ",nip13");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip13");
 #endif
 #ifdef NOSTR_FEATURE_NIP17
-        n = snprintf(feature_list + pos, remaining, ",nip17");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip17");
 #endif
 #ifdef NOSTR_FEATURE_NIP25
-        n = snprintf(feature_list + pos, remaining, ",nip25");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip25");
 #endif
 #ifdef NOSTR_FEATURE_NIP44
-        n = snprintf(feature_list + pos, remaining, ",nip44");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip44");
 #endif
 #ifdef NOSTR_FEATURE_NIP46
-        n = snprintf(feature_list + pos, remaining, ",nip46");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip46");
 #endif
 #ifdef NOSTR_FEATURE_NIP47
-        n = snprintf(feature_list + pos, remaining, ",nip47");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip47");
 #endif
 #ifdef NOSTR_FEATURE_NIP57
-        n = snprintf(feature_list + pos, remaining, ",nip57");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip57");
 #endif
 #ifdef NOSTR_FEATURE_NIP59
-        n = snprintf(feature_list + pos, remaining, ",nip59");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",nip59");
 #endif
 #ifdef NOSTR_FEATURE_RELAY
-        n = snprintf(feature_list + pos, remaining, ",relay");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",relay");
 #endif
 #ifdef NOSTR_FEATURE_RELAY_PROTOCOL
-        n = snprintf(feature_list + pos, remaining, ",relay-protocol");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",relay-protocol");
 #endif
 #ifdef NOSTR_FEATURE_HD_KEYS
-        n = snprintf(feature_list + pos, remaining, ",hd-keys");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",hd-keys");
 #endif
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
-        n = snprintf(feature_list + pos, remaining, ",json-enhanced");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",json-enhanced");
 #endif
 #ifdef NOSTR_FEATURE_THREADING
-        n = snprintf(feature_list + pos, remaining, ",threading");
-        if (n > 0 && (size_t)n < remaining) { pos += n; remaining -= n; }
+        APPEND_FEATURE(",threading");
 #endif
+#undef APPEND_FEATURE
+
         (void)pos;
         (void)remaining;
-
         initialized = 1;
     }
 
