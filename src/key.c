@@ -25,9 +25,14 @@
 #include <esp_random.h>
 #endif
 #else
+#ifdef _WIN32
+#include <windows.h>
+#include <bcrypt.h>
+#else
 #include <openssl/rand.h>
-#include <openssl/sha.h>
 #include <openssl/err.h>
+#endif
+#include <openssl/sha.h>
 #endif
 
 #ifdef HAVE_NOSCRYPT
@@ -84,8 +89,6 @@ static volatile int rng_initialized = 0;
 #endif
 #endif
 
-static int openssl_rng_seeded = 0;
-
 int nostr_random_bytes(uint8_t *buf, size_t len) {
 #ifdef HAVE_MBEDTLS
 #ifdef ESP_PLATFORM
@@ -108,6 +111,11 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
+#ifdef _WIN32
+    return BCryptGenRandom(NULL, buf, (ULONG)len,
+                           BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0 ? 1 : 0;
+#else
+    static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
         RAND_poll();
         openssl_rng_seeded = 1;
@@ -117,6 +125,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
         ERR_clear_error();
     }
     return result;
+#endif
 #endif
 }
 
