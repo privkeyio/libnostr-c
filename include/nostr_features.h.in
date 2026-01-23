@@ -70,6 +70,7 @@ extern "C" {
 #cmakedefine HAVE_MBEDTLS
 #cmakedefine HAVE_CJSON
 #cmakedefine HAVE_LIBWEBSOCKETS
+#cmakedefine HAVE_UTF8PROC
 #cmakedefine HAVE_SCHNORRSIG_SIGN32
 
 /* =============================================================================

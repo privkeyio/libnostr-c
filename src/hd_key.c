@@ -12,6 +12,10 @@
 #include <openssl/kdf.h>
 #include <arpa/inet.h>
 
+#ifdef HAVE_UTF8PROC
+#include <utf8proc.h>
+#endif
+
 #include "data/bip39_english.h"
 
 extern void secure_wipe(void* data, size_t len);
@@ -129,6 +133,7 @@ nostr_error_t nostr_hd_key_derive(const nostr_hd_key* parent, uint32_t index, no
     unsigned int hash_len = 64;
     
     if (!HMAC(EVP_sha512(), parent->chain_code, 32, data, 37, hash, &hash_len)) {
+        secure_wipe(data, sizeof(data));
         return NOSTR_ERR_MEMORY;
     }
     
@@ -452,6 +457,24 @@ nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
     return NOSTR_OK;
 }
 
+#ifdef HAVE_UTF8PROC
+static char* nfkd_normalize(const char* str)
+{
+    if (!str) return NULL;
+    utf8proc_uint8_t* normalized = utf8proc_NFKD((const utf8proc_uint8_t*)str);
+    return (char*)normalized;
+}
+#else
+static int is_ascii_string(const char* str)
+{
+    if (!str) return 1;
+    for (const unsigned char* p = (const unsigned char*)str; *p; p++) {
+        if (*p > 127) return 0;
+    }
+    return 1;
+}
+#endif
+
 nostr_error_t nostr_mnemonic_to_seed(const char* mnemonic, const char* passphrase, uint8_t seed[64])
 {
     if (!mnemonic || !seed) {
@@ -461,6 +484,56 @@ nostr_error_t nostr_mnemonic_to_seed(const char* mnemonic, const char* passphras
     nostr_error_t err = nostr_mnemonic_validate(mnemonic);
     if (err != NOSTR_OK) {
         return err;
+    }
+
+#ifdef HAVE_UTF8PROC
+    char* norm_mnemonic = nfkd_normalize(mnemonic);
+    if (!norm_mnemonic) {
+        return NOSTR_ERR_MEMORY;
+    }
+
+    char* norm_passphrase = NULL;
+    if (passphrase) {
+        norm_passphrase = nfkd_normalize(passphrase);
+        if (!norm_passphrase) {
+            free(norm_mnemonic);
+            return NOSTR_ERR_MEMORY;
+        }
+    }
+
+    size_t passphrase_len = norm_passphrase ? strlen(norm_passphrase) : 0;
+    size_t salt_len = 8 + passphrase_len;
+
+    char* salt = malloc(salt_len + 1);
+    if (!salt) {
+        free(norm_mnemonic);
+        if (norm_passphrase) free(norm_passphrase);
+        return NOSTR_ERR_MEMORY;
+    }
+
+    memcpy(salt, "mnemonic", 8);
+    if (norm_passphrase) {
+        memcpy(salt + 8, norm_passphrase, passphrase_len);
+    }
+    salt[salt_len] = '\0';
+
+    int result = PKCS5_PBKDF2_HMAC(norm_mnemonic, strlen(norm_mnemonic),
+                                   (unsigned char*)salt, salt_len,
+                                   2048, EVP_sha512(), 64, seed);
+
+    secure_wipe(salt, salt_len + 1);
+    free(salt);
+    secure_wipe(norm_mnemonic, strlen(norm_mnemonic));
+    free(norm_mnemonic);
+    if (norm_passphrase) {
+        secure_wipe(norm_passphrase, strlen(norm_passphrase));
+        free(norm_passphrase);
+    }
+
+    return (result == 1) ? NOSTR_OK : NOSTR_ERR_MEMORY;
+#else
+    if (!is_ascii_string(mnemonic) || !is_ascii_string(passphrase)) {
+        return NOSTR_ERR_INVALID_PARAM;
     }
 
     size_t passphrase_len = passphrase ? strlen(passphrase) : 0;
@@ -485,6 +558,7 @@ nostr_error_t nostr_mnemonic_to_seed(const char* mnemonic, const char* passphras
     free(salt);
 
     return (result == 1) ? NOSTR_OK : NOSTR_ERR_MEMORY;
+#endif
 }
 
 nostr_error_t nostr_mnemonic_to_keypair(const char* mnemonic, const char* passphrase,
