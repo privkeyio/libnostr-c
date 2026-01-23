@@ -775,11 +775,6 @@ endif()
 # Link required libraries
 set(NOSTR_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 
-# Windows requires bcrypt for random number generation
-if(WIN32)
-    list(APPEND NOSTR_LINK_LIBRARIES bcrypt)
-endif()
-
 # Add optional libraries if they exist
 if(HAVE_CJSON)
     if(CJSON_FOUND)
