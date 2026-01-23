@@ -17,13 +17,13 @@
 extern void secure_wipe(void* data, size_t len);
 extern int nostr_random_bytes(uint8_t* buf, size_t len);
 
-#ifdef HAVE_NOSCRYPT
-#include <noscrypt.h>
-extern NCContext* nc_ctx;
-#else
 #include <secp256k1.h>
 #include <secp256k1_extrakeys.h>
 extern secp256k1_context* secp256k1_ctx;
+
+#ifdef HAVE_NOSCRYPT
+#include <noscrypt.h>
+extern NCContext* nc_ctx;
 #endif
 
 #define HD_HARDENED_FLAG 0x80000000
@@ -112,10 +112,6 @@ nostr_error_t nostr_hd_key_derive(const nostr_hd_key* parent, uint32_t index, no
         memcpy(data + 1, parent->privkey.data, 32);
         memcpy(data + 33, &index_be, 4);
     } else {
-#ifdef HAVE_NOSCRYPT
-        data[0] = 0x02;
-        memcpy(data + 1, parent->pubkey.data, 32);
-#else
         secp256k1_pubkey pubkey;
         if (!secp256k1_ec_pubkey_create(secp256k1_ctx, &pubkey, parent->privkey.data)) {
             return NOSTR_ERR_INVALID_KEY;
@@ -128,7 +124,6 @@ nostr_error_t nostr_hd_key_derive(const nostr_hd_key* parent, uint32_t index, no
         }
 
         memcpy(data, compressed, 33);
-#endif
         memcpy(data + 33, &index_be, 4);
     }
 
@@ -141,74 +136,68 @@ nostr_error_t nostr_hd_key_derive(const nostr_hd_key* parent, uint32_t index, no
     
     memcpy(child->chain_code, hash + 32, 32);
     
-#ifdef HAVE_NOSCRYPT
-    NCSecretKey parent_seckey, child_seckey;
-    uint8_t tweak[32];
-    
-    memcpy(parent_seckey.key, parent->privkey.data, 32);
-    memcpy(tweak, hash, 32);
-    
-    memcpy(child_seckey.key, parent_seckey.key, 32);
-    
-    int carry = 0;
-    for (int i = 0; i < 32; i++) {
-        int sum = child_seckey.key[31-i] + tweak[31-i] + carry;
-        child_seckey.key[31-i] = sum & 0xff;
-        carry = sum >> 8;
+    unsigned char child_privkey[32];
+    memcpy(child_privkey, parent->privkey.data, 32);
+
+    if (!secp256k1_ec_seckey_tweak_add(secp256k1_ctx, child_privkey, hash)) {
+        secure_wipe(hash, 64);
+        secure_wipe(data, sizeof(data));
+        secure_wipe(child_privkey, 32);
+        return NOSTR_ERR_INVALID_KEY;
     }
-    
+
+    memcpy(child->privkey.data, child_privkey, 32);
+
+#ifdef HAVE_NOSCRYPT
+    NCSecretKey child_seckey;
     NCPublicKey nc_pubkey;
+
+    memcpy(child_seckey.key, child_privkey, 32);
+
     if (NCGetPublicKey(nc_ctx, &child_seckey, &nc_pubkey) != NC_SUCCESS) {
         secure_wipe(hash, 64);
-        secure_wipe(&parent_seckey, sizeof(parent_seckey));
+        secure_wipe(data, sizeof(data));
+        secure_wipe(child_privkey, 32);
         secure_wipe(&child_seckey, sizeof(child_seckey));
         return NOSTR_ERR_INVALID_KEY;
     }
-    
-    memcpy(child->privkey.data, child_seckey.key, 32);
+
     memcpy(child->pubkey.data, nc_pubkey.key, 32);
-    
-    secure_wipe(&parent_seckey, sizeof(parent_seckey));
+
     secure_wipe(&child_seckey, sizeof(child_seckey));
 #else
     secp256k1_keypair child_keypair;
-    unsigned char child_privkey[32];
-    
-    memcpy(child_privkey, parent->privkey.data, 32);
-    
-    if (!secp256k1_ec_seckey_tweak_add(secp256k1_ctx, child_privkey, hash)) {
-        secure_wipe(hash, 64);
-        secure_wipe(child_privkey, 32);
-        return NOSTR_ERR_INVALID_KEY;
-    }
-    
-    memcpy(child->privkey.data, child_privkey, 32);
-    
+
     if (!secp256k1_keypair_create(secp256k1_ctx, &child_keypair, child_privkey)) {
         secure_wipe(hash, 64);
+        secure_wipe(data, sizeof(data));
         secure_wipe(child_privkey, 32);
         return NOSTR_ERR_INVALID_KEY;
     }
-    
+
     secp256k1_xonly_pubkey xonly_pubkey;
     if (!secp256k1_keypair_xonly_pub(secp256k1_ctx, &xonly_pubkey, NULL, &child_keypair)) {
         secure_wipe(hash, 64);
+        secure_wipe(data, sizeof(data));
         secure_wipe(child_privkey, 32);
         secure_wipe(&child_keypair, sizeof(child_keypair));
         return NOSTR_ERR_INVALID_KEY;
     }
-    
+
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_ctx, child->pubkey.data, &xonly_pubkey)) {
         secure_wipe(hash, 64);
+        secure_wipe(data, sizeof(data));
         secure_wipe(child_privkey, 32);
         secure_wipe(&child_keypair, sizeof(child_keypair));
         return NOSTR_ERR_INVALID_KEY;
     }
-    
-    secure_wipe(child_privkey, 32);
+
     secure_wipe(&child_keypair, sizeof(child_keypair));
 #endif
-    
+
+    secure_wipe(data, sizeof(data));
+    secure_wipe(child_privkey, 32);
+
     secure_wipe(hash, 64);
     return NOSTR_OK;
 }
@@ -228,6 +217,7 @@ nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* master, const char* p
         return NOSTR_OK;
     }
 
+    size_t path_len = strlen(path + 2);
     char* path_copy = strdup(path + 2);
     if (!path_copy) {
         return NOSTR_ERR_MEMORY;
@@ -251,6 +241,7 @@ nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* master, const char* p
         char* endptr;
         uint32_t index = strtoul(token, &endptr, 10);
         if (*endptr != '\0' || index >= HD_HARDENED_FLAG) {
+            secure_wipe(path_copy, path_len);
             free(path_copy);
             secure_wipe(&current, sizeof(current));
             return NOSTR_ERR_INVALID_PARAM;
@@ -263,6 +254,7 @@ nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* master, const char* p
         nostr_hd_key next;
         nostr_error_t err = nostr_hd_key_derive(&current, index, &next);
         if (err != NOSTR_OK) {
+            secure_wipe(path_copy, path_len);
             free(path_copy);
             secure_wipe(&current, sizeof(current));
             return err;
@@ -275,6 +267,7 @@ nostr_error_t nostr_hd_key_derive_path(const nostr_hd_key* master, const char* p
         token = strtok_r(NULL, "/", &saveptr);
     }
 
+    secure_wipe(path_copy, path_len);
     free(path_copy);
     memcpy(derived, &current, sizeof(nostr_hd_key));
     secure_wipe(&current, sizeof(current));
@@ -299,9 +292,18 @@ nostr_error_t nostr_hd_key_to_keypair(const nostr_hd_key* hd_key, nostr_keypair*
 
 static int bip39_word_index(const char* word)
 {
-    for (int i = 0; i < BIP39_WORDLIST_SIZE; i++) {
-        if (strcmp(word, bip39_wordlist[i]) == 0) {
-            return i;
+    int left = 0;
+    int right = BIP39_WORDLIST_SIZE - 1;
+
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        int cmp = strcmp(word, bip39_wordlist[mid]);
+        if (cmp == 0) {
+            return mid;
+        } else if (cmp < 0) {
+            right = mid - 1;
+        } else {
+            left = mid + 1;
         }
     }
     return -1;
@@ -377,12 +379,13 @@ nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    size_t mnemonic_len = strlen(mnemonic);
     char* mnemonic_copy = strdup(mnemonic);
     if (!mnemonic_copy) {
         return NOSTR_ERR_MEMORY;
     }
 
-    int indices[24];
+    int indices[24] = {0};
     int word_count = 0;
     char* saveptr;
     char* word = strtok_r(mnemonic_copy, " ", &saveptr);
@@ -390,7 +393,7 @@ nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
     while (word != NULL && word_count < 24) {
         int idx = bip39_word_index(word);
         if (idx < 0) {
-            secure_wipe(mnemonic_copy, strlen(mnemonic_copy));
+            secure_wipe(mnemonic_copy, mnemonic_len);
             free(mnemonic_copy);
             return NOSTR_ERR_INVALID_PARAM;
         }
@@ -398,7 +401,7 @@ nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
         word = strtok_r(NULL, " ", &saveptr);
     }
 
-    secure_wipe(mnemonic_copy, strlen(mnemonic_copy));
+    secure_wipe(mnemonic_copy, mnemonic_len);
     free(mnemonic_copy);
 
     int entropy_bytes;
@@ -436,6 +439,7 @@ nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
     uint8_t actual_checksum = entropy[entropy_bytes] >> (8 - checksum_bits);
 
     secure_wipe(entropy, sizeof(entropy));
+    secure_wipe(hash, sizeof(hash));
 
     if (expected_checksum != actual_checksum) {
         return NOSTR_ERR_INVALID_PARAM;
@@ -450,9 +454,19 @@ nostr_error_t nostr_mnemonic_to_seed(const char* mnemonic, const char* passphras
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    nostr_error_t validate_err = nostr_mnemonic_validate(mnemonic);
+    if (validate_err != NOSTR_OK) {
+        return validate_err;
+    }
+
     const char* salt_prefix = "mnemonic";
+    size_t prefix_len = strlen(salt_prefix);
     size_t passphrase_len = passphrase ? strlen(passphrase) : 0;
-    size_t salt_len = strlen(salt_prefix) + passphrase_len + 1;
+
+    if (passphrase_len > SIZE_MAX - prefix_len - 1) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+    size_t salt_len = prefix_len + passphrase_len + 1;
 
     char* salt = malloc(salt_len);
     if (!salt) {

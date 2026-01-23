@@ -21,6 +21,8 @@ static void test_nip06_vector(const char* name, const char* mnemonic,
     assert(strcmp(privkey_hex, expected_privkey) == 0);
     assert(strcmp(pubkey_hex, expected_pubkey) == 0);
 
+    nostr_keypair_destroy(&keypair);
+
     printf("  %s: PASS\n", name);
 }
 
@@ -59,6 +61,7 @@ static void test_mnemonic_generation(void)
     nostr_keypair keypair;
     assert(nostr_mnemonic_to_keypair(mnemonic12, NULL, 0, &keypair) == NOSTR_OK);
     assert(keypair.initialized == 1);
+    nostr_keypair_destroy(&keypair);
 
     printf("  Mnemonic generation: PASS\n");
 }
@@ -88,6 +91,9 @@ static void test_passphrase(void)
     assert(nostr_mnemonic_to_keypair(mnemonic, "test passphrase", 0, &keypair_with_pass) == NOSTR_OK);
     assert(memcmp(keypair_no_pass.privkey.data, keypair_with_pass.privkey.data, 32) != 0);
 
+    nostr_keypair_destroy(&keypair_no_pass);
+    nostr_keypair_destroy(&keypair_with_pass);
+
     printf("  Passphrase support: PASS\n");
 }
 
@@ -103,6 +109,9 @@ static void test_account_index(void)
     assert(nostr_mnemonic_to_keypair(mnemonic, NULL, 0, &keypair0) == NOSTR_OK);
     assert(nostr_mnemonic_to_keypair(mnemonic, NULL, 1, &keypair1) == NOSTR_OK);
     assert(memcmp(keypair0.privkey.data, keypair1.privkey.data, 32) != 0);
+
+    nostr_keypair_destroy(&keypair0);
+    nostr_keypair_destroy(&keypair1);
 
     printf("  Account index support: PASS\n");
 }
