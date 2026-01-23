@@ -113,7 +113,8 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
 #endif
 #else
 #ifdef _WIN32
-    return BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0 ? 1 : 0;
+    NTSTATUS status = BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    return status >= 0 ? 1 : 0;
 #else
     return RAND_bytes(buf, len);
 #endif
