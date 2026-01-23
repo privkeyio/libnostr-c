@@ -27,8 +27,6 @@ extern NCContext* nc_ctx;
 #endif
 
 #define HD_HARDENED_FLAG 0x80000000
-#define BIP32_KEY_SIZE 32
-#define BIP32_CHAINCODE_SIZE 32
 
 static const char HD_SEED_KEY[] = "Bitcoin seed";
 
@@ -375,7 +373,7 @@ nostr_error_t nostr_mnemonic_generate(int word_count, char* mnemonic, size_t mne
 
 nostr_error_t nostr_mnemonic_validate(const char* mnemonic)
 {
-    if (!mnemonic || strlen(mnemonic) == 0) {
+    if (!mnemonic || *mnemonic == '\0') {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
@@ -454,35 +452,30 @@ nostr_error_t nostr_mnemonic_to_seed(const char* mnemonic, const char* passphras
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    nostr_error_t validate_err = nostr_mnemonic_validate(mnemonic);
-    if (validate_err != NOSTR_OK) {
-        return validate_err;
+    nostr_error_t err = nostr_mnemonic_validate(mnemonic);
+    if (err != NOSTR_OK) {
+        return err;
     }
 
-    const char* salt_prefix = "mnemonic";
-    size_t prefix_len = strlen(salt_prefix);
     size_t passphrase_len = passphrase ? strlen(passphrase) : 0;
+    size_t salt_len = 8 + passphrase_len;
 
-    if (passphrase_len > SIZE_MAX - prefix_len - 1) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    size_t salt_len = prefix_len + passphrase_len + 1;
-
-    char* salt = malloc(salt_len);
+    char* salt = malloc(salt_len + 1);
     if (!salt) {
         return NOSTR_ERR_MEMORY;
     }
 
-    strcpy(salt, salt_prefix);
+    memcpy(salt, "mnemonic", 8);
     if (passphrase) {
-        strcat(salt, passphrase);
+        memcpy(salt + 8, passphrase, passphrase_len);
     }
+    salt[salt_len] = '\0';
 
     int result = PKCS5_PBKDF2_HMAC(mnemonic, strlen(mnemonic),
-                                   (unsigned char*)salt, strlen(salt),
+                                   (unsigned char*)salt, salt_len,
                                    2048, EVP_sha512(), 64, seed);
 
-    secure_wipe(salt, salt_len);
+    secure_wipe(salt, salt_len + 1);
     free(salt);
 
     return (result == 1) ? NOSTR_OK : NOSTR_ERR_MEMORY;
@@ -495,13 +488,8 @@ nostr_error_t nostr_mnemonic_to_keypair(const char* mnemonic, const char* passph
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    nostr_error_t err = nostr_mnemonic_validate(mnemonic);
-    if (err != NOSTR_OK) {
-        return err;
-    }
-
     uint8_t seed[64];
-    err = nostr_mnemonic_to_seed(mnemonic, passphrase, seed);
+    nostr_error_t err = nostr_mnemonic_to_seed(mnemonic, passphrase, seed);
     if (err != NOSTR_OK) {
         return err;
     }
@@ -536,8 +524,8 @@ nostr_error_t nostr_hd_key_from_seed(const uint8_t* seed, size_t seed_len, nostr
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 
-nostr_error_t nostr_hd_key_derive(const nostr_hd_key* parent, uint32_t index, bool hardened, nostr_hd_key* child) {
-    (void)parent; (void)index; (void)hardened; (void)child;
+nostr_error_t nostr_hd_key_derive(const nostr_hd_key* parent, uint32_t index, nostr_hd_key* child) {
+    (void)parent; (void)index; (void)child;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 
