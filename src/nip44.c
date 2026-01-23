@@ -477,13 +477,11 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 
-    /* Allocate decrypted buffer */
-    decrypted = malloc(encrypted_len);
+    decrypted = calloc(1, encrypted_len);
     if (!decrypted) {
         free(payload);
         return NOSTR_ERR_MEMORY;
     }
-    memset(decrypted, 0, encrypted_len);
 
     /* Set up decryption args */
     memset(&enc_args, 0, sizeof(enc_args));
