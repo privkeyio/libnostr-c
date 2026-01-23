@@ -29,9 +29,6 @@
 #include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/sha.h>
-#ifdef _WIN32
-#include <wincrypt.h>
-#endif
 #endif
 
 #ifdef HAVE_NOSCRYPT
@@ -110,21 +107,31 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
+#ifdef _WIN32
+    typedef long NTSTATUS;
+    typedef NTSTATUS (WINAPI *BCryptGenRandomFn)(void*, unsigned char*, unsigned long, unsigned long);
+    static BCryptGenRandomFn pBCryptGenRandom = NULL;
+    static int bcrypt_init = 0;
+
+    if (!bcrypt_init) {
+        HMODULE hBcrypt = LoadLibraryA("bcrypt.dll");
+        if (hBcrypt) {
+            pBCryptGenRandom = (BCryptGenRandomFn)GetProcAddress(hBcrypt, "BCryptGenRandom");
+        }
+        bcrypt_init = 1;
+    }
+
+    if (pBCryptGenRandom) {
+        NTSTATUS status = pBCryptGenRandom(NULL, buf, (unsigned long)len, 0x00000002);
+        if (status == 0) {
+            return 1;
+        }
+    }
+    return 0;
+#else
     static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
         RAND_poll();
-#ifdef _WIN32
-        if (RAND_status() != 1) {
-            uint8_t seed_buf[32];
-            HCRYPTPROV hProvider = 0;
-            if (CryptAcquireContextW(&hProvider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT)) {
-                if (CryptGenRandom(hProvider, sizeof(seed_buf), seed_buf)) {
-                    RAND_seed(seed_buf, sizeof(seed_buf));
-                }
-                CryptReleaseContext(hProvider, 0);
-            }
-        }
-#endif
         openssl_rng_seeded = 1;
     }
     int result = RAND_bytes(buf, (int)len);
@@ -132,6 +139,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
         ERR_clear_error();
     }
     return result;
+#endif
 #endif
 }
 

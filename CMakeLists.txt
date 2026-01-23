@@ -775,11 +775,6 @@ endif()
 # Link required libraries
 set(NOSTR_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 
-# Windows-specific libraries for CryptoAPI fallback RNG seeding
-if(WIN32)
-    list(APPEND NOSTR_LINK_LIBRARIES advapi32)
-endif()
-
 
 # Add optional libraries if they exist
 if(HAVE_CJSON)
