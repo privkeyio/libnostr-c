@@ -555,17 +555,15 @@ static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
     }
 
     for (size_t i = 0; i < src_count; i++) {
-        if (src[i]) {
-            (*dst)[i] = strdup(src[i]);
-            if (!(*dst)[i]) {
-                for (size_t j = 0; j < i; j++) {
-                    free((*dst)[j]);
-                }
-                free(*dst);
-                *dst = NULL;
-                *dst_count = 0;
-                return NOSTR_RELAY_ERR_MEMORY;
+        (*dst)[i] = strdup(src[i] ? src[i] : "");
+        if (!(*dst)[i]) {
+            for (size_t j = 0; j < i; j++) {
+                free((*dst)[j]);
             }
+            free(*dst);
+            *dst = NULL;
+            *dst_count = 0;
+            return NOSTR_RELAY_ERR_MEMORY;
         }
     }
 
@@ -581,7 +579,27 @@ nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t
 
     memset(dst, 0, sizeof(nostr_filter_t));
 
+    if (src->ids_count > 0 && !src->ids) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    if (src->authors_count > 0 && !src->authors) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
     if (src->kinds_count > 0 && !src->kinds) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    if (src->kinds_count > NOSTR_MAX_TAG_FILTER_VALUES) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    if (src->e_tags_count > 0 && !src->e_tags) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
+
+    if (src->p_tags_count > 0 && !src->p_tags) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
