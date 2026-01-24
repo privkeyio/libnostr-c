@@ -40,8 +40,23 @@ static int g_tests_failed_count = 0;
 
 #define TEST_ASSERT_EQUAL_STRING(expected, actual) \
     do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", expected, actual); \
+        const char* _exp = (expected); \
+        const char* _act = (actual); \
+        if (_exp == NULL && _act == NULL) { \
+            break; \
+        } \
+        if (_exp == NULL) { \
+            printf("String comparison failed: expected is NULL, actual='%s'\n", _act); \
+            g_test_failed = 1; \
+            return; \
+        } \
+        if (_act == NULL) { \
+            printf("String comparison failed: expected='%s', actual is NULL\n", _exp); \
+            g_test_failed = 1; \
+            return; \
+        } \
+        if (strcmp(_exp, _act) != 0) { \
+            printf("String comparison failed: '%s' != '%s'\n", _exp, _act); \
             g_test_failed = 1; \
             return; \
         } \

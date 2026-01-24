@@ -82,10 +82,20 @@ nostr_error_t nostr_repost_create(nostr_event** event, const char* reposted_even
     }
 
     if (d_tag) {
-        char a_value[256];
-        snprintf(a_value, sizeof(a_value), "%u:%s:%s", reposted_kind, reposted_pubkey, d_tag);
+        int needed = snprintf(NULL, 0, "%u:%s:%s", reposted_kind, reposted_pubkey, d_tag);
+        if (needed < 0) {
+            cleanup_event(event);
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+        char* a_value = malloc((size_t)needed + 1);
+        if (!a_value) {
+            cleanup_event(event);
+            return NOSTR_ERR_MEMORY;
+        }
+        snprintf(a_value, (size_t)needed + 1, "%u:%s:%s", reposted_kind, reposted_pubkey, d_tag);
         const char* a_tag[2] = {"a", a_value};
         err = nostr_event_add_tag(*event, a_tag, 2);
+        free(a_value);
         if (err != NOSTR_OK) {
             cleanup_event(event);
             return err;
@@ -162,22 +172,21 @@ static int is_bech32_char(char c)
 
 static const char* find_nostr_uri(const char* content, size_t* uri_len)
 {
-    const char* pos = strstr(content, NOSTR_URI_PREFIX);
-    if (!pos)
-        return NULL;
-
-    const char* start = pos + NOSTR_URI_PREFIX_LEN;
-    if (strncmp(start, "note1", 5) != 0 &&
-        strncmp(start, "nevent1", 7) != 0 &&
-        strncmp(start, "naddr1", 6) != 0)
-        return NULL;
-
-    const char* end = start;
-    while (*end && is_bech32_char(*end))
-        end++;
-
-    *uri_len = (size_t)(end - pos);
-    return pos;
+    const char* pos = content;
+    while ((pos = strstr(pos, NOSTR_URI_PREFIX)) != NULL) {
+        const char* start = pos + NOSTR_URI_PREFIX_LEN;
+        if (strncmp(start, "note1", 5) == 0 ||
+            strncmp(start, "nevent1", 7) == 0 ||
+            strncmp(start, "naddr1", 6) == 0) {
+            const char* end = start;
+            while (*end && is_bech32_char(*end))
+                end++;
+            *uri_len = (size_t)(end - pos);
+            return pos;
+        }
+        pos += NOSTR_URI_PREFIX_LEN;
+    }
+    return NULL;
 }
 
 nostr_error_t nostr_quote_tags_from_content(nostr_event* event)
