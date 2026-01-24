@@ -98,6 +98,7 @@ static const char* skip_json_whitespace(const char* p)
 static int parse_hex4(const char** pp)
 {
     const char* p = *pp;
+    if (!p[0] || !p[1] || !p[2] || !p[3]) return -1;
     unsigned int val = 0;
     for (int i = 0; i < 4; i++) {
         int d = hex_digit_value(p[i]);
