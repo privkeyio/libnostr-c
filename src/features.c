@@ -25,10 +25,6 @@ int nostr_feature_nip_supported(int nip_number)
         case 17:
             return 1;
 #endif
-#ifdef NOSTR_FEATURE_NIP18
-        case 18:
-            return 1;
-#endif
 #ifdef NOSTR_FEATURE_NIP25
         case 25:
             return 1;
@@ -138,9 +134,6 @@ const char* nostr_feature_list_enabled(void)
 #endif
 #ifdef NOSTR_FEATURE_NIP17
         APPEND_FEATURE(",nip17");
-#endif
-#ifdef NOSTR_FEATURE_NIP18
-        APPEND_FEATURE(",nip18");
 #endif
 #ifdef NOSTR_FEATURE_NIP25
         APPEND_FEATURE(",nip25");
