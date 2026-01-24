@@ -4,12 +4,11 @@
 #include <stdio.h>
 #include <limits.h>
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <bcrypt.h>
-#pragma comment(lib, "bcrypt.lib")
-#ifndef NT_SUCCESS
-#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
-#endif
+#define RtlGenRandom SystemFunction036
+BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
+#pragma comment(lib, "advapi32.lib")
 #endif
 #ifdef NOSTR_FEATURE_THREADING
 #ifndef _WIN32
@@ -114,8 +113,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
 #endif
 #else
 #ifdef _WIN32
-    NTSTATUS status = BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-    return NT_SUCCESS(status) ? 1 : 0;
+    return RtlGenRandom(buf, (ULONG)len) ? 1 : 0;
 #else
     if (RAND_status() != 1) {
         RAND_poll();
