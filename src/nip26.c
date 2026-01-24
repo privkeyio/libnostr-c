@@ -73,6 +73,7 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
 
     const char *p = conditions;
     size_t iterations = 0;
+    int parsed = 0;
 
     while (*p) {
         if (++iterations > NIP26_MAX_CONDITIONS) {
@@ -109,6 +110,7 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             out->kinds = new_kinds;
             out->kinds[out->kind_count++] = (uint16_t)val;
             p = endptr;
+            parsed++;
         }
         else if (strncmp(p, "created_at>", 11) == 0) {
             p += 11;
@@ -122,6 +124,7 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             out->created_after = (int64_t)val;
             out->has_created_after = 1;
             p = endptr;
+            parsed++;
         }
         else if (strncmp(p, "created_at<", 11) == 0) {
             p += 11;
@@ -135,11 +138,17 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             out->created_before = (int64_t)val;
             out->has_created_before = 1;
             p = endptr;
+            parsed++;
         }
         else {
             cleanup_conditions(out);
             return 0;
         }
+    }
+
+    if (parsed == 0) {
+        cleanup_conditions(out);
+        return 0;
     }
 
     return 1;
