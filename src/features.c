@@ -45,6 +45,10 @@ int nostr_feature_nip_supported(int nip_number)
         case 49:
             return 1;
 #endif
+#ifdef NOSTR_FEATURE_NIP51
+        case 51:
+            return 1;
+#endif
 #ifdef NOSTR_FEATURE_NIP57
         case 57:
             return 1;
@@ -145,6 +149,9 @@ const char* nostr_feature_list_enabled(void)
 #endif
 #ifdef NOSTR_FEATURE_NIP49
         APPEND_FEATURE(",nip49");
+#endif
+#ifdef NOSTR_FEATURE_NIP51
+        APPEND_FEATURE(",nip51");
 #endif
 #ifdef NOSTR_FEATURE_NIP57
         APPEND_FEATURE(",nip57");
