@@ -182,6 +182,19 @@ nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_
         filter->limit = limit->valueint;
     }
 
+    cJSON* search = cJSON_GetObjectItem(root, "search");
+    if (search && cJSON_IsString(search) && search->valuestring) {
+        if (strlen(search->valuestring) > NOSTR_DEFAULT_MAX_CONTENT_LENGTH) {
+            err = NOSTR_RELAY_ERR_INVALID_JSON;
+            goto cleanup;
+        }
+        filter->search = strdup(search->valuestring);
+        if (!filter->search) {
+            err = NOSTR_RELAY_ERR_MEMORY;
+            goto cleanup;
+        }
+    }
+
     cJSON_Delete(root);
     return NOSTR_RELAY_OK;
 
@@ -249,6 +262,8 @@ void nostr_filter_free(nostr_filter_t* filter)
         free(filter->generic_tags);
     }
 
+    free(filter->search);
+
     memset(filter, 0, sizeof(nostr_filter_t));
 }
 
@@ -304,6 +319,17 @@ nostr_relay_error_t nostr_filter_validate(const nostr_filter_t* filter, nostr_va
             strncpy(result->error_message, "invalid pubkey in #p filter", sizeof(result->error_message) - 1);
             strncpy(result->error_field, "#p", sizeof(result->error_field) - 1);
             return NOSTR_RELAY_ERR_INVALID_PUBKEY;
+        }
+    }
+
+    if (filter->search) {
+        size_t search_len = strlen(filter->search);
+        if (search_len > NOSTR_DEFAULT_MAX_CONTENT_LENGTH) {
+            result->valid = false;
+            result->error_code = NOSTR_RELAY_ERR_INVALID_CONTENT;
+            strncpy(result->error_message, "search query too long", sizeof(result->error_message) - 1);
+            strncpy(result->error_field, "search", sizeof(result->error_field) - 1);
+            return NOSTR_RELAY_ERR_INVALID_CONTENT;
         }
     }
 
@@ -419,12 +445,37 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
     return true;
 }
 
+bool nostr_filter_matches_with_search(const nostr_filter_t* filter, const nostr_event* event,
+                                      nostr_search_callback_t search_cb, void* user_data)
+{
+    if (!nostr_filter_matches(filter, event))
+        return false;
+
+    if (filter->search && filter->search[0] != '\0')
+        return search_cb && search_cb(filter->search, event, user_data);
+
+    return true;
+}
+
 bool nostr_filters_match(const nostr_filter_t* filters, size_t count, const nostr_event* event)
 {
     if (!filters || count == 0 || !event) return false;
 
     for (size_t i = 0; i < count; i++) {
         if (nostr_filter_matches(&filters[i], event)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool nostr_filters_match_with_search(const nostr_filter_t* filters, size_t count, const nostr_event* event,
+                                     nostr_search_callback_t search_cb, void* user_data)
+{
+    if (!filters || count == 0 || !event) return false;
+
+    for (size_t i = 0; i < count; i++) {
+        if (nostr_filter_matches_with_search(&filters[i], event, search_cb, user_data)) {
             return true;
         }
     }
@@ -535,6 +586,18 @@ int32_t nostr_filter_get_limit(const nostr_filter_t* filter)
     return filter->limit;
 }
 
+const char* nostr_filter_get_search(const nostr_filter_t* filter)
+{
+    if (!filter) return NULL;
+    return filter->search;
+}
+
+bool nostr_filter_has_search(const nostr_filter_t* filter)
+{
+    if (!filter) return false;
+    return filter->search != NULL && filter->search[0] != '\0';
+}
+
 static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
                                                char** src, size_t src_count)
 {
@@ -630,6 +693,14 @@ nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t
     dst->since = src->since;
     dst->until = src->until;
     dst->limit = src->limit;
+
+    if (src->search) {
+        dst->search = strdup(src->search);
+        if (!dst->search) {
+            err = NOSTR_RELAY_ERR_MEMORY;
+            goto cleanup;
+        }
+    }
 
     return NOSTR_RELAY_OK;
 

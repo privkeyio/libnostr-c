@@ -130,6 +130,10 @@ if(NOSTR_FEATURE_RELAY_PROTOCOL)
     add_executable(test_filter_clone test_filter_clone.c)
     target_link_libraries(test_filter_clone nostr_static)
     add_test(NAME filter_clone_tests COMMAND test_filter_clone)
+
+    add_executable(test_nip50 test_nip50.c)
+    target_link_libraries(test_nip50 nostr_static)
+    add_test(NAME nip50_tests COMMAND test_nip50)
 endif()
 
 target_link_libraries(test_runner nostr_static)

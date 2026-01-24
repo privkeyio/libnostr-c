@@ -110,7 +110,7 @@ typedef struct {
 } nostr_generic_tag_filter_t;
 
 /**
- * @brief Filter structure for subscription matching (NIP-01)
+ * @brief Filter structure for subscription matching (NIP-01, NIP-50)
  */
 typedef struct {
     char** ids;                 /**< Event ID prefixes to match */
@@ -128,7 +128,17 @@ typedef struct {
     int64_t since;              /**< Minimum created_at (0 = no limit) */
     int64_t until;              /**< Maximum created_at (0 = no limit) */
     int32_t limit;              /**< Max events to return (0 = no limit) */
+    char* search;               /**< NIP-50: search query string (NULL = no search) */
 } nostr_filter_t;
+
+/**
+ * @brief Search matching callback for NIP-50 support
+ * @param query The search query string from the filter
+ * @param event The event to match against
+ * @param user_data User-provided context data
+ * @return true if event matches the search query, false otherwise
+ */
+typedef bool (*nostr_search_callback_t)(const char* query, const nostr_event* event, void* user_data);
 
 /* ============================================================================
  * Client Message Types and Structures
@@ -246,8 +256,22 @@ nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_
  * @param filter Filter to check against
  * @param event Event to check
  * @return true if event matches filter, false otherwise
+ * @note Search field (NIP-50) is ignored. Use nostr_filter_matches_with_search for search support.
  */
 bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event);
+
+/**
+ * @brief Check if an event matches a filter with optional search callback (NIP-50)
+ * @param filter Filter to check against
+ * @param event Event to check
+ * @param search_cb Callback for search matching. If NULL and filter has a non-empty search
+ *                  field, the function returns false (no match). If filter has no search
+ *                  field, callback is not invoked.
+ * @param user_data User data passed to search callback
+ * @return true if event matches filter, false otherwise
+ */
+bool nostr_filter_matches_with_search(const nostr_filter_t* filter, const nostr_event* event,
+                                      nostr_search_callback_t search_cb, void* user_data);
 
 /**
  * @brief Check if an event matches any filter in an array (OR logic)
@@ -255,8 +279,22 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
  * @param count Number of filters
  * @param event Event to check
  * @return true if event matches any filter, false otherwise
+ * @note Search fields (NIP-50) are ignored. Use nostr_filters_match_with_search for search support.
  */
 bool nostr_filters_match(const nostr_filter_t* filters, size_t count, const nostr_event* event);
+
+/**
+ * @brief Check if an event matches any filter with optional search callback (NIP-50)
+ * @param filters Array of filters
+ * @param count Number of filters
+ * @param event Event to check
+ * @param search_cb Callback for search matching. If NULL, filters with non-empty search
+ *                  fields will not match. Filters without search fields are unaffected.
+ * @param user_data User data passed to search callback
+ * @return true if event matches any filter, false otherwise
+ */
+bool nostr_filters_match_with_search(const nostr_filter_t* filters, size_t count, const nostr_event* event,
+                                     nostr_search_callback_t search_cb, void* user_data);
 
 /**
  * @brief Validate a filter structure
@@ -837,6 +875,20 @@ int64_t nostr_filter_get_until(const nostr_filter_t* filter);
  * @return Limit (0 if not specified)
  */
 int32_t nostr_filter_get_limit(const nostr_filter_t* filter);
+
+/**
+ * @brief Get search query (NIP-50)
+ * @param filter Filter to query
+ * @return Search query string (NULL if not specified)
+ */
+const char* nostr_filter_get_search(const nostr_filter_t* filter);
+
+/**
+ * @brief Check if filter has a search query (NIP-50)
+ * @param filter Filter to query
+ * @return true if filter has search field, false otherwise
+ */
+bool nostr_filter_has_search(const nostr_filter_t* filter);
 
 /* ============================================================================
  * Client Message Accessor Functions
