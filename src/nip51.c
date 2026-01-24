@@ -177,21 +177,25 @@ static nostr_error_t set_string_field(nostr_list* list, char** field, const char
 
 nostr_error_t nostr_list_set_d_tag(nostr_list* list, const char* d_tag)
 {
+    if (!list) return NOSTR_ERR_INVALID_PARAM;
     return set_string_field(list, &list->d_tag, d_tag);
 }
 
 nostr_error_t nostr_list_set_title(nostr_list* list, const char* title)
 {
+    if (!list) return NOSTR_ERR_INVALID_PARAM;
     return set_string_field(list, &list->title, title);
 }
 
 nostr_error_t nostr_list_set_description(nostr_list* list, const char* description)
 {
+    if (!list) return NOSTR_ERR_INVALID_PARAM;
     return set_string_field(list, &list->description, description);
 }
 
 nostr_error_t nostr_list_set_image(nostr_list* list, const char* image)
 {
+    if (!list) return NOSTR_ERR_INVALID_PARAM;
     return set_string_field(list, &list->image, image);
 }
 
