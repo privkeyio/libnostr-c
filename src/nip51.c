@@ -17,8 +17,10 @@ static size_t json_escaped_len(const char* s)
     size_t len = 0;
     for (const char* p = s; *p; p++) {
         unsigned char c = (unsigned char)*p;
-        if (c == '"' || c == '\\' || c < 0x20) {
+        if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t') {
             len += 2;
+        } else if (c < 0x20) {
+            len += 6;
         } else {
             len += 1;
         }
@@ -40,7 +42,11 @@ static void json_escape_to(char* dest, const char* src)
         default:
             if (c < 0x20) {
                 *dest++ = '\\';
-                *dest++ = 'n';
+                *dest++ = 'u';
+                *dest++ = '0';
+                *dest++ = '0';
+                *dest++ = "0123456789abcdef"[c >> 4];
+                *dest++ = "0123456789abcdef"[c & 0x0f];
             } else {
                 *dest++ = c;
             }
