@@ -7,6 +7,9 @@
 #include <windows.h>
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#endif
 #endif
 #ifdef NOSTR_FEATURE_THREADING
 #ifndef _WIN32
