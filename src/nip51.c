@@ -462,9 +462,16 @@ nostr_error_t nostr_list_to_event(const nostr_list* list, const nostr_keypair* k
             goto cleanup;
         }
 
+        const unsigned char* priv_key = nostr_keypair_private_key(keypair);
+        const unsigned char* pub_key = nostr_keypair_public_key(keypair);
+        if (!priv_key || !pub_key) {
+            free(private_json);
+            err = NOSTR_ERR_INVALID_PARAM;
+            goto cleanup;
+        }
+
         char* encrypted = NULL;
-        err = nostr_nip44_encrypt(nostr_keypair_private_key(keypair),
-                                  nostr_keypair_public_key(keypair),
+        err = nostr_nip44_encrypt(priv_key, pub_key,
                                   private_json, strlen(private_json), &encrypted);
         free(private_json);
 
@@ -708,11 +715,17 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
 
     if (event->content && strlen(event->content) > 0 && keypair) {
 #ifdef NOSTR_FEATURE_NIP44
+        const unsigned char* priv_key = nostr_keypair_private_key(keypair);
+        const unsigned char* pub_key = nostr_keypair_public_key(keypair);
+        if (!priv_key || !pub_key) {
+            err = NOSTR_ERR_INVALID_PARAM;
+            goto cleanup;
+        }
+
         char* decrypted = NULL;
         size_t decrypted_len = 0;
 
-        err = nostr_nip44_decrypt(nostr_keypair_private_key(keypair),
-                                  nostr_keypair_public_key(keypair),
+        err = nostr_nip44_decrypt(priv_key, pub_key,
                                   event->content, &decrypted, &decrypted_len);
 
         if (err != NOSTR_OK) {
