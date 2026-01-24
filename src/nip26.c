@@ -391,9 +391,6 @@ nostr_error_t nostr_event_get_delegation(const nostr_event *event,
             if (!is_valid_hex(token_hex, 128))
                 return NOSTR_ERR_INVALID_EVENT;
 
-            if (strlen(conditions) > NIP26_MAX_CONDITIONS_LEN)
-                return NOSTR_ERR_INVALID_EVENT;
-
             if (nostr_hex_decode(delegator_hex, delegation->delegator_pubkey.data, 32) != 32)
                 return NOSTR_ERR_INVALID_EVENT;
 
