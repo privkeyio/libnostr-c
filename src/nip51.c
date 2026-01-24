@@ -61,6 +61,20 @@ static bool is_parameterized_list(uint16_t kind)
     return kind >= 30000 && kind < 40000;
 }
 
+static bool is_valid_hex64(const char* s)
+{
+    if (!s || strlen(s) != 64) {
+        return false;
+    }
+    for (size_t i = 0; i < 64; i++) {
+        char c = s[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void free_item(nostr_list_item* item)
 {
     if (!item) {
@@ -210,7 +224,7 @@ static nostr_error_t add_item(nostr_list* list, const char* tag_type, const char
 nostr_error_t nostr_list_add_pubkey(nostr_list* list, const char* pubkey,
                                     const char* relay_hint, const char* petname, bool is_private)
 {
-    if (!pubkey || strlen(pubkey) != 64) {
+    if (!is_valid_hex64(pubkey)) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     return add_item(list, "p", pubkey, relay_hint, petname, is_private);
@@ -219,7 +233,7 @@ nostr_error_t nostr_list_add_pubkey(nostr_list* list, const char* pubkey,
 nostr_error_t nostr_list_add_event(nostr_list* list, const char* event_id,
                                    const char* relay_hint, bool is_private)
 {
-    if (!event_id || strlen(event_id) != 64) {
+    if (!is_valid_hex64(event_id)) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     return add_item(list, "e", event_id, relay_hint, NULL, is_private);
@@ -462,8 +476,8 @@ nostr_error_t nostr_list_to_event(const nostr_list* list, const nostr_keypair* k
             goto cleanup;
         }
 
-        const unsigned char* priv_key = nostr_keypair_private_key(keypair);
-        const unsigned char* pub_key = nostr_keypair_public_key(keypair);
+        const nostr_privkey* priv_key = nostr_keypair_private_key(keypair);
+        const nostr_key* pub_key = nostr_keypair_public_key(keypair);
         if (!priv_key || !pub_key) {
             free(private_json);
             err = NOSTR_ERR_INVALID_PARAM;
@@ -599,6 +613,41 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                             p++;
                         }
                         if (hex_count == 4) {
+                            if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
+                                if (p[0] == '\\' && p[1] == 'u') {
+                                    p += 2;
+                                    unsigned int low_surrogate = 0;
+                                    int low_count = 0;
+                                    for (int i = 0; i < 4 && *p; i++) {
+                                        char c = *p;
+                                        unsigned int digit;
+                                        if (c >= '0' && c <= '9') {
+                                            digit = c - '0';
+                                        } else if (c >= 'a' && c <= 'f') {
+                                            digit = 10 + (c - 'a');
+                                        } else if (c >= 'A' && c <= 'F') {
+                                            digit = 10 + (c - 'A');
+                                        } else {
+                                            break;
+                                        }
+                                        low_surrogate = (low_surrogate << 4) | digit;
+                                        low_count++;
+                                        p++;
+                                    }
+                                    if (low_count == 4 && low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+                                        codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + (low_surrogate - 0xDC00);
+                                    } else {
+                                        if (len < max_len) dest[len++] = '?';
+                                        continue;
+                                    }
+                                } else {
+                                    if (len < max_len) dest[len++] = '?';
+                                    continue;
+                                }
+                            } else if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) {
+                                if (len < max_len) dest[len++] = '?';
+                                continue;
+                            }
                             if (codepoint <= 0x7F) {
                                 if (len < max_len) {
                                     dest[len++] = (char)codepoint;
@@ -612,7 +661,7 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                                 } else {
                                     truncated = true;
                                 }
-                            } else {
+                            } else if (codepoint <= 0xFFFF) {
                                 if (len + 3 <= max_len) {
                                     dest[len++] = (char)(0xE0 | (codepoint >> 12));
                                     dest[len++] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
@@ -620,6 +669,17 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                                 } else {
                                     truncated = true;
                                 }
+                            } else if (codepoint <= 0x10FFFF) {
+                                if (len + 4 <= max_len) {
+                                    dest[len++] = (char)(0xF0 | (codepoint >> 18));
+                                    dest[len++] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+                                    dest[len++] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+                                    dest[len++] = (char)(0x80 | (codepoint & 0x3F));
+                                } else {
+                                    truncated = true;
+                                }
+                            } else {
+                                if (len < max_len) dest[len++] = '?';
                             }
                         } else {
                             if (len < max_len) dest[len++] = '?';
@@ -715,8 +775,8 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
 
     if (event->content && strlen(event->content) > 0 && keypair) {
 #ifdef NOSTR_FEATURE_NIP44
-        const unsigned char* priv_key = nostr_keypair_private_key(keypair);
-        const unsigned char* pub_key = nostr_keypair_public_key(keypair);
+        const nostr_privkey* priv_key = nostr_keypair_private_key(keypair);
+        const nostr_key* pub_key = nostr_keypair_public_key(keypair);
         if (!priv_key || !pub_key) {
             err = NOSTR_ERR_INVALID_PARAM;
             goto cleanup;
