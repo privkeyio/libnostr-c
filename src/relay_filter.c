@@ -440,12 +440,8 @@ bool nostr_filter_matches_with_search(const nostr_filter_t* filter, const nostr_
     if (!nostr_filter_matches(filter, event))
         return false;
 
-    if (filter->search && filter->search[0] != '\0') {
-        if (!search_cb)
-            return false;
-        if (!search_cb(filter->search, event, user_data))
-            return false;
-    }
+    if (filter->search && filter->search[0] != '\0')
+        return search_cb && search_cb(filter->search, event, user_data);
 
     return true;
 }

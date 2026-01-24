@@ -85,7 +85,7 @@ void tearDown(void) {}
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
-static bool test_search_callback_contains(const char* query, const nostr_event* event, void* user_data)
+static bool search_cb_contains(const char* query, const nostr_event* event, void* user_data)
 {
     (void)user_data;
     if (!query || !event || !event->content)
@@ -93,15 +93,7 @@ static bool test_search_callback_contains(const char* query, const nostr_event* 
     return strstr(event->content, query) != NULL;
 }
 
-static bool test_search_callback_always_true(const char* query, const nostr_event* event, void* user_data)
-{
-    (void)query;
-    (void)event;
-    (void)user_data;
-    return true;
-}
-
-static bool test_search_callback_always_false(const char* query, const nostr_event* event, void* user_data)
+static bool search_cb_always_false(const char* query, const nostr_event* event, void* user_data)
 {
     (void)query;
     (void)event;
@@ -109,7 +101,7 @@ static bool test_search_callback_always_false(const char* query, const nostr_eve
     return false;
 }
 
-void test_filter_parse_search(void)
+static void test_filter_parse_search(void)
 {
     const char* json = "{\"search\":\"best nostr apps\",\"kinds\":[1]}";
     nostr_filter_t filter;
@@ -124,7 +116,7 @@ void test_filter_parse_search(void)
     nostr_filter_free(&filter);
 }
 
-void test_filter_parse_no_search(void)
+static void test_filter_parse_no_search(void)
 {
     const char* json = "{\"kinds\":[1]}";
     nostr_filter_t filter;
@@ -137,7 +129,7 @@ void test_filter_parse_no_search(void)
     nostr_filter_free(&filter);
 }
 
-void test_filter_parse_empty_search(void)
+static void test_filter_parse_empty_search(void)
 {
     const char* json = "{\"search\":\"\",\"kinds\":[1]}";
     nostr_filter_t filter;
@@ -151,7 +143,7 @@ void test_filter_parse_empty_search(void)
     nostr_filter_free(&filter);
 }
 
-void test_filter_get_search(void)
+static void test_filter_get_search(void)
 {
     const char* json = "{\"search\":\"bitcoin lightning\"}";
     nostr_filter_t filter;
@@ -165,14 +157,14 @@ void test_filter_get_search(void)
     nostr_filter_free(&filter);
 }
 
-void test_filter_get_search_null_filter(void)
+static void test_filter_get_search_null_filter(void)
 {
     const char* search = nostr_filter_get_search(NULL);
     TEST_ASSERT_NULL(search);
     TEST_ASSERT_FALSE(nostr_filter_has_search(NULL));
 }
 
-void test_filter_clone_with_search(void)
+static void test_filter_clone_with_search(void)
 {
     nostr_filter_t src;
     nostr_filter_t dst;
@@ -193,7 +185,7 @@ void test_filter_clone_with_search(void)
     free(src.search);
 }
 
-void test_filter_clone_no_search(void)
+static void test_filter_clone_no_search(void)
 {
     nostr_filter_t src;
     nostr_filter_t dst;
@@ -206,7 +198,7 @@ void test_filter_clone_no_search(void)
     nostr_filter_free(&dst);
 }
 
-void test_filter_matches_with_search_callback(void)
+static void test_filter_matches_with_search_callback(void)
 {
     nostr_filter_t filter;
     memset(&filter, 0, sizeof(filter));
@@ -219,17 +211,17 @@ void test_filter_matches_with_search_callback(void)
     nostr_event_set_content(event, "hello world");
 
     TEST_ASSERT_TRUE(nostr_filter_matches_with_search(&filter, event,
-                                                       test_search_callback_contains, NULL));
+                                                       search_cb_contains, NULL));
 
     nostr_event_set_content(event, "goodbye world");
     TEST_ASSERT_FALSE(nostr_filter_matches_with_search(&filter, event,
-                                                        test_search_callback_contains, NULL));
+                                                        search_cb_contains, NULL));
 
     nostr_event_destroy(event);
     free(filter.search);
 }
 
-void test_filter_matches_with_search_no_callback(void)
+static void test_filter_matches_with_search_no_callback(void)
 {
     nostr_filter_t filter;
     memset(&filter, 0, sizeof(filter));
@@ -247,7 +239,7 @@ void test_filter_matches_with_search_no_callback(void)
     free(filter.search);
 }
 
-void test_filter_matches_with_search_empty_search(void)
+static void test_filter_matches_with_search_empty_search(void)
 {
     nostr_filter_t filter;
     memset(&filter, 0, sizeof(filter));
@@ -264,7 +256,7 @@ void test_filter_matches_with_search_empty_search(void)
     free(filter.search);
 }
 
-void test_filter_matches_without_search(void)
+static void test_filter_matches_without_search(void)
 {
     nostr_filter_t filter;
     memset(&filter, 0, sizeof(filter));
@@ -279,12 +271,12 @@ void test_filter_matches_without_search(void)
 
     TEST_ASSERT_TRUE(nostr_filter_matches_with_search(&filter, event, NULL, NULL));
     TEST_ASSERT_TRUE(nostr_filter_matches_with_search(&filter, event,
-                                                       test_search_callback_always_false, NULL));
+                                                       search_cb_always_false, NULL));
 
     nostr_event_destroy(event);
 }
 
-void test_filter_matches_search_with_kind_filter(void)
+static void test_filter_matches_search_with_kind_filter(void)
 {
     nostr_filter_t filter;
     memset(&filter, 0, sizeof(filter));
@@ -300,17 +292,17 @@ void test_filter_matches_search_with_kind_filter(void)
     nostr_event_set_content(event, "I love nostr");
 
     TEST_ASSERT_TRUE(nostr_filter_matches_with_search(&filter, event,
-                                                       test_search_callback_contains, NULL));
+                                                       search_cb_contains, NULL));
 
     event->kind = 7;
     TEST_ASSERT_FALSE(nostr_filter_matches_with_search(&filter, event,
-                                                        test_search_callback_contains, NULL));
+                                                        search_cb_contains, NULL));
 
     nostr_event_destroy(event);
     free(filter.search);
 }
 
-void test_filters_match_with_search(void)
+static void test_filters_match_with_search(void)
 {
     nostr_filter_t filters[2];
     memset(filters, 0, sizeof(filters));
@@ -330,21 +322,21 @@ void test_filters_match_with_search(void)
     nostr_event_set_content(event, "I love bitcoin");
 
     TEST_ASSERT_TRUE(nostr_filters_match_with_search(filters, 2, event,
-                                                      test_search_callback_contains, NULL));
+                                                      search_cb_contains, NULL));
 
     nostr_event_set_content(event, "I love ethereum");
     TEST_ASSERT_FALSE(nostr_filters_match_with_search(filters, 2, event,
-                                                       test_search_callback_contains, NULL));
+                                                       search_cb_contains, NULL));
 
     event->kind = 7;
     TEST_ASSERT_TRUE(nostr_filters_match_with_search(filters, 2, event,
-                                                      test_search_callback_contains, NULL));
+                                                      search_cb_contains, NULL));
 
     nostr_event_destroy(event);
     free(filters[0].search);
 }
 
-void test_filter_matches_basic_still_works(void)
+static void test_filter_matches_basic_still_works(void)
 {
     nostr_filter_t filter;
     memset(&filter, 0, sizeof(filter));
@@ -364,7 +356,7 @@ void test_filter_matches_basic_still_works(void)
     free(filter.search);
 }
 
-void test_client_msg_parse_req_with_search(void)
+static void test_client_msg_parse_req_with_search(void)
 {
     const char* json = "[\"REQ\",\"sub1\",{\"search\":\"best apps\",\"kinds\":[1]}]";
     nostr_client_msg_t msg;
@@ -381,7 +373,7 @@ void test_client_msg_parse_req_with_search(void)
     nostr_client_msg_free(&msg);
 }
 
-void test_client_msg_parse_multiple_filters_with_search(void)
+static void test_client_msg_parse_multiple_filters_with_search(void)
 {
     const char* json = "[\"REQ\",\"sub1\",{\"search\":\"orange\"},{\"kinds\":[1,2],\"search\":\"purple\"}]";
     nostr_client_msg_t msg;
@@ -397,7 +389,7 @@ void test_client_msg_parse_multiple_filters_with_search(void)
     nostr_client_msg_free(&msg);
 }
 
-void test_search_with_extensions(void)
+static void test_search_with_extensions(void)
 {
     const char* json = "{\"search\":\"best nostr apps language:en include:spam\"}";
     nostr_filter_t filter;
