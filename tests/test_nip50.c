@@ -162,7 +162,8 @@ static void test_filter_get_search(void)
 {
     const char* json = "{\"search\":\"bitcoin lightning\"}";
     nostr_filter_t filter;
-    nostr_filter_parse(json, strlen(json), &filter);
+    nostr_relay_error_t rc = nostr_filter_parse(json, strlen(json), &filter);
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, rc);
 
     const char* search = nostr_filter_get_search(&filter);
     TEST_ASSERT_NOT_NULL(search);
