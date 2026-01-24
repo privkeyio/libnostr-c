@@ -26,7 +26,7 @@ void run_nip21_tests(void);
 void run_relay_tests(void);
 void run_zap_tests(void);
 void run_nip10_tests(void);
-void run_nip18_tests(void);
+int run_nip18_tests(void);
 void run_nip25_tests(void);
 void run_utils_tests(void);
 void run_coverage_tests(void);
