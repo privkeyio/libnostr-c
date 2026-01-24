@@ -131,6 +131,13 @@ typedef struct {
     char* search;               /**< NIP-50: search query string (NULL = no search) */
 } nostr_filter_t;
 
+/**
+ * @brief Search matching callback for NIP-50 support
+ * @param query The search query string from the filter
+ * @param event The event to match against
+ * @param user_data User-provided context data
+ * @return true if event matches the search query, false otherwise
+ */
 typedef bool (*nostr_search_callback_t)(const char* query, const nostr_event* event, void* user_data);
 
 /* ============================================================================
@@ -257,7 +264,9 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
  * @brief Check if an event matches a filter with optional search callback (NIP-50)
  * @param filter Filter to check against
  * @param event Event to check
- * @param search_cb Callback for search matching (may be NULL if filter has no search)
+ * @param search_cb Callback for search matching. If NULL and filter has a non-empty search
+ *                  field, the function returns false (no match). If filter has no search
+ *                  field, callback is not invoked.
  * @param user_data User data passed to search callback
  * @return true if event matches filter, false otherwise
  */
@@ -279,7 +288,8 @@ bool nostr_filters_match(const nostr_filter_t* filters, size_t count, const nost
  * @param filters Array of filters
  * @param count Number of filters
  * @param event Event to check
- * @param search_cb Callback for search matching (may be NULL if no filters have search)
+ * @param search_cb Callback for search matching. If NULL, filters with non-empty search
+ *                  fields will not match. Filters without search fields are unaffected.
  * @param user_data User data passed to search callback
  * @return true if event matches any filter, false otherwise
  */

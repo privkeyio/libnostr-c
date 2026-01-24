@@ -322,6 +322,17 @@ nostr_relay_error_t nostr_filter_validate(const nostr_filter_t* filter, nostr_va
         }
     }
 
+    if (filter->search) {
+        size_t search_len = strlen(filter->search);
+        if (search_len > NOSTR_DEFAULT_MAX_CONTENT_LENGTH) {
+            result->valid = false;
+            result->error_code = NOSTR_RELAY_ERR_INVALID_CONTENT;
+            strncpy(result->error_message, "search query too long", sizeof(result->error_message) - 1);
+            strncpy(result->error_field, "search", sizeof(result->error_field) - 1);
+            return NOSTR_RELAY_ERR_INVALID_CONTENT;
+        }
+    }
+
     return NOSTR_RELAY_OK;
 }
 
