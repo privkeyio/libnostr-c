@@ -1477,6 +1477,69 @@ nostr_error_t nostr_event_verify_delegation(const nostr_event* event);
  */
 void nostr_delegation_free(nostr_delegation* delegation);
 
+typedef enum {
+    NOSTR_LIST_KIND_MUTE = 10000,
+    NOSTR_LIST_KIND_PIN = 10001,
+    NOSTR_LIST_KIND_BOOKMARK = 10003,
+    NOSTR_LIST_KIND_COMMUNITIES = 10004,
+    NOSTR_LIST_KIND_PUBLIC_CHATS = 10005,
+    NOSTR_LIST_KIND_BLOCKED_RELAYS = 10006,
+    NOSTR_LIST_KIND_SEARCH_RELAYS = 10007,
+    NOSTR_LIST_KIND_INTERESTS = 10015,
+    NOSTR_LIST_KIND_EMOJIS = 10030,
+    NOSTR_LIST_KIND_FOLLOW_SET = 30000,
+    NOSTR_LIST_KIND_RELAY_SET = 30002,
+    NOSTR_LIST_KIND_BOOKMARK_SET = 30003,
+    NOSTR_LIST_KIND_CURATION_SET = 30004,
+    NOSTR_LIST_KIND_INTEREST_SET = 30015
+} nostr_list_kind;
+
+typedef struct nostr_list_item {
+    char* tag_type;
+    char* value;
+    char* relay_hint;
+    char* petname;
+    bool is_private;
+} nostr_list_item;
+
+typedef struct nostr_list {
+    uint16_t kind;
+    char* d_tag;
+    char* title;
+    char* description;
+    char* image;
+    nostr_list_item* items;
+    size_t item_count;
+    size_t item_capacity;
+} nostr_list;
+
+nostr_error_t nostr_list_create(nostr_list** list, uint16_t kind);
+void nostr_list_free(nostr_list* list);
+
+nostr_error_t nostr_list_set_d_tag(nostr_list* list, const char* d_tag);
+nostr_error_t nostr_list_set_title(nostr_list* list, const char* title);
+nostr_error_t nostr_list_set_description(nostr_list* list, const char* description);
+nostr_error_t nostr_list_set_image(nostr_list* list, const char* image);
+
+nostr_error_t nostr_list_add_pubkey(nostr_list* list, const char* pubkey,
+                                    const char* relay_hint, const char* petname, bool is_private);
+nostr_error_t nostr_list_add_event(nostr_list* list, const char* event_id,
+                                   const char* relay_hint, bool is_private);
+nostr_error_t nostr_list_add_hashtag(nostr_list* list, const char* hashtag, bool is_private);
+nostr_error_t nostr_list_add_word(nostr_list* list, const char* word, bool is_private);
+nostr_error_t nostr_list_add_relay(nostr_list* list, const char* relay_url, bool is_private);
+nostr_error_t nostr_list_add_reference(nostr_list* list, const char* reference,
+                                       const char* relay_hint, bool is_private);
+
+nostr_error_t nostr_list_to_event(const nostr_list* list, const nostr_keypair* keypair,
+                                  nostr_event** event);
+nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypair* keypair,
+                                    nostr_list** list);
+
+size_t nostr_list_count(const nostr_list* list);
+const nostr_list_item* nostr_list_get(const nostr_list* list, size_t index);
+nostr_error_t nostr_list_remove(nostr_list* list, size_t index);
+
 #ifdef __cplusplus
 }
 #endif
