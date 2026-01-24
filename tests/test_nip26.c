@@ -427,8 +427,7 @@ int run_nip26_tests(void)
 int main(void)
 {
     printf("Running NIP-26 tests...\n\n");
-    int result = run_nip26_tests();
-    return result;
+    return run_nip26_tests();
 }
 #endif
 

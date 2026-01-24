@@ -50,18 +50,16 @@ static int is_valid_hex(const char *str, size_t expected_len)
     return 1;
 }
 
-static int is_valid_hex_pubkey(const char *str)
-{
-    return is_valid_hex(str, 64);
-}
-
-static int is_valid_hex_token(const char *str)
-{
-    return is_valid_hex(str, 128);
-}
-
 #define NIP26_MAX_CONDITIONS 100
 #define NIP26_MAX_KINDS 256
+#define NIP26_MAX_CONDITIONS_LEN 4096
+
+static void cleanup_conditions(nostr_delegation_conditions *out)
+{
+    free(out->kinds);
+    out->kinds = NULL;
+    out->kind_count = 0;
+}
 
 static int parse_delegation_conditions(const char *conditions, nostr_delegation_conditions *out)
 {
@@ -69,17 +67,13 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
         return 0;
 
     memset(out, 0, sizeof(*out));
-    out->kinds = NULL;
-    out->kind_count = 0;
 
     const char *p = conditions;
     size_t iterations = 0;
 
     while (*p) {
         if (++iterations > NIP26_MAX_CONDITIONS) {
-            free(out->kinds);
-            out->kinds = NULL;
-            out->kind_count = 0;
+            cleanup_conditions(out);
             return 0;
         }
 
@@ -95,24 +89,18 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             errno = 0;
             unsigned long val = strtoul(p, &endptr, 10);
             if (errno != 0 || endptr == p || val > UINT16_MAX) {
-                free(out->kinds);
-                out->kinds = NULL;
-                out->kind_count = 0;
+                cleanup_conditions(out);
                 return 0;
             }
 
             if (out->kind_count >= NIP26_MAX_KINDS) {
-                free(out->kinds);
-                out->kinds = NULL;
-                out->kind_count = 0;
+                cleanup_conditions(out);
                 return 0;
             }
 
             uint16_t *new_kinds = realloc(out->kinds, sizeof(uint16_t) * (out->kind_count + 1));
             if (!new_kinds) {
-                free(out->kinds);
-                out->kinds = NULL;
-                out->kind_count = 0;
+                cleanup_conditions(out);
                 return 0;
             }
             out->kinds = new_kinds;
@@ -125,9 +113,7 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             errno = 0;
             long long val = strtoll(p, &endptr, 10);
             if (errno != 0 || endptr == p) {
-                free(out->kinds);
-                out->kinds = NULL;
-                out->kind_count = 0;
+                cleanup_conditions(out);
                 return 0;
             }
             out->created_after = (int64_t)val;
@@ -140,9 +126,7 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             errno = 0;
             long long val = strtoll(p, &endptr, 10);
             if (errno != 0 || endptr == p) {
-                free(out->kinds);
-                out->kinds = NULL;
-                out->kind_count = 0;
+                cleanup_conditions(out);
                 return 0;
             }
             out->created_before = (int64_t)val;
@@ -156,6 +140,33 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
     }
 
     return 1;
+}
+
+static nostr_error_t build_delegation_hash(const nostr_key *delegatee_pubkey,
+                                            const char *conditions,
+                                            uint8_t hash[32])
+{
+    size_t conditions_len = strlen(conditions);
+    if (conditions_len > NIP26_MAX_CONDITIONS_LEN)
+        return NOSTR_ERR_INVALID_PARAM;
+    if (conditions_len > SIZE_MAX - 84)
+        return NOSTR_ERR_INVALID_PARAM;
+
+    char delegatee_hex[65];
+    nostr_hex_encode(delegatee_pubkey->data, 32, delegatee_hex);
+
+    size_t delegation_str_len = 17 + 64 + 1 + conditions_len + 1;
+    char *delegation_string = malloc(delegation_str_len);
+    if (!delegation_string)
+        return NOSTR_ERR_MEMORY;
+
+    snprintf(delegation_string, delegation_str_len, "nostr:delegation:%s:%s",
+             delegatee_hex, conditions);
+
+    nip26_sha256((const uint8_t *)delegation_string, strlen(delegation_string), hash);
+    free(delegation_string);
+
+    return NOSTR_OK;
 }
 
 nostr_error_t nostr_delegation_create(const nostr_privkey *delegator_privkey,
@@ -176,25 +187,10 @@ nostr_error_t nostr_delegation_create(const nostr_privkey *delegator_privkey,
 
     memset(delegation, 0, sizeof(*delegation));
 
-    char delegatee_hex[65];
-    nostr_hex_encode(delegatee_pubkey->data, 32, delegatee_hex);
-
-    size_t conditions_len = strlen(conditions);
-    if (conditions_len > 4096)
-        return NOSTR_ERR_INVALID_PARAM;
-    if (conditions_len > SIZE_MAX - 84)
-        return NOSTR_ERR_INVALID_PARAM;
-    size_t delegation_str_len = 17 + 64 + 1 + conditions_len + 1;
-    char *delegation_string = malloc(delegation_str_len);
-    if (!delegation_string)
-        return NOSTR_ERR_MEMORY;
-
-    snprintf(delegation_string, delegation_str_len, "nostr:delegation:%s:%s",
-             delegatee_hex, conditions);
-
     uint8_t hash[32];
-    nip26_sha256((const uint8_t *)delegation_string, strlen(delegation_string), hash);
-    free(delegation_string);
+    err = build_delegation_hash(delegatee_pubkey, conditions, hash);
+    if (err != NOSTR_OK)
+        return err;
 
 #ifdef HAVE_NOSCRYPT
     NCSecretKey nc_secret;
@@ -284,25 +280,10 @@ nostr_error_t nostr_delegation_verify(const nostr_delegation *delegation,
     if (err != NOSTR_OK)
         return err;
 
-    char delegatee_hex[65];
-    nostr_hex_encode(delegatee_pubkey->data, 32, delegatee_hex);
-
-    size_t conditions_len = strlen(delegation->conditions);
-    if (conditions_len > 4096)
-        return NOSTR_ERR_INVALID_PARAM;
-    if (conditions_len > SIZE_MAX - 84)
-        return NOSTR_ERR_INVALID_PARAM;
-    size_t delegation_str_len = 17 + 64 + 1 + conditions_len + 1;
-    char *delegation_string = malloc(delegation_str_len);
-    if (!delegation_string)
-        return NOSTR_ERR_MEMORY;
-
-    snprintf(delegation_string, delegation_str_len, "nostr:delegation:%s:%s",
-             delegatee_hex, delegation->conditions);
-
     uint8_t hash[32];
-    nip26_sha256((const uint8_t *)delegation_string, strlen(delegation_string), hash);
-    free(delegation_string);
+    err = build_delegation_hash(delegatee_pubkey, delegation->conditions, hash);
+    if (err != NOSTR_OK)
+        return err;
 
 #ifdef HAVE_NOSCRYPT
     NCPublicKey nc_public;
@@ -395,10 +376,10 @@ nostr_error_t nostr_event_get_delegation(const nostr_event *event,
             if (!delegator_hex || !conditions || !token_hex)
                 return NOSTR_ERR_INVALID_EVENT;
 
-            if (!is_valid_hex_pubkey(delegator_hex))
+            if (!is_valid_hex(delegator_hex, 64))
                 return NOSTR_ERR_INVALID_EVENT;
 
-            if (!is_valid_hex_token(token_hex))
+            if (!is_valid_hex(token_hex, 128))
                 return NOSTR_ERR_INVALID_EVENT;
 
             if (nostr_hex_decode(delegator_hex, delegation->delegator_pubkey.data, 32) != 32)
@@ -435,14 +416,10 @@ nostr_error_t nostr_event_verify_delegation(const nostr_event *event)
         return err;
 
     err = nostr_delegation_verify(&delegation, &event->pubkey);
-    if (err != NOSTR_OK) {
-        nostr_delegation_free(&delegation);
-        return err;
-    }
+    if (err == NOSTR_OK)
+        err = nostr_delegation_check_conditions(&delegation, event->kind, event->created_at);
 
-    err = nostr_delegation_check_conditions(&delegation, event->kind, event->created_at);
     nostr_delegation_free(&delegation);
-
     return err;
 }
 
