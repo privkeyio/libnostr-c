@@ -52,11 +52,7 @@ void test_ncryptsec_encrypt_decrypt(void)
 
     nostr_privkey original_privkey;
     nostr_key pubkey;
-    nostr_error_t err = nostr_key_generate(&original_privkey, &pubkey);
-    if (err != NOSTR_OK) {
-        printf("nostr_key_generate failed with error: %d\n", err);
-    }
-    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_key_generate(&original_privkey, &pubkey));
 
     char ncryptsec[256];
     TEST_ASSERT_EQUAL(NOSTR_OK, nostr_ncryptsec_encrypt(&original_privkey, "testpassword123", 16, ncryptsec, sizeof(ncryptsec)));

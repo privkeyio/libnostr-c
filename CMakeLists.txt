@@ -869,38 +869,20 @@ if(HAVE_UTF8PROC)
 endif()
 
 if(HAVE_SECP256K1)
-    if(SECP256K1_FOUND)
-        # Use pkg-config link libraries directly
-        if(SECP256K1_LINK_LIBRARIES)
-            list(APPEND NOSTR_LINK_LIBRARIES ${SECP256K1_LINK_LIBRARIES})
-            message(STATUS "Linking with secp256k1 libraries from pkg-config: ${SECP256K1_LINK_LIBRARIES}")
-        else()
-            # Fallback to manual library detection
-            find_library(SECP256K1_MANUAL_LIB 
-                NAMES secp256k1 libsecp256k1
-                PATHS /opt/homebrew/lib /usr/local/lib
-                NO_DEFAULT_PATH
-            )
-            if(SECP256K1_MANUAL_LIB)
-                list(APPEND NOSTR_LINK_LIBRARIES ${SECP256K1_MANUAL_LIB})
-                message(STATUS "Linking with manually found secp256k1 library: ${SECP256K1_MANUAL_LIB}")
-            else()
-                # Don't try to link by name on Windows as it will fail
-                if(NOT WIN32)
-                    list(APPEND NOSTR_LINK_LIBRARIES secp256k1) 
-                    message(STATUS "Linking with secp256k1 library by name: secp256k1 (fallback)")
-                else()
-                    message(WARNING "secp256k1 not found on Windows - disabling secp256k1 backend")
-                    set(HAVE_SECP256K1 OFF)
-                endif()
-            endif()
-        endif()
-    elseif(SECP256K1_LIBRARIES AND NOT SECP256K1_LIBRARIES STREQUAL "NOTFOUND")
+    if(SECP256K1_LIBRARIES AND NOT SECP256K1_LIBRARIES STREQUAL "NOTFOUND")
+        # Use library found by find_library (works for both Windows and Unix)
         list(APPEND NOSTR_LINK_LIBRARIES ${SECP256K1_LIBRARIES})
-        message(STATUS "Linking with detected secp256k1 library: ${SECP256K1_LIBRARIES}")
+        message(STATUS "Linking with secp256k1 library: ${SECP256K1_LIBRARIES}")
+    elseif(SECP256K1_LINK_LIBRARIES)
+        # Use pkg-config link libraries
+        list(APPEND NOSTR_LINK_LIBRARIES ${SECP256K1_LINK_LIBRARIES})
+        message(STATUS "Linking with secp256k1 from pkg-config: ${SECP256K1_LINK_LIBRARIES}")
+    elseif(NOT WIN32)
+        # Unix fallback: link by name
+        list(APPEND NOSTR_LINK_LIBRARIES secp256k1)
+        message(STATUS "Linking with secp256k1 by name (fallback)")
     else()
-        # No valid secp256k1 library found
-        message(WARNING "secp256k1 claimed available but no library found - disabling")
+        message(WARNING "secp256k1 not found - disabling")
         set(HAVE_SECP256K1 OFF)
     endif()
 endif()
