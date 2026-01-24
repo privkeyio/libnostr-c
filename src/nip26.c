@@ -307,6 +307,17 @@ nostr_error_t nostr_delegation_verify(const nostr_delegation *delegation,
     return NOSTR_OK;
 }
 
+static int kind_allowed(const nostr_delegation_conditions *cond, uint16_t kind)
+{
+    if (cond->kind_count == 0)
+        return 1;
+    for (size_t i = 0; i < cond->kind_count; i++) {
+        if (cond->kinds[i] == kind)
+            return 1;
+    }
+    return 0;
+}
+
 nostr_error_t nostr_delegation_check_conditions(const nostr_delegation *delegation,
                                                 uint16_t event_kind,
                                                 int64_t created_at)
@@ -316,17 +327,8 @@ nostr_error_t nostr_delegation_check_conditions(const nostr_delegation *delegati
 
     const nostr_delegation_conditions *cond = &delegation->parsed_conditions;
 
-    if (cond->kind_count > 0) {
-        int found = 0;
-        for (size_t i = 0; i < cond->kind_count; i++) {
-            if (cond->kinds[i] == event_kind) {
-                found = 1;
-                break;
-            }
-        }
-        if (!found)
-            return NOSTR_ERR_INVALID_EVENT;
-    }
+    if (!kind_allowed(cond, event_kind))
+        return NOSTR_ERR_INVALID_EVENT;
 
     if (cond->has_created_after && created_at <= cond->created_after)
         return NOSTR_ERR_INVALID_EVENT;
@@ -426,9 +428,12 @@ nostr_error_t nostr_event_verify_delegation(const nostr_event *event)
         return err;
 
     err = nostr_delegation_verify(&delegation, &event->pubkey);
-    if (err == NOSTR_OK)
-        err = nostr_delegation_check_conditions(&delegation, event->kind, event->created_at);
+    if (err != NOSTR_OK)
+        goto cleanup;
 
+    err = nostr_delegation_check_conditions(&delegation, event->kind, event->created_at);
+
+cleanup:
     nostr_delegation_free(&delegation);
     return err;
 }
@@ -446,61 +451,29 @@ void nostr_delegation_free(nostr_delegation *delegation)
 
 #else
 
-nostr_error_t nostr_delegation_create(const nostr_privkey *delegator_privkey,
-                                      const nostr_key *delegatee_pubkey,
-                                      const char *conditions,
-                                      nostr_delegation *delegation)
-{
-    (void)delegator_privkey;
-    (void)delegatee_pubkey;
-    (void)conditions;
-    (void)delegation;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
+#define NIP26_STUB_RETURN(ret) return ret
+#define NIP26_UNUSED(x) (void)(x)
 
-nostr_error_t nostr_delegation_verify(const nostr_delegation *delegation,
-                                      const nostr_key *delegatee_pubkey)
-{
-    (void)delegation;
-    (void)delegatee_pubkey;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
+nostr_error_t nostr_delegation_create(const nostr_privkey *dp, const nostr_key *pk,
+                                      const char *cond, nostr_delegation *del)
+{ NIP26_UNUSED(dp); NIP26_UNUSED(pk); NIP26_UNUSED(cond); NIP26_UNUSED(del); NIP26_STUB_RETURN(NOSTR_ERR_NOT_SUPPORTED); }
 
-nostr_error_t nostr_delegation_check_conditions(const nostr_delegation *delegation,
-                                                uint16_t event_kind,
-                                                int64_t created_at)
-{
-    (void)delegation;
-    (void)event_kind;
-    (void)created_at;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
+nostr_error_t nostr_delegation_verify(const nostr_delegation *del, const nostr_key *pk)
+{ NIP26_UNUSED(del); NIP26_UNUSED(pk); NIP26_STUB_RETURN(NOSTR_ERR_NOT_SUPPORTED); }
 
-nostr_error_t nostr_event_add_delegation(nostr_event *event,
-                                         const nostr_delegation *delegation)
-{
-    (void)event;
-    (void)delegation;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
+nostr_error_t nostr_delegation_check_conditions(const nostr_delegation *del, uint16_t kind, int64_t ts)
+{ NIP26_UNUSED(del); NIP26_UNUSED(kind); NIP26_UNUSED(ts); NIP26_STUB_RETURN(NOSTR_ERR_NOT_SUPPORTED); }
 
-nostr_error_t nostr_event_get_delegation(const nostr_event *event,
-                                         nostr_delegation *delegation)
-{
-    (void)event;
-    (void)delegation;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
+nostr_error_t nostr_event_add_delegation(nostr_event *ev, const nostr_delegation *del)
+{ NIP26_UNUSED(ev); NIP26_UNUSED(del); NIP26_STUB_RETURN(NOSTR_ERR_NOT_SUPPORTED); }
 
-nostr_error_t nostr_event_verify_delegation(const nostr_event *event)
-{
-    (void)event;
-    return NOSTR_ERR_NOT_SUPPORTED;
-}
+nostr_error_t nostr_event_get_delegation(const nostr_event *ev, nostr_delegation *del)
+{ NIP26_UNUSED(ev); NIP26_UNUSED(del); NIP26_STUB_RETURN(NOSTR_ERR_NOT_SUPPORTED); }
 
-void nostr_delegation_free(nostr_delegation *delegation)
-{
-    (void)delegation;
-}
+nostr_error_t nostr_event_verify_delegation(const nostr_event *ev)
+{ NIP26_UNUSED(ev); NIP26_STUB_RETURN(NOSTR_ERR_NOT_SUPPORTED); }
+
+void nostr_delegation_free(nostr_delegation *del)
+{ NIP26_UNUSED(del); }
 
 #endif
