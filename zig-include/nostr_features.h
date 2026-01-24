@@ -23,6 +23,9 @@ extern "C" {
 #ifndef NOSTR_FEATURE_NIP18
 #define NOSTR_FEATURE_NIP18
 #endif
+#ifndef NOSTR_FEATURE_NIP26
+#define NOSTR_FEATURE_NIP26
+#endif
 #ifndef NOSTR_FEATURE_NIP57
 #define NOSTR_FEATURE_NIP57
 #endif
