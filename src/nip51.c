@@ -593,17 +593,25 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                         }
                         if (hex_count == 4) {
                             if (codepoint <= 0x7F) {
-                                if (len < max_len) dest[len++] = (char)codepoint;
+                                if (len < max_len) {
+                                    dest[len++] = (char)codepoint;
+                                } else {
+                                    truncated = true;
+                                }
                             } else if (codepoint <= 0x7FF) {
-                                if (len + 1 < max_len) {
+                                if (len + 2 <= max_len) {
                                     dest[len++] = (char)(0xC0 | (codepoint >> 6));
                                     dest[len++] = (char)(0x80 | (codepoint & 0x3F));
+                                } else {
+                                    truncated = true;
                                 }
                             } else {
-                                if (len + 2 < max_len) {
+                                if (len + 3 <= max_len) {
                                     dest[len++] = (char)(0xE0 | (codepoint >> 12));
                                     dest[len++] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
                                     dest[len++] = (char)(0x80 | (codepoint & 0x3F));
+                                } else {
+                                    truncated = true;
                                 }
                             }
                         } else {
@@ -707,7 +715,10 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
                                   nostr_keypair_public_key(keypair),
                                   event->content, &decrypted, &decrypted_len);
 
-        if (err == NOSTR_OK && decrypted) {
+        if (err != NOSTR_OK) {
+            goto cleanup;
+        }
+        if (decrypted) {
             err = parse_private_content(decrypted, *list);
             free(decrypted);
             if (err != NOSTR_OK) goto cleanup;
