@@ -3,10 +3,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
-#ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 #include <windows.h>
-#else
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
+#endif
+#ifdef NOSTR_FEATURE_THREADING
+#ifndef _WIN32
 #include <pthread.h>
 #endif
 #endif
@@ -107,6 +110,13 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
+#ifdef _WIN32
+    NTSTATUS status = BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    return NT_SUCCESS(status) ? 1 : 0;
+#else
+    if (RAND_status() != 1) {
+        RAND_poll();
+    }
     while (len > 0) {
         int chunk = (len > INT_MAX) ? INT_MAX : (int)len;
         if (RAND_bytes(buf, chunk) != 1) {
@@ -117,6 +127,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
         len -= chunk;
     }
     return 1;
+#endif
 #endif
 }
 
