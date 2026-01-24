@@ -3,12 +3,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
-#ifdef _WIN32
+#if defined(_WIN32) || defined(WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#define RtlGenRandom SystemFunction036
-BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
-#pragma comment(lib, "advapi32.lib")
+#include <wincrypt.h>
 #endif
 #ifdef NOSTR_FEATURE_THREADING
 #ifndef _WIN32
@@ -112,8 +110,14 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-#ifdef _WIN32
-    return RtlGenRandom(buf, (ULONG)len) ? 1 : 0;
+#if defined(_WIN32) || defined(WIN32)
+    HCRYPTPROV hProvider = 0;
+    if (!CryptAcquireContextW(&hProvider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT)) {
+        return 0;
+    }
+    BOOL result = CryptGenRandom(hProvider, (DWORD)len, buf);
+    CryptReleaseContext(hProvider, 0);
+    return result ? 1 : 0;
 #else
     if (RAND_status() != 1) {
         RAND_poll();

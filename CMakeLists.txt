@@ -775,6 +775,11 @@ endif()
 # Link required libraries
 set(NOSTR_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 
+# Add Windows-specific libraries
+if(WIN32)
+    list(APPEND NOSTR_LINK_LIBRARIES advapi32)
+endif()
+
 
 # Add optional libraries if they exist
 if(HAVE_CJSON)
