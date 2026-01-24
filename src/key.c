@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 #include <windows.h>
@@ -26,6 +27,7 @@
 #endif
 #else
 #include <openssl/rand.h>
+#include <openssl/err.h>
 #include <openssl/sha.h>
 #endif
 
@@ -105,7 +107,16 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-    return RAND_bytes(buf, len);
+    while (len > 0) {
+        int chunk = (len > INT_MAX) ? INT_MAX : (int)len;
+        if (RAND_bytes(buf, chunk) != 1) {
+            ERR_clear_error();
+            return 0;
+        }
+        buf += chunk;
+        len -= chunk;
+    }
+    return 1;
 #endif
 }
 
