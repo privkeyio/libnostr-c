@@ -30,29 +30,22 @@ static void json_escape_to(char* dest, const char* src)
 {
     if (!src) return;
     while (*src) {
-        unsigned char c = (unsigned char)*src;
-        if (c == '"') {
-            *dest++ = '\\';
-            *dest++ = '"';
-        } else if (c == '\\') {
-            *dest++ = '\\';
-            *dest++ = '\\';
-        } else if (c == '\n') {
-            *dest++ = '\\';
-            *dest++ = 'n';
-        } else if (c == '\r') {
-            *dest++ = '\\';
-            *dest++ = 'r';
-        } else if (c == '\t') {
-            *dest++ = '\\';
-            *dest++ = 't';
-        } else if (c < 0x20) {
-            *dest++ = '\\';
-            *dest++ = 'n';
-        } else {
-            *dest++ = c;
+        unsigned char c = (unsigned char)*src++;
+        switch (c) {
+        case '"':  *dest++ = '\\'; *dest++ = '"';  break;
+        case '\\': *dest++ = '\\'; *dest++ = '\\'; break;
+        case '\n': *dest++ = '\\'; *dest++ = 'n';  break;
+        case '\r': *dest++ = '\\'; *dest++ = 'r';  break;
+        case '\t': *dest++ = '\\'; *dest++ = 't';  break;
+        default:
+            if (c < 0x20) {
+                *dest++ = '\\';
+                *dest++ = 'n';
+            } else {
+                *dest++ = c;
+            }
+            break;
         }
-        src++;
     }
     *dest = '\0';
 }
@@ -115,60 +108,37 @@ void nostr_list_free(nostr_list* list)
     free(list);
 }
 
-nostr_error_t nostr_list_set_d_tag(nostr_list* list, const char* d_tag)
+static nostr_error_t set_string_field(nostr_list* list, char** field, const char* value)
 {
     if (!list) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-
-    free(list->d_tag);
-    list->d_tag = d_tag ? strdup(d_tag) : NULL;
-    if (d_tag && !list->d_tag) {
+    free(*field);
+    *field = value ? strdup(value) : NULL;
+    if (value && !*field) {
         return NOSTR_ERR_MEMORY;
     }
     return NOSTR_OK;
+}
+
+nostr_error_t nostr_list_set_d_tag(nostr_list* list, const char* d_tag)
+{
+    return set_string_field(list, &list->d_tag, d_tag);
 }
 
 nostr_error_t nostr_list_set_title(nostr_list* list, const char* title)
 {
-    if (!list) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    free(list->title);
-    list->title = title ? strdup(title) : NULL;
-    if (title && !list->title) {
-        return NOSTR_ERR_MEMORY;
-    }
-    return NOSTR_OK;
+    return set_string_field(list, &list->title, title);
 }
 
 nostr_error_t nostr_list_set_description(nostr_list* list, const char* description)
 {
-    if (!list) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    free(list->description);
-    list->description = description ? strdup(description) : NULL;
-    if (description && !list->description) {
-        return NOSTR_ERR_MEMORY;
-    }
-    return NOSTR_OK;
+    return set_string_field(list, &list->description, description);
 }
 
 nostr_error_t nostr_list_set_image(nostr_list* list, const char* image)
 {
-    if (!list) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    free(list->image);
-    list->image = image ? strdup(image) : NULL;
-    if (image && !list->image) {
-        return NOSTR_ERR_MEMORY;
-    }
-    return NOSTR_OK;
+    return set_string_field(list, &list->image, image);
 }
 
 static nostr_error_t ensure_capacity(nostr_list* list)
@@ -559,27 +529,16 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
             }
             p++;
 
-            char* dest = NULL;
-            size_t max_len = 0;
-            if (field == 0) {
-                dest = tag_type;
-                max_len = sizeof(tag_type) - 1;
-            } else if (field == 1) {
-                dest = value;
-                max_len = sizeof(value) - 1;
-            } else if (field == 2) {
-                dest = relay_hint;
-                max_len = sizeof(relay_hint) - 1;
-            } else if (field == 3) {
-                dest = petname;
-                max_len = sizeof(petname) - 1;
-            } else {
-                while (*p && *p != '"') {
-                    p++;
-                }
-                if (*p == '"') {
-                    p++;
-                }
+            char* dest;
+            size_t max_len;
+            switch (field) {
+            case 0:  dest = tag_type;   max_len = sizeof(tag_type) - 1;   break;
+            case 1:  dest = value;      max_len = sizeof(value) - 1;      break;
+            case 2:  dest = relay_hint; max_len = sizeof(relay_hint) - 1; break;
+            case 3:  dest = petname;    max_len = sizeof(petname) - 1;    break;
+            default:
+                while (*p && *p != '"') p++;
+                if (*p == '"') p++;
                 field++;
                 continue;
             }
@@ -588,32 +547,25 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
             while (*p && *p != '"' && len < max_len) {
                 if (*p == '\\' && *(p+1)) {
                     p++;
-                    if (*p == 'n') {
-                        dest[len++] = '\n';
-                    } else if (*p == 'r') {
-                        dest[len++] = '\r';
-                    } else if (*p == 't') {
-                        dest[len++] = '\t';
-                    } else if (*p == '"') {
-                        dest[len++] = '"';
-                    } else if (*p == '\\') {
-                        dest[len++] = '\\';
-                    } else if (*p == 'u') {
+                    switch (*p) {
+                    case 'n':  dest[len++] = '\n'; break;
+                    case 'r':  dest[len++] = '\r'; break;
+                    case 't':  dest[len++] = '\t'; break;
+                    case '"':  dest[len++] = '"';  break;
+                    case '\\': dest[len++] = '\\'; break;
+                    case 'u':
                         p++;
-                        int hex_count = 0;
-                        while (hex_count < 4 && *p &&
-                               ((*p >= '0' && *p <= '9') ||
-                                (*p >= 'a' && *p <= 'f') ||
-                                (*p >= 'A' && *p <= 'F'))) {
-                            hex_count++;
+                        for (int i = 0; i < 4 && *p &&
+                             ((*p >= '0' && *p <= '9') ||
+                              (*p >= 'a' && *p <= 'f') ||
+                              (*p >= 'A' && *p <= 'F')); i++) {
                             p++;
                         }
-                        if (len < max_len) {
-                            dest[len++] = '?';
-                        }
+                        if (len < max_len) dest[len++] = '?';
                         continue;
-                    } else {
+                    default:
                         dest[len++] = *p;
+                        break;
                     }
                 } else {
                     dest[len++] = *p;
