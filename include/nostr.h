@@ -1299,11 +1299,13 @@ nostr_error_t nostr_nrelay_decode(const char* bech32, nostr_nrelay* relay);
 /**
  * @brief Encrypt a private key with a password (NIP-49)
  * @param privkey Private key to encrypt
- * @param password Password for encryption
+ * @param password Password for encryption (caller should NFKC normalize for interop)
  * @param log_n Scrypt log_n parameter (16-22, higher = more secure but slower)
  * @param ncryptsec Output buffer for ncryptsec string
  * @param ncryptsec_size Size of ncryptsec buffer (at least 163 bytes: 162 chars + NUL)
  * @return NOSTR_OK on success, error code otherwise
+ * @note Memory requirements: log_n=16: 64MB, log_n=18: 256MB, log_n=20: 1GB, log_n=22: 4GB
+ * @note Caller is responsible for NFKC normalizing passwords and wiping after use
  */
 nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey* privkey,
                                        const char* password,
@@ -1314,9 +1316,10 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey* privkey,
 /**
  * @brief Decrypt an ncryptsec string to recover the private key (NIP-49)
  * @param ncryptsec Encrypted key string (ncryptsec1...)
- * @param password Password for decryption
+ * @param password Password for decryption (caller should NFKC normalize for interop)
  * @param privkey Output private key
  * @return NOSTR_OK on success, NOSTR_ERR_INVALID_SIGNATURE if password wrong
+ * @note Caller is responsible for NFKC normalizing passwords and wiping after use
  */
 nostr_error_t nostr_ncryptsec_decrypt(const char* ncryptsec,
                                        const char* password,
