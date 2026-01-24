@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 #include <windows.h>
@@ -82,6 +83,8 @@ static mbedtls_entropy_context rng_entropy;
 static mbedtls_ctr_drbg_context rng_ctr_drbg;
 static volatile int rng_initialized = 0;
 #endif
+#else
+static volatile int openssl_rng_seeded = 0;
 #endif
 
 int nostr_random_bytes(uint8_t *buf, size_t len) {
@@ -106,16 +109,24 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-    static int openssl_rng_seeded = 0;
     if (!openssl_rng_seeded) {
-        RAND_poll();
-        openssl_rng_seeded = 1;
+        lock_ctx_init();
+        if (!openssl_rng_seeded) {
+            RAND_poll();
+            openssl_rng_seeded = 1;
+        }
+        unlock_ctx_init();
     }
-    int result = RAND_bytes(buf, (int)len);
-    if (result != 1) {
-        ERR_clear_error();
+    while (len > 0) {
+        int chunk = (len > INT_MAX) ? INT_MAX : (int)len;
+        if (RAND_bytes(buf, chunk) != 1) {
+            ERR_clear_error();
+            return 0;
+        }
+        buf += chunk;
+        len -= chunk;
     }
-    return result;
+    return 1;
 #endif
 }
 
