@@ -6,8 +6,56 @@
 #include <string.h>
 #include <time.h>
 
+#include <stdint.h>
+
 #define INITIAL_ITEM_CAPACITY 8
 #define MAX_ITEM_COUNT 4096
+
+static size_t json_escaped_len(const char* s)
+{
+    if (!s) return 0;
+    size_t len = 0;
+    for (const char* p = s; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (c == '"' || c == '\\' || c < 0x20) {
+            len += 2;
+        } else {
+            len += 1;
+        }
+    }
+    return len;
+}
+
+static void json_escape_to(char* dest, const char* src)
+{
+    if (!src) return;
+    while (*src) {
+        unsigned char c = (unsigned char)*src;
+        if (c == '"') {
+            *dest++ = '\\';
+            *dest++ = '"';
+        } else if (c == '\\') {
+            *dest++ = '\\';
+            *dest++ = '\\';
+        } else if (c == '\n') {
+            *dest++ = '\\';
+            *dest++ = 'n';
+        } else if (c == '\r') {
+            *dest++ = '\\';
+            *dest++ = 'r';
+        } else if (c == '\t') {
+            *dest++ = '\\';
+            *dest++ = 't';
+        } else if (c < 0x20) {
+            *dest++ = '\\';
+            *dest++ = 'n';
+        } else {
+            *dest++ = c;
+        }
+        src++;
+    }
+    *dest = '\0';
+}
 
 static bool is_parameterized_list(uint16_t kind)
 {
@@ -127,10 +175,16 @@ static nostr_error_t ensure_capacity(nostr_list* list)
 {
     if (list->item_count >= list->item_capacity) {
         size_t new_capacity = list->item_capacity * 2;
+        if (new_capacity < list->item_capacity) {
+            return NOSTR_ERR_MEMORY;
+        }
         if (new_capacity > MAX_ITEM_COUNT) {
             new_capacity = MAX_ITEM_COUNT;
         }
         if (new_capacity <= list->item_count) {
+            return NOSTR_ERR_MEMORY;
+        }
+        if (new_capacity > SIZE_MAX / sizeof(nostr_list_item)) {
             return NOSTR_ERR_MEMORY;
         }
         nostr_list_item* new_items = realloc(list->items,
@@ -287,13 +341,18 @@ static char* build_private_content(const nostr_list* list)
         if (!item->is_private) {
             continue;
         }
-        buf_size += strlen(item->tag_type) + strlen(item->value) + 16;
+        size_t item_size = json_escaped_len(item->tag_type) +
+                          json_escaped_len(item->value) + 16;
         if (item->relay_hint) {
-            buf_size += strlen(item->relay_hint) + 4;
+            item_size += json_escaped_len(item->relay_hint) + 4;
         }
         if (item->petname) {
-            buf_size += strlen(item->petname) + 4;
+            item_size += json_escaped_len(item->petname) + 4;
         }
+        if (buf_size > SIZE_MAX - item_size) {
+            return NULL;
+        }
+        buf_size += item_size;
     }
 
     char* json = malloc(buf_size);
@@ -301,7 +360,8 @@ static char* build_private_content(const nostr_list* list)
         return NULL;
     }
 
-    strcpy(json, "[");
+    char* pos = json;
+    *pos++ = '[';
     bool first = true;
     for (size_t i = 0; i < list->item_count; i++) {
         const nostr_list_item* item = &list->items[i];
@@ -310,32 +370,44 @@ static char* build_private_content(const nostr_list* list)
         }
 
         if (!first) {
-            strcat(json, ",");
+            *pos++ = ',';
         }
         first = false;
 
-        strcat(json, "[\"");
-        strcat(json, item->tag_type);
-        strcat(json, "\",\"");
-        strcat(json, item->value);
-        strcat(json, "\"");
+        *pos++ = '[';
+        *pos++ = '"';
+        json_escape_to(pos, item->tag_type);
+        pos += strlen(pos);
+        *pos++ = '"';
+        *pos++ = ',';
+        *pos++ = '"';
+        json_escape_to(pos, item->value);
+        pos += strlen(pos);
+        *pos++ = '"';
 
         if (item->relay_hint) {
-            strcat(json, ",\"");
-            strcat(json, item->relay_hint);
-            strcat(json, "\"");
+            *pos++ = ',';
+            *pos++ = '"';
+            json_escape_to(pos, item->relay_hint);
+            pos += strlen(pos);
+            *pos++ = '"';
         }
         if (item->petname) {
             if (!item->relay_hint) {
-                strcat(json, ",\"\"");
+                *pos++ = ',';
+                *pos++ = '"';
+                *pos++ = '"';
             }
-            strcat(json, ",\"");
-            strcat(json, item->petname);
-            strcat(json, "\"");
+            *pos++ = ',';
+            *pos++ = '"';
+            json_escape_to(pos, item->petname);
+            pos += strlen(pos);
+            *pos++ = '"';
         }
-        strcat(json, "]");
+        *pos++ = ']';
     }
-    strcat(json, "]");
+    *pos++ = ']';
+    *pos = '\0';
 
     return json;
 }
@@ -526,6 +598,20 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                         dest[len++] = '"';
                     } else if (*p == '\\') {
                         dest[len++] = '\\';
+                    } else if (*p == 'u') {
+                        p++;
+                        int hex_count = 0;
+                        while (hex_count < 4 && *p &&
+                               ((*p >= '0' && *p <= '9') ||
+                                (*p >= 'a' && *p <= 'f') ||
+                                (*p >= 'A' && *p <= 'F'))) {
+                            hex_count++;
+                            p++;
+                        }
+                        if (len < max_len) {
+                            dest[len++] = '?';
+                        }
+                        continue;
                     } else {
                         dest[len++] = *p;
                     }
@@ -581,19 +667,23 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
         const char* value = tag->values[1];
 
         if (strcmp(tag_type, "d") == 0) {
-            nostr_list_set_d_tag(*list, value);
+            err = nostr_list_set_d_tag(*list, value);
+            if (err != NOSTR_OK) goto cleanup;
             continue;
         }
         if (strcmp(tag_type, "title") == 0) {
-            nostr_list_set_title(*list, value);
+            err = nostr_list_set_title(*list, value);
+            if (err != NOSTR_OK) goto cleanup;
             continue;
         }
         if (strcmp(tag_type, "description") == 0) {
-            nostr_list_set_description(*list, value);
+            err = nostr_list_set_description(*list, value);
+            if (err != NOSTR_OK) goto cleanup;
             continue;
         }
         if (strcmp(tag_type, "image") == 0) {
-            nostr_list_set_image(*list, value);
+            err = nostr_list_set_image(*list, value);
+            if (err != NOSTR_OK) goto cleanup;
             continue;
         }
 
@@ -601,11 +691,7 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
         const char* petname = (tag->count >= 4 && tag->values[3]) ? tag->values[3] : NULL;
 
         err = add_item(*list, tag_type, value, relay_hint, petname, false);
-        if (err == NOSTR_ERR_MEMORY) {
-            nostr_list_free(*list);
-            *list = NULL;
-            return err;
-        }
+        if (err != NOSTR_OK) goto cleanup;
     }
 
     if (event->content && strlen(event->content) > 0 && keypair) {
@@ -620,16 +706,17 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
         if (err == NOSTR_OK && decrypted) {
             err = parse_private_content(decrypted, *list);
             free(decrypted);
-            if (err != NOSTR_OK) {
-                nostr_list_free(*list);
-                *list = NULL;
-                return err;
-            }
+            if (err != NOSTR_OK) goto cleanup;
         }
 #endif
     }
 
     return NOSTR_OK;
+
+cleanup:
+    nostr_list_free(*list);
+    *list = NULL;
+    return err;
 }
 
 #else
