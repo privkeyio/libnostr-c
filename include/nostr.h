@@ -1391,6 +1391,92 @@ nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pu
                                  nostr_nip05_http_callback http_callback, void* user_data,
                                  char*** relays_out, size_t* relay_count_out);
 
+/**
+ * @brief Parsed delegation conditions from condition string
+ */
+typedef struct nostr_delegation_conditions {
+    uint16_t* kinds;
+    size_t kind_count;
+    int64_t created_after;
+    int64_t created_before;
+    int has_created_after;
+    int has_created_before;
+} nostr_delegation_conditions;
+
+/**
+ * @brief NIP-26 Delegation structure
+ */
+typedef struct nostr_delegation {
+    nostr_key delegator_pubkey;
+    char* conditions;
+    uint8_t token[NOSTR_SIG_SIZE];
+    nostr_delegation_conditions parsed_conditions;
+} nostr_delegation;
+
+/**
+ * @brief Create a delegation token (NIP-26)
+ * @param delegator_privkey Delegator's private key (signs the delegation)
+ * @param delegatee_pubkey Delegatee's public key (authorized to sign events)
+ * @param conditions Condition query string (e.g., "kind=1&created_at>123")
+ * @param delegation Output delegation structure
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_delegation_create(const nostr_privkey* delegator_privkey,
+                                      const nostr_key* delegatee_pubkey,
+                                      const char* conditions,
+                                      nostr_delegation* delegation);
+
+/**
+ * @brief Verify a delegation token (NIP-26)
+ * @param delegation Delegation to verify
+ * @param delegatee_pubkey Expected delegatee's public key
+ * @return NOSTR_OK if valid, NOSTR_ERR_INVALID_SIGNATURE otherwise
+ */
+nostr_error_t nostr_delegation_verify(const nostr_delegation* delegation,
+                                      const nostr_key* delegatee_pubkey);
+
+/**
+ * @brief Check if event parameters satisfy delegation conditions (NIP-26)
+ * @param delegation Delegation with parsed conditions
+ * @param event_kind Event kind to check
+ * @param created_at Event timestamp to check
+ * @return NOSTR_OK if conditions satisfied, NOSTR_ERR_INVALID_EVENT otherwise
+ */
+nostr_error_t nostr_delegation_check_conditions(const nostr_delegation* delegation,
+                                                uint16_t event_kind,
+                                                int64_t created_at);
+
+/**
+ * @brief Add delegation tag to an event (NIP-26)
+ * @param event Event to add delegation tag to
+ * @param delegation Delegation to add
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_event_add_delegation(nostr_event* event,
+                                         const nostr_delegation* delegation);
+
+/**
+ * @brief Extract delegation from an event's tags (NIP-26)
+ * @param event Event to extract delegation from
+ * @param delegation Output delegation structure (caller must call nostr_delegation_free)
+ * @return NOSTR_OK if found, NOSTR_ERR_NOT_FOUND if no delegation tag
+ */
+nostr_error_t nostr_event_get_delegation(const nostr_event* event,
+                                         nostr_delegation* delegation);
+
+/**
+ * @brief Verify event's delegation tag is valid (NIP-26)
+ * @param event Event with delegation tag to verify
+ * @return NOSTR_OK if valid, error code otherwise
+ */
+nostr_error_t nostr_event_verify_delegation(const nostr_event* event);
+
+/**
+ * @brief Free resources allocated in a delegation structure (NIP-26)
+ * @param delegation Delegation to free
+ */
+void nostr_delegation_free(nostr_delegation* delegation);
+
 #ifdef __cplusplus
 }
 #endif
