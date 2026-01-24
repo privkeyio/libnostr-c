@@ -74,7 +74,8 @@ static int test_list_create_invalid(void)
 static int test_list_add_pubkey(void)
 {
     nostr_list* list = NULL;
-    nostr_list_create(&list, NOSTR_LIST_KIND_MUTE);
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_list_create(&list, NOSTR_LIST_KIND_MUTE));
+    TEST_ASSERT_NOT_NULL(list);
 
     const char* pubkey = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 

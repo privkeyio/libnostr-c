@@ -660,6 +660,9 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
             free(decrypted);
             if (err != NOSTR_OK) goto cleanup;
         }
+#else
+        err = NOSTR_ERR_NOT_SUPPORTED;
+        goto cleanup;
 #endif
     }
 
