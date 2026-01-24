@@ -113,11 +113,11 @@ static int xchacha20_poly1305_encrypt(
         goto cleanup;
 
     if (aad && aad_len > 0) {
-        if (EVP_EncryptUpdate(ctx, NULL, &len, aad, aad_len) != 1)
+        if (EVP_EncryptUpdate(ctx, NULL, &len, aad, (int)aad_len) != 1)
             goto cleanup;
     }
 
-    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1)
+    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, (int)plaintext_len) != 1)
         goto cleanup;
 
     if (EVP_EncryptFinal_ex(ctx, ciphertext + len, &len) != 1)
@@ -169,11 +169,11 @@ static int xchacha20_poly1305_decrypt(
         goto cleanup;
 
     if (aad && aad_len > 0) {
-        if (EVP_DecryptUpdate(ctx, NULL, &len, aad, aad_len) != 1)
+        if (EVP_DecryptUpdate(ctx, NULL, &len, aad, (int)aad_len) != 1)
             goto cleanup;
     }
 
-    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1)
+    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, (int)ciphertext_len) != 1)
         goto cleanup;
 
     if (EVP_DecryptFinal_ex(ctx, plaintext + len, &len) != 1)
@@ -274,14 +274,19 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
     }
 
     if (RAND_bytes(salt, NIP49_SALT_SIZE) != 1) {
+        secure_wipe(salt, sizeof(salt));
         return NOSTR_ERR_MEMORY;
     }
 
     if (RAND_bytes(nonce, NIP49_NONCE_SIZE) != 1) {
+        secure_wipe(salt, sizeof(salt));
+        secure_wipe(nonce, sizeof(nonce));
         return NOSTR_ERR_MEMORY;
     }
 
     if (!derive_key_scrypt(password, salt, log_n, symmetric_key)) {
+        secure_wipe(salt, sizeof(salt));
+        secure_wipe(nonce, sizeof(nonce));
         return NOSTR_ERR_ENCODING;
     }
 
@@ -291,6 +296,8 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
                                     privkey->data, NIP49_PRIVKEY_SIZE,
                                     ciphertext, mac)) {
         secure_wipe(symmetric_key, sizeof(symmetric_key));
+        secure_wipe(salt, sizeof(salt));
+        secure_wipe(nonce, sizeof(nonce));
         return NOSTR_ERR_ENCODING;
     }
 
@@ -300,6 +307,7 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
     *p++ = NIP49_VERSION;
     *p++ = log_n;
     memcpy(p, salt, NIP49_SALT_SIZE); p += NIP49_SALT_SIZE;
+    secure_wipe(salt, sizeof(salt));
     memcpy(p, nonce, NIP49_NONCE_SIZE); p += NIP49_NONCE_SIZE;
     *p++ = key_security;
     memcpy(p, ciphertext, NIP49_PRIVKEY_SIZE); p += NIP49_PRIVKEY_SIZE;
@@ -309,11 +317,19 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
     int data5bit_len = bech32_convert_bits(payload, NIP49_PAYLOAD_SIZE,
                                            data5bit, sizeof(data5bit), 8, 5, 1);
     if (data5bit_len <= 0) {
+        secure_wipe(payload, sizeof(payload));
+        secure_wipe(nonce, sizeof(nonce));
+        secure_wipe(ciphertext, sizeof(ciphertext));
+        secure_wipe(mac, sizeof(mac));
         return NOSTR_ERR_ENCODING;
     }
 
     uint8_t checksum[6];
     if (!bech32_create_checksum("ncryptsec", data5bit, data5bit_len, checksum)) {
+        secure_wipe(payload, sizeof(payload));
+        secure_wipe(nonce, sizeof(nonce));
+        secure_wipe(ciphertext, sizeof(ciphertext));
+        secure_wipe(mac, sizeof(mac));
         return NOSTR_ERR_ENCODING;
     }
 
@@ -330,6 +346,8 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
 
     secure_wipe(payload, sizeof(payload));
     secure_wipe(nonce, sizeof(nonce));
+    secure_wipe(ciphertext, sizeof(ciphertext));
+    secure_wipe(mac, sizeof(mac));
 
     return NOSTR_OK;
 }
