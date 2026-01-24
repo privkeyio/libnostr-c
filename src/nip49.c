@@ -256,100 +256,69 @@ nostr_error_t nostr_ncryptsec_encrypt(const nostr_privkey *privkey,
     uint8_t ciphertext[NIP49_PRIVKEY_SIZE];
     uint8_t mac[NIP49_MAC_SIZE];
     uint8_t payload[NIP49_PAYLOAD_SIZE];
+    uint8_t data5bit[146];
+    uint8_t checksum[6];
+    nostr_error_t ret = NOSTR_ERR_ENCODING;
+    int data5bit_len;
 
-    if (!privkey || !password || !ncryptsec) {
+    if (!privkey || !password || !ncryptsec ||
+        strlen(password) == 0 ||
+        log_n < 16 || log_n > 22 ||
+        ncryptsec_size < NIP49_NCRYPTSEC_SIZE) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    if (strlen(password) == 0) {
-        return NOSTR_ERR_INVALID_PARAM;
+    if (RAND_bytes(salt, NIP49_SALT_SIZE) != 1 ||
+        RAND_bytes(nonce, NIP49_NONCE_SIZE) != 1) {
+        ret = NOSTR_ERR_MEMORY;
+        goto cleanup;
     }
 
-    if (log_n < 16 || log_n > 22) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    if (ncryptsec_size < NIP49_NCRYPTSEC_SIZE) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    if (RAND_bytes(salt, NIP49_SALT_SIZE) != 1) {
-        secure_wipe(salt, sizeof(salt));
-        return NOSTR_ERR_MEMORY;
-    }
-
-    if (RAND_bytes(nonce, NIP49_NONCE_SIZE) != 1) {
-        secure_wipe(salt, sizeof(salt));
-        secure_wipe(nonce, sizeof(nonce));
-        return NOSTR_ERR_MEMORY;
-    }
-
-    if (!derive_key_scrypt(password, salt, log_n, symmetric_key)) {
-        secure_wipe(salt, sizeof(salt));
-        secure_wipe(nonce, sizeof(nonce));
-        return NOSTR_ERR_ENCODING;
-    }
+    if (!derive_key_scrypt(password, salt, log_n, symmetric_key))
+        goto cleanup;
 
     uint8_t key_security = NIP49_KEY_SECURITY_UNKNOWN;
     if (!xchacha20_poly1305_encrypt(symmetric_key, nonce,
                                     &key_security, 1,
                                     privkey->data, NIP49_PRIVKEY_SIZE,
-                                    ciphertext, mac)) {
-        secure_wipe(symmetric_key, sizeof(symmetric_key));
-        secure_wipe(salt, sizeof(salt));
-        secure_wipe(nonce, sizeof(nonce));
-        return NOSTR_ERR_ENCODING;
-    }
-
-    secure_wipe(symmetric_key, sizeof(symmetric_key));
+                                    ciphertext, mac))
+        goto cleanup;
 
     uint8_t *p = payload;
     *p++ = NIP49_VERSION;
     *p++ = log_n;
     memcpy(p, salt, NIP49_SALT_SIZE); p += NIP49_SALT_SIZE;
-    secure_wipe(salt, sizeof(salt));
     memcpy(p, nonce, NIP49_NONCE_SIZE); p += NIP49_NONCE_SIZE;
     *p++ = key_security;
     memcpy(p, ciphertext, NIP49_PRIVKEY_SIZE); p += NIP49_PRIVKEY_SIZE;
     memcpy(p, mac, NIP49_MAC_SIZE);
 
-    uint8_t data5bit[146];
-    int data5bit_len = bech32_convert_bits(payload, NIP49_PAYLOAD_SIZE,
-                                           data5bit, sizeof(data5bit), 8, 5, 1);
-    if (data5bit_len <= 0) {
-        secure_wipe(payload, sizeof(payload));
-        secure_wipe(nonce, sizeof(nonce));
-        secure_wipe(ciphertext, sizeof(ciphertext));
-        secure_wipe(mac, sizeof(mac));
-        return NOSTR_ERR_ENCODING;
-    }
+    data5bit_len = bech32_convert_bits(payload, NIP49_PAYLOAD_SIZE,
+                                       data5bit, sizeof(data5bit), 8, 5, 1);
+    if (data5bit_len <= 0)
+        goto cleanup;
 
-    uint8_t checksum[6];
-    if (!bech32_create_checksum("ncryptsec", data5bit, data5bit_len, checksum)) {
-        secure_wipe(payload, sizeof(payload));
-        secure_wipe(nonce, sizeof(nonce));
-        secure_wipe(ciphertext, sizeof(ciphertext));
-        secure_wipe(mac, sizeof(mac));
-        return NOSTR_ERR_ENCODING;
-    }
+    if (!bech32_create_checksum("ncryptsec", data5bit, data5bit_len, checksum))
+        goto cleanup;
 
     memcpy(ncryptsec, "ncryptsec1", 10);
     char *pos = ncryptsec + 10;
-
-    for (int i = 0; i < data5bit_len; i++) {
+    for (int i = 0; i < data5bit_len; i++)
         *pos++ = BECH32_CHARSET[data5bit[i]];
-    }
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 6; i++)
         *pos++ = BECH32_CHARSET[checksum[i]];
-    }
     *pos = '\0';
 
-    secure_wipe(payload, sizeof(payload));
+    ret = NOSTR_OK;
+
+cleanup:
+    secure_wipe(salt, sizeof(salt));
     secure_wipe(nonce, sizeof(nonce));
+    secure_wipe(symmetric_key, sizeof(symmetric_key));
     secure_wipe(ciphertext, sizeof(ciphertext));
     secure_wipe(mac, sizeof(mac));
-
-    return NOSTR_OK;
+    secure_wipe(payload, sizeof(payload));
+    return ret;
 }
 
 nostr_error_t nostr_ncryptsec_decrypt(const char *ncryptsec,
@@ -358,30 +327,24 @@ nostr_error_t nostr_ncryptsec_decrypt(const char *ncryptsec,
 {
     uint8_t payload[NIP49_PAYLOAD_SIZE];
     uint8_t symmetric_key[32];
-    nostr_error_t err;
+    nostr_error_t ret;
 
-    if (!ncryptsec || !password || !privkey) {
+    if (!ncryptsec || !password || !privkey || strlen(password) == 0)
         return NOSTR_ERR_INVALID_PARAM;
-    }
 
-    if (strlen(password) == 0) {
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    err = decode_ncryptsec(ncryptsec, payload);
-    if (err != NOSTR_OK) {
-        return err;
-    }
+    ret = decode_ncryptsec(ncryptsec, payload);
+    if (ret != NOSTR_OK)
+        return ret;
 
     if (payload[0] != NIP49_VERSION) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_NOT_SUPPORTED;
+        ret = NOSTR_ERR_NOT_SUPPORTED;
+        goto cleanup;
     }
 
     uint8_t log_n = payload[1];
     if (log_n < 16 || log_n > 22) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_INVALID_PARAM;
+        ret = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
     }
 
     const uint8_t *p = payload + 2;
@@ -389,65 +352,61 @@ nostr_error_t nostr_ncryptsec_decrypt(const char *ncryptsec,
     const uint8_t *nonce = p; p += NIP49_NONCE_SIZE;
     uint8_t key_security = *p++;
     if (key_security > 0x02) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_INVALID_PARAM;
+        ret = NOSTR_ERR_INVALID_PARAM;
+        goto cleanup;
     }
     const uint8_t *ciphertext = p; p += NIP49_PRIVKEY_SIZE;
     const uint8_t *mac = p;
 
     if (!derive_key_scrypt(password, salt, log_n, symmetric_key)) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_ENCODING;
+        ret = NOSTR_ERR_ENCODING;
+        goto cleanup;
     }
 
     if (!xchacha20_poly1305_decrypt(symmetric_key, nonce,
                                      &key_security, 1,
                                      ciphertext, NIP49_PRIVKEY_SIZE,
                                      mac, privkey->data)) {
-        secure_wipe(symmetric_key, sizeof(symmetric_key));
-        secure_wipe(payload, sizeof(payload));
         secure_wipe(privkey->data, NIP49_PRIVKEY_SIZE);
-        return NOSTR_ERR_INVALID_SIGNATURE;
+        ret = NOSTR_ERR_INVALID_SIGNATURE;
+        goto cleanup;
     }
 
+    ret = NOSTR_OK;
+
+cleanup:
     secure_wipe(symmetric_key, sizeof(symmetric_key));
     secure_wipe(payload, sizeof(payload));
-    return NOSTR_OK;
+    return ret;
 }
 
 nostr_error_t nostr_ncryptsec_validate(const char *ncryptsec)
 {
     uint8_t payload[NIP49_PAYLOAD_SIZE];
-    nostr_error_t err;
+    nostr_error_t ret;
 
-    if (!ncryptsec) {
+    if (!ncryptsec)
         return NOSTR_ERR_INVALID_PARAM;
-    }
 
-    err = decode_ncryptsec(ncryptsec, payload);
-    if (err != NOSTR_OK) {
-        return err;
-    }
+    ret = decode_ncryptsec(ncryptsec, payload);
+    if (ret != NOSTR_OK)
+        return ret;
 
-    if (payload[0] != NIP49_VERSION) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_NOT_SUPPORTED;
-    }
-
+    uint8_t version = payload[0];
     uint8_t log_n = payload[1];
-    if (log_n < 16 || log_n > 22) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
     uint8_t key_security = payload[2 + NIP49_SALT_SIZE + NIP49_NONCE_SIZE];
-    if (key_security > 0x02) {
-        secure_wipe(payload, sizeof(payload));
-        return NOSTR_ERR_INVALID_PARAM;
-    }
+
+    if (version != NIP49_VERSION)
+        ret = NOSTR_ERR_NOT_SUPPORTED;
+    else if (log_n < 16 || log_n > 22)
+        ret = NOSTR_ERR_INVALID_PARAM;
+    else if (key_security > 0x02)
+        ret = NOSTR_ERR_INVALID_PARAM;
+    else
+        ret = NOSTR_OK;
 
     secure_wipe(payload, sizeof(payload));
-    return NOSTR_OK;
+    return ret;
 }
 
 #else
