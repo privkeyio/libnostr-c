@@ -83,8 +83,6 @@ static mbedtls_entropy_context rng_entropy;
 static mbedtls_ctr_drbg_context rng_ctr_drbg;
 static volatile int rng_initialized = 0;
 #endif
-#else
-static volatile int openssl_rng_seeded = 0;
 #endif
 
 int nostr_random_bytes(uint8_t *buf, size_t len) {
@@ -109,14 +107,6 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
 #endif
 #else
-    if (!openssl_rng_seeded) {
-        lock_ctx_init();
-        if (!openssl_rng_seeded) {
-            RAND_poll();
-            openssl_rng_seeded = 1;
-        }
-        unlock_ctx_init();
-    }
     while (len > 0) {
         int chunk = (len > INT_MAX) ? INT_MAX : (int)len;
         if (RAND_bytes(buf, chunk) != 1) {
