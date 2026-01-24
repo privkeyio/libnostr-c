@@ -47,7 +47,7 @@ if(NOSTR_FEATURE_NIP25)
     add_test(NAME nip25_tests COMMAND test_nip25)
 endif()
 
-if(NOSTR_FEATURE_NIP26)
+if(NOSTR_FEATURE_NIP26 AND HAVE_CRYPTO_BACKEND)
     add_executable(test_nip26 test_nip26.c)
     target_link_libraries(test_nip26 nostr_static)
     add_test(NAME nip26_tests COMMAND test_nip26)

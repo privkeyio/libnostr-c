@@ -134,8 +134,8 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
             p = endptr;
         }
         else {
-            while (*p && *p != '&')
-                p++;
+            cleanup_conditions(out);
+            return 0;
         }
     }
 
@@ -374,6 +374,10 @@ nostr_error_t nostr_event_get_delegation(const nostr_event *event,
             const char *token_hex = tag->values[3];
 
             if (!delegator_hex || !conditions || !token_hex)
+                return NOSTR_ERR_INVALID_EVENT;
+
+            size_t conditions_len = strlen(conditions);
+            if (conditions_len == 0 || conditions_len > NIP26_MAX_CONDITIONS_LEN)
                 return NOSTR_ERR_INVALID_EVENT;
 
             if (!is_valid_hex(delegator_hex, 64))

@@ -342,6 +342,37 @@ static void test_invalid_params(void)
     nostr_keypair_destroy(&kp);
 }
 
+static void test_unknown_condition_rejected(void)
+{
+    nostr_init();
+
+    nostr_keypair delegator, delegatee;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_keypair_generate(&delegator));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_keypair_generate(&delegatee));
+
+    nostr_delegation delegation;
+
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM,
+        nostr_delegation_create(&delegator.privkey, &delegatee.pubkey,
+            "kind=1&unknown=value", &delegation));
+
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM,
+        nostr_delegation_create(&delegator.privkey, &delegatee.pubkey,
+            "foo=bar", &delegation));
+
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM,
+        nostr_delegation_create(&delegator.privkey, &delegatee.pubkey,
+            "kind=1&pubkey=abc123", &delegation));
+
+    TEST_ASSERT_EQUAL(NOSTR_OK,
+        nostr_delegation_create(&delegator.privkey, &delegatee.pubkey,
+            "kind=1&kind=7&created_at>1000&created_at<2000", &delegation));
+    nostr_delegation_free(&delegation);
+
+    nostr_keypair_destroy(&delegator);
+    nostr_keypair_destroy(&delegatee);
+}
+
 static void test_nip26_spec_example(void)
 {
     nostr_init();
@@ -398,6 +429,7 @@ int run_nip26_tests(void)
     RUN_TEST(test_event_verify_delegation_wrong_kind);
     RUN_TEST(test_event_no_delegation);
     RUN_TEST(test_invalid_params);
+    RUN_TEST(test_unknown_condition_rejected);
     RUN_TEST(test_nip26_spec_example);
 #else
     RUN_TEST(test_delegation_create_and_verify, "test_delegation_create_and_verify");
@@ -410,6 +442,7 @@ int run_nip26_tests(void)
     RUN_TEST(test_event_verify_delegation_wrong_kind, "test_event_verify_delegation_wrong_kind");
     RUN_TEST(test_event_no_delegation, "test_event_no_delegation");
     RUN_TEST(test_invalid_params, "test_invalid_params");
+    RUN_TEST(test_unknown_condition_rejected, "test_unknown_condition_rejected");
     RUN_TEST(test_nip26_spec_example, "test_nip26_spec_example");
 #endif
 
