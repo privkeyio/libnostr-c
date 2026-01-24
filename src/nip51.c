@@ -324,6 +324,9 @@ static char* build_private_content(const nostr_list* list)
         }
         if (item->petname) {
             item_size += json_escaped_len(item->petname) + 4;
+            if (!item->relay_hint) {
+                item_size += 3;
+            }
         }
         if (buf_size > SIZE_MAX - item_size) {
             return NULL;
@@ -550,7 +553,16 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
             }
 
             size_t len = 0;
-            while (*p && *p != '"' && len < max_len) {
+            bool truncated = false;
+            while (*p && *p != '"') {
+                if (len >= max_len) {
+                    truncated = true;
+                    while (*p && *p != '"') {
+                        if (*p == '\\' && *(p+1)) p++;
+                        p++;
+                    }
+                    break;
+                }
                 if (*p == '\\' && *(p+1)) {
                     p++;
                     switch (*p) {
@@ -559,16 +571,46 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                     case 't':  dest[len++] = '\t'; break;
                     case '"':  dest[len++] = '"';  break;
                     case '\\': dest[len++] = '\\'; break;
-                    case 'u':
+                    case 'u': {
                         p++;
-                        for (int i = 0; i < 4 && *p &&
-                             ((*p >= '0' && *p <= '9') ||
-                              (*p >= 'a' && *p <= 'f') ||
-                              (*p >= 'A' && *p <= 'F')); i++) {
+                        unsigned int codepoint = 0;
+                        int hex_count = 0;
+                        for (int i = 0; i < 4 && *p; i++) {
+                            char c = *p;
+                            unsigned int digit;
+                            if (c >= '0' && c <= '9') {
+                                digit = c - '0';
+                            } else if (c >= 'a' && c <= 'f') {
+                                digit = 10 + (c - 'a');
+                            } else if (c >= 'A' && c <= 'F') {
+                                digit = 10 + (c - 'A');
+                            } else {
+                                break;
+                            }
+                            codepoint = (codepoint << 4) | digit;
+                            hex_count++;
                             p++;
                         }
-                        if (len < max_len) dest[len++] = '?';
+                        if (hex_count == 4) {
+                            if (codepoint <= 0x7F) {
+                                if (len < max_len) dest[len++] = (char)codepoint;
+                            } else if (codepoint <= 0x7FF) {
+                                if (len + 1 < max_len) {
+                                    dest[len++] = (char)(0xC0 | (codepoint >> 6));
+                                    dest[len++] = (char)(0x80 | (codepoint & 0x3F));
+                                }
+                            } else {
+                                if (len + 2 < max_len) {
+                                    dest[len++] = (char)(0xE0 | (codepoint >> 12));
+                                    dest[len++] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+                                    dest[len++] = (char)(0x80 | (codepoint & 0x3F));
+                                }
+                            }
+                        } else {
+                            if (len < max_len) dest[len++] = '?';
+                        }
                         continue;
+                    }
                     default:
                         dest[len++] = *p;
                         break;
@@ -579,6 +621,10 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                 p++;
             }
             dest[len] = '\0';
+
+            if (truncated) {
+                return NOSTR_ERR_JSON_PARSE;
+            }
 
             if (*p == '"') {
                 p++;
