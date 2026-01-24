@@ -66,6 +66,9 @@ static int parse_delegation_conditions(const char *conditions, nostr_delegation_
     if (!conditions || !out)
         return 0;
 
+    if (*conditions == '\0')
+        return 0;
+
     memset(out, 0, sizeof(*out));
 
     const char *p = conditions;
@@ -384,6 +387,9 @@ nostr_error_t nostr_event_get_delegation(const nostr_event *event,
                 return NOSTR_ERR_INVALID_EVENT;
 
             if (!is_valid_hex(token_hex, 128))
+                return NOSTR_ERR_INVALID_EVENT;
+
+            if (strlen(conditions) > NIP26_MAX_CONDITIONS_LEN)
                 return NOSTR_ERR_INVALID_EVENT;
 
             if (nostr_hex_decode(delegator_hex, delegation->delegator_pubkey.data, 32) != 32)
