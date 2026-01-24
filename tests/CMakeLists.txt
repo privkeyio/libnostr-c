@@ -16,6 +16,7 @@ add_executable(test_runner
     test_relay.c
     test_zap.c
     test_nip10.c
+    test_nip18.c
     test_nip25.c
     test_utils.c
     test_runner.c
@@ -32,6 +33,12 @@ if(NOSTR_FEATURE_NIP10)
     add_executable(test_nip10 test_nip10.c)
     target_link_libraries(test_nip10 nostr_static)
     add_test(NAME nip10_tests COMMAND test_nip10)
+endif()
+
+if(NOSTR_FEATURE_NIP18)
+    add_executable(test_nip18 test_nip18.c)
+    target_link_libraries(test_nip18 nostr_static)
+    add_test(NAME nip18_tests COMMAND test_nip18)
 endif()
 
 if(NOSTR_FEATURE_NIP25)
@@ -101,6 +108,10 @@ if(NOSTR_FEATURE_RELAY_PROTOCOL)
     add_executable(test_relay_integration test_relay_integration.c)
     target_link_libraries(test_relay_integration nostr_static)
     add_test(NAME relay_integration_tests COMMAND test_relay_integration)
+
+    add_executable(test_filter_clone test_filter_clone.c)
+    target_link_libraries(test_filter_clone nostr_static)
+    add_test(NAME filter_clone_tests COMMAND test_filter_clone)
 endif()
 
 target_link_libraries(test_runner nostr_static)

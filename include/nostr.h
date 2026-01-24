@@ -1172,6 +1172,56 @@ nostr_error_t nostr_reaction_is_like(const nostr_event* event, int* is_like);
  */
 nostr_error_t nostr_reaction_is_dislike(const nostr_event* event, int* is_dislike);
 
+/**
+ * @brief Create a repost event (NIP-18)
+ * @param event Output event pointer
+ * @param reposted_event_id ID of event being reposted (64-char hex)
+ * @param reposted_pubkey Pubkey of original event author (64-char hex)
+ * @param relay_hint Relay URL where original event can be found (required)
+ * @param reposted_kind Kind of reposted event (1 for kind:6, other for kind:16)
+ * @param d_tag Optional d-tag for replaceable events (adds "a" tag with kind:pubkey:d-tag)
+ * @param embedded_json Optional stringified JSON of reposted event (can be NULL)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_repost_create(nostr_event** event, const char* reposted_event_id,
+                                  const char* reposted_pubkey, const char* relay_hint,
+                                  uint16_t reposted_kind, const char* d_tag,
+                                  const char* embedded_json);
+
+/**
+ * @brief Parse a repost event (NIP-18)
+ * @param event Input repost event (must be kind 6 or 16)
+ * @param reposted_event_id Output buffer for reposted event ID (optional, at least 65 bytes)
+ * @param event_id_size Size of reposted_event_id buffer
+ * @param reposted_pubkey Output buffer for reposted pubkey (optional, at least 65 bytes)
+ * @param pubkey_size Size of reposted_pubkey buffer
+ * @param relay_hint Output buffer for relay hint (optional)
+ * @param relay_hint_size Size of relay_hint buffer
+ * @param reposted_kind Output for reposted event kind (optional, from k tag)
+ * @return NOSTR_OK on success, error code otherwise
+ */
+nostr_error_t nostr_repost_parse(const nostr_event* event, char* reposted_event_id, size_t event_id_size,
+                                 char* reposted_pubkey, size_t pubkey_size,
+                                 char* relay_hint, size_t relay_hint_size,
+                                 uint16_t* reposted_kind);
+
+/**
+ * @brief Extract quote tags from event content (NIP-18)
+ *
+ * Scans the event content for nostr: URI mentions (note1..., nevent1..., naddr1...)
+ * and adds corresponding q tags to the event. This ensures quote reposts are not
+ * pulled and included as replies in threads.
+ *
+ * @param event Event to scan and add q tags to
+ * @return NOSTR_OK on success, error code otherwise
+ *
+ * Tag formats:
+ * - note:   ["q", "<event-id-hex>", "", ""]
+ * - nevent: ["q", "<event-id-hex>", "<relay-if-available>", "<pubkey-if-available>"]
+ * - naddr:  ["q", "<kind:pubkey:d-tag>", "<relay-if-available>", ""]
+ */
+nostr_error_t nostr_quote_tags_from_content(nostr_event* event);
+
 #define NOSTR_URI_MAX_RELAYS 16
 #define NOSTR_URI_MAX_RELAY_LEN 256
 #define NOSTR_URI_MAX_IDENTIFIER_LEN 256

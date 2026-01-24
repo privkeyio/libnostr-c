@@ -26,6 +26,7 @@ void run_nip21_tests(void);
 void run_relay_tests(void);
 void run_zap_tests(void);
 void run_nip10_tests(void);
+int run_nip18_tests(void);
 void run_nip25_tests(void);
 void run_utils_tests(void);
 void run_coverage_tests(void);
@@ -73,6 +74,12 @@ int main(void)
 #ifdef NOSTR_FEATURE_NIP10
     printf("NIP-10 tests:\n");
     run_nip10_tests();
+    printf("\n");
+#endif
+
+#ifdef NOSTR_FEATURE_NIP18
+    printf("NIP-18 tests:\n");
+    run_nip18_tests();
     printf("\n");
 #endif
 
