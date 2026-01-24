@@ -538,31 +538,26 @@ int32_t nostr_filter_get_limit(const nostr_filter_t* filter)
 static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
                                                char** src, size_t src_count)
 {
-    if (src_count == 0) {
-        *dst = NULL;
-        *dst_count = 0;
-        return NOSTR_RELAY_OK;
-    }
+    *dst = NULL;
+    *dst_count = 0;
 
-    if (!src) {
+    if (src_count == 0)
+        return NOSTR_RELAY_OK;
+
+    if (!src)
         return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
 
     *dst = calloc(src_count, sizeof(char*));
-    if (!*dst) {
-        *dst_count = 0;
+    if (!*dst)
         return NOSTR_RELAY_ERR_MEMORY;
-    }
 
     for (size_t i = 0; i < src_count; i++) {
         (*dst)[i] = strdup(src[i] ? src[i] : "");
         if (!(*dst)[i]) {
-            for (size_t j = 0; j < i; j++) {
+            for (size_t j = 0; j < i; j++)
                 free((*dst)[j]);
-            }
             free(*dst);
             *dst = NULL;
-            *dst_count = 0;
             return NOSTR_RELAY_ERR_MEMORY;
         }
     }
@@ -573,39 +568,19 @@ static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
 
 nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t* src)
 {
-    if (!dst || !src) {
+    if (!dst || !src)
         return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
 
     memset(dst, 0, sizeof(nostr_filter_t));
 
-    if (src->ids_count > 0 && !src->ids) {
+    if ((src->ids_count > 0 && !src->ids) ||
+        (src->authors_count > 0 && !src->authors) ||
+        (src->kinds_count > 0 && !src->kinds) ||
+        (src->kinds_count > NOSTR_MAX_TAG_FILTER_VALUES) ||
+        (src->e_tags_count > 0 && !src->e_tags) ||
+        (src->p_tags_count > 0 && !src->p_tags) ||
+        (src->generic_tags_count > 0 && !src->generic_tags))
         return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    if (src->authors_count > 0 && !src->authors) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    if (src->kinds_count > 0 && !src->kinds) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    if (src->kinds_count > NOSTR_MAX_TAG_FILTER_VALUES) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    if (src->e_tags_count > 0 && !src->e_tags) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    if (src->p_tags_count > 0 && !src->p_tags) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
-
-    if (src->generic_tags_count > 0 && !src->generic_tags) {
-        return NOSTR_RELAY_ERR_INVALID_JSON;
-    }
 
     nostr_relay_error_t err;
 
@@ -615,7 +590,7 @@ nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t
     err = clone_string_array(&dst->authors, &dst->authors_count, src->authors, src->authors_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    if (src->kinds_count > 0 && src->kinds) {
+    if (src->kinds_count > 0) {
         dst->kinds = calloc(src->kinds_count, sizeof(int32_t));
         if (!dst->kinds) {
             err = NOSTR_RELAY_ERR_MEMORY;
@@ -631,7 +606,7 @@ nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t
     err = clone_string_array(&dst->p_tags, &dst->p_tags_count, src->p_tags, src->p_tags_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    if (src->generic_tags_count > 0 && src->generic_tags) {
+    if (src->generic_tags_count > 0) {
         dst->generic_tags = calloc(src->generic_tags_count, sizeof(nostr_generic_tag_filter_t));
         if (!dst->generic_tags) {
             err = NOSTR_RELAY_ERR_MEMORY;

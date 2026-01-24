@@ -50,7 +50,7 @@
 static void test_repost_create_kind1(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL);
+    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL(6, event->kind);
@@ -80,7 +80,7 @@ static void test_repost_create_kind1(void)
 static void test_repost_create_generic(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 30023, NULL);
+    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 30023, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL(16, event->kind);
@@ -104,7 +104,7 @@ static void test_repost_create_with_embedded_json(void)
 {
     const char* embedded = "{\"id\":\"test\",\"content\":\"hello\"}";
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, embedded);
+    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL, embedded);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(event);
     TEST_ASSERT_EQUAL_STRING(embedded, event->content);
@@ -112,10 +112,41 @@ static void test_repost_create_with_embedded_json(void)
     nostr_event_destroy(event);
 }
 
+static void test_repost_create_with_a_tag(void)
+{
+    nostr_event* event = NULL;
+    const char* d_tag = "my-article";
+    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 30023, d_tag, NULL);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+    TEST_ASSERT_NOT_NULL(event);
+    TEST_ASSERT_EQUAL(16, event->kind);
+
+    int found_a = 0, found_k = 0;
+    char expected_a[256];
+    snprintf(expected_a, sizeof(expected_a), "30023:%s:%s", TEST_PUBKEY, d_tag);
+
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2) {
+            if (strcmp(event->tags[i].values[0], "a") == 0) {
+                found_a = 1;
+                TEST_ASSERT_EQUAL_STRING(expected_a, event->tags[i].values[1]);
+            } else if (strcmp(event->tags[i].values[0], "k") == 0) {
+                found_k = 1;
+                TEST_ASSERT_EQUAL_STRING("30023", event->tags[i].values[1]);
+            }
+        }
+    }
+
+    TEST_ASSERT_TRUE(found_a);
+    TEST_ASSERT_TRUE(found_k);
+
+    nostr_event_destroy(event);
+}
+
 static void test_repost_parse_kind6(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL);
+    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     char event_id[65];
@@ -137,7 +168,7 @@ static void test_repost_parse_kind6(void)
 static void test_repost_parse_kind16(void)
 {
     nostr_event* event = NULL;
-    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 7, NULL);
+    nostr_error_t err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 7, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
 
     char event_id[65];
@@ -172,24 +203,173 @@ static void test_invalid_params(void)
 {
     nostr_error_t err;
 
-    err = nostr_repost_create(NULL, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL);
+    err = nostr_repost_create(NULL, TEST_EVENT_ID, TEST_PUBKEY, TEST_RELAY, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
 
     nostr_event* event = NULL;
-    err = nostr_repost_create(&event, NULL, TEST_PUBKEY, TEST_RELAY, 1, NULL);
+    err = nostr_repost_create(&event, NULL, TEST_PUBKEY, TEST_RELAY, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
 
-    err = nostr_repost_create(&event, TEST_EVENT_ID, NULL, TEST_RELAY, 1, NULL);
+    err = nostr_repost_create(&event, TEST_EVENT_ID, NULL, TEST_RELAY, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
 
-    err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, NULL, 1, NULL);
+    err = nostr_repost_create(&event, TEST_EVENT_ID, TEST_PUBKEY, NULL, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
 
-    err = nostr_repost_create(&event, "invalid", TEST_PUBKEY, TEST_RELAY, 1, NULL);
+    err = nostr_repost_create(&event, "invalid", TEST_PUBKEY, TEST_RELAY, 1, NULL, NULL);
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
 
     err = nostr_repost_parse(NULL, NULL, 0, NULL, 0, NULL, 0, NULL);
     TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
+}
+
+static void test_quote_tags_note(void)
+{
+    nostr_event* event = NULL;
+    nostr_error_t err = nostr_event_create(&event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_event_set_content(event, "Check this out nostr:note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn2l0z3");
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_quote_tags_from_content(event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    int found_q = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && strcmp(event->tags[i].values[0], "q") == 0) {
+            found_q = 1;
+            TEST_ASSERT_TRUE(strlen(event->tags[i].values[1]) == 64);
+            TEST_ASSERT_EQUAL(4, event->tags[i].count);
+            TEST_ASSERT_EQUAL_STRING("", event->tags[i].values[2]);
+            TEST_ASSERT_EQUAL_STRING("", event->tags[i].values[3]);
+        }
+    }
+    TEST_ASSERT_TRUE(found_q);
+
+    nostr_event_destroy(event);
+}
+
+static void test_quote_tags_nevent(void)
+{
+    nostr_event* event = NULL;
+    nostr_error_t err = nostr_event_create(&event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_event_set_content(event,
+        "Look at nostr:nevent1qqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqradspk");
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_quote_tags_from_content(event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    int found_q = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && strcmp(event->tags[i].values[0], "q") == 0) {
+            found_q = 1;
+            TEST_ASSERT_TRUE(strlen(event->tags[i].values[1]) == 64);
+            TEST_ASSERT_EQUAL(4, event->tags[i].count);
+        }
+    }
+    TEST_ASSERT_TRUE(found_q);
+
+    nostr_event_destroy(event);
+}
+
+static void test_quote_tags_multiple_mentions(void)
+{
+    nostr_event* event = NULL;
+    nostr_error_t err = nostr_event_create(&event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_event_set_content(event,
+        "First nostr:note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn2l0z3 "
+        "and second nostr:note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn2l0z3");
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_quote_tags_from_content(event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    int q_count = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && strcmp(event->tags[i].values[0], "q") == 0)
+            q_count++;
+    }
+    TEST_ASSERT_EQUAL(2, q_count);
+
+    nostr_event_destroy(event);
+}
+
+static void test_quote_tags_no_mentions(void)
+{
+    nostr_event* event = NULL;
+    nostr_error_t err = nostr_event_create(&event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_event_set_content(event, "Just a regular post with no mentions.");
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_quote_tags_from_content(event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    int q_count = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && strcmp(event->tags[i].values[0], "q") == 0)
+            q_count++;
+    }
+    TEST_ASSERT_EQUAL(0, q_count);
+
+    nostr_event_destroy(event);
+}
+
+static void test_quote_tags_empty_content(void)
+{
+    nostr_event* event = NULL;
+    nostr_error_t err = nostr_event_create(&event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_event_set_content(event, "");
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_quote_tags_from_content(event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+    TEST_ASSERT_EQUAL(0, event->tags_count);
+
+    nostr_event_destroy(event);
+}
+
+static void test_quote_tags_null_event(void)
+{
+    nostr_error_t err = nostr_quote_tags_from_content(NULL);
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, err);
+}
+
+static void test_quote_tags_nevent_with_relay_and_author(void)
+{
+    nostr_event* event = NULL;
+    nostr_error_t err = nostr_event_create(&event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_event_set_content(event,
+        "Look at nostr:nevent1qqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpzamhxue69uhhyetvv9ujuetcv9khqmr99e3k7mgzyz4242424242424242424242424242424242424242424242424254gvmty");
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    err = nostr_quote_tags_from_content(event);
+    TEST_ASSERT_EQUAL(NOSTR_OK, err);
+
+    int found_q = 0;
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if (event->tags[i].count >= 2 && strcmp(event->tags[i].values[0], "q") == 0) {
+            found_q = 1;
+            TEST_ASSERT_EQUAL(4, event->tags[i].count);
+            TEST_ASSERT_TRUE(strlen(event->tags[i].values[1]) == 64);
+            TEST_ASSERT_EQUAL_STRING("wss://relay.example.com", event->tags[i].values[2]);
+            TEST_ASSERT_TRUE(strlen(event->tags[i].values[3]) == 64);
+        }
+    }
+    TEST_ASSERT_TRUE(found_q);
+
+    nostr_event_destroy(event);
 }
 
 void run_nip18_tests(void)
@@ -205,6 +385,9 @@ void run_nip18_tests(void)
     test_repost_create_with_embedded_json();
     printf("     Success: test_repost_create_with_embedded_json\n");
 
+    test_repost_create_with_a_tag();
+    printf("     Success: test_repost_create_with_a_tag\n");
+
     test_repost_parse_kind6();
     printf("     Success: test_repost_parse_kind6\n");
 
@@ -216,6 +399,27 @@ void run_nip18_tests(void)
 
     test_invalid_params();
     printf("     Success: test_invalid_params\n");
+
+    test_quote_tags_note();
+    printf("     Success: test_quote_tags_note\n");
+
+    test_quote_tags_nevent();
+    printf("     Success: test_quote_tags_nevent\n");
+
+    test_quote_tags_multiple_mentions();
+    printf("     Success: test_quote_tags_multiple_mentions\n");
+
+    test_quote_tags_no_mentions();
+    printf("     Success: test_quote_tags_no_mentions\n");
+
+    test_quote_tags_empty_content();
+    printf("     Success: test_quote_tags_empty_content\n");
+
+    test_quote_tags_null_event();
+    printf("     Success: test_quote_tags_null_event\n");
+
+    test_quote_tags_nevent_with_relay_and_author();
+    printf("     Success: test_quote_tags_nevent_with_relay_and_author\n");
 }
 
 #ifndef TEST_RUNNER_INCLUDED

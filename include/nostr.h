@@ -1179,12 +1179,14 @@ nostr_error_t nostr_reaction_is_dislike(const nostr_event* event, int* is_dislik
  * @param reposted_pubkey Pubkey of original event author (64-char hex)
  * @param relay_hint Relay URL where original event can be found (required)
  * @param reposted_kind Kind of reposted event (1 for kind:6, other for kind:16)
+ * @param d_tag Optional d-tag for replaceable events (adds "a" tag with kind:pubkey:d-tag)
  * @param embedded_json Optional stringified JSON of reposted event (can be NULL)
  * @return NOSTR_OK on success, error code otherwise
  */
 nostr_error_t nostr_repost_create(nostr_event** event, const char* reposted_event_id,
                                   const char* reposted_pubkey, const char* relay_hint,
-                                  uint16_t reposted_kind, const char* embedded_json);
+                                  uint16_t reposted_kind, const char* d_tag,
+                                  const char* embedded_json);
 
 /**
  * @brief Parse a repost event (NIP-18)
@@ -1202,6 +1204,23 @@ nostr_error_t nostr_repost_parse(const nostr_event* event, char* reposted_event_
                                  char* reposted_pubkey, size_t pubkey_size,
                                  char* relay_hint, size_t relay_hint_size,
                                  uint16_t* reposted_kind);
+
+/**
+ * @brief Extract quote tags from event content (NIP-18)
+ *
+ * Scans the event content for nostr: URI mentions (note1..., nevent1..., naddr1...)
+ * and adds corresponding q tags to the event. This ensures quote reposts are not
+ * pulled and included as replies in threads.
+ *
+ * @param event Event to scan and add q tags to
+ * @return NOSTR_OK on success, error code otherwise
+ *
+ * Tag formats:
+ * - note:   ["q", "<event-id-hex>", "", ""]
+ * - nevent: ["q", "<event-id-hex>", "<relay-if-available>", "<pubkey-if-available>"]
+ * - naddr:  ["q", "<kind:pubkey:d-tag>", "<relay-if-available>", ""]
+ */
+nostr_error_t nostr_quote_tags_from_content(nostr_event* event);
 
 #define NOSTR_URI_MAX_RELAYS 16
 #define NOSTR_URI_MAX_RELAY_LEN 256

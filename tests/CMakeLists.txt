@@ -16,6 +16,7 @@ add_executable(test_runner
     test_relay.c
     test_zap.c
     test_nip10.c
+    test_nip18.c
     test_nip25.c
     test_utils.c
     test_runner.c
