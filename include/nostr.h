@@ -1485,13 +1485,28 @@ typedef enum {
     NOSTR_LIST_KIND_PUBLIC_CHATS = 10005,
     NOSTR_LIST_KIND_BLOCKED_RELAYS = 10006,
     NOSTR_LIST_KIND_SEARCH_RELAYS = 10007,
+    NOSTR_LIST_KIND_SIMPLE_GROUPS = 10009,
+    NOSTR_LIST_KIND_RELAY_FEEDS = 10012,
     NOSTR_LIST_KIND_INTERESTS = 10015,
+    NOSTR_LIST_KIND_MEDIA_FOLLOWS = 10020,
     NOSTR_LIST_KIND_EMOJIS = 10030,
+    NOSTR_LIST_KIND_DM_RELAYS = 10050,
+    NOSTR_LIST_KIND_GOOD_WIKI_AUTHORS = 10101,
+    NOSTR_LIST_KIND_GOOD_WIKI_RELAYS = 10102,
     NOSTR_LIST_KIND_FOLLOW_SET = 30000,
     NOSTR_LIST_KIND_RELAY_SET = 30002,
     NOSTR_LIST_KIND_BOOKMARK_SET = 30003,
     NOSTR_LIST_KIND_CURATION_SET = 30004,
-    NOSTR_LIST_KIND_INTEREST_SET = 30015
+    NOSTR_LIST_KIND_CURATION_SET_VIDEOS = 30005,
+    NOSTR_LIST_KIND_CURATION_SET_PICTURES = 30006,
+    NOSTR_LIST_KIND_KIND_MUTE_SET = 30007,
+    NOSTR_LIST_KIND_INTEREST_SET = 30015,
+    NOSTR_LIST_KIND_EMOJI_SET = 30030,
+    NOSTR_LIST_KIND_RELEASE_ARTIFACT_SET = 30063,
+    NOSTR_LIST_KIND_APP_CURATION_SET = 30267,
+    NOSTR_LIST_KIND_CALENDAR = 31924,
+    NOSTR_LIST_KIND_STARTER_PACK = 39089,
+    NOSTR_LIST_KIND_MEDIA_STARTER_PACK = 39092
 } nostr_list_kind;
 
 typedef struct nostr_list_item {
@@ -1530,6 +1545,10 @@ nostr_error_t nostr_list_add_word(nostr_list* list, const char* word, bool is_pr
 nostr_error_t nostr_list_add_relay(nostr_list* list, const char* relay_url, bool is_private);
 nostr_error_t nostr_list_add_reference(nostr_list* list, const char* reference,
                                        const char* relay_hint, bool is_private);
+nostr_error_t nostr_list_add_group(nostr_list* list, const char* group_id,
+                                   const char* relay_url, const char* group_name, bool is_private);
+nostr_error_t nostr_list_add_emoji(nostr_list* list, const char* shortcode,
+                                   const char* image_url, bool is_private);
 
 nostr_error_t nostr_list_to_event(const nostr_list* list, const nostr_keypair* keypair,
                                   nostr_event** event);

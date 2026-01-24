@@ -61,18 +61,51 @@ static bool is_parameterized_list(uint16_t kind)
     return kind >= 30000 && kind < 40000;
 }
 
+static int hex_digit_value(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    return -1;
+}
+
 static bool is_valid_hex64(const char* s)
 {
     if (!s || strlen(s) != 64) {
         return false;
     }
     for (size_t i = 0; i < 64; i++) {
-        char c = s[i];
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+        if (hex_digit_value(s[i]) < 0) {
             return false;
         }
     }
     return true;
+}
+
+static bool is_json_whitespace(char c)
+{
+    return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+}
+
+static const char* skip_json_whitespace(const char* p)
+{
+    while (*p && (is_json_whitespace(*p) || *p == ',')) {
+        p++;
+    }
+    return p;
+}
+
+static int parse_hex4(const char** pp)
+{
+    const char* p = *pp;
+    unsigned int val = 0;
+    for (int i = 0; i < 4; i++) {
+        int d = hex_digit_value(p[i]);
+        if (d < 0) return -1;
+        val = (val << 4) | (unsigned int)d;
+    }
+    *pp = p + 4;
+    return (int)val;
 }
 
 static void free_item(nostr_list_item* item)
@@ -241,7 +274,7 @@ nostr_error_t nostr_list_add_event(nostr_list* list, const char* event_id,
 
 nostr_error_t nostr_list_add_hashtag(nostr_list* list, const char* hashtag, bool is_private)
 {
-    if (!hashtag || strlen(hashtag) == 0) {
+    if (!hashtag || !*hashtag) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     return add_item(list, "t", hashtag, NULL, NULL, is_private);
@@ -249,7 +282,7 @@ nostr_error_t nostr_list_add_hashtag(nostr_list* list, const char* hashtag, bool
 
 nostr_error_t nostr_list_add_word(nostr_list* list, const char* word, bool is_private)
 {
-    if (!word || strlen(word) == 0) {
+    if (!word || !*word) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     return add_item(list, "word", word, NULL, NULL, is_private);
@@ -257,7 +290,7 @@ nostr_error_t nostr_list_add_word(nostr_list* list, const char* word, bool is_pr
 
 nostr_error_t nostr_list_add_relay(nostr_list* list, const char* relay_url, bool is_private)
 {
-    if (!relay_url || strlen(relay_url) == 0) {
+    if (!relay_url || !*relay_url) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     return add_item(list, "relay", relay_url, NULL, NULL, is_private);
@@ -266,10 +299,28 @@ nostr_error_t nostr_list_add_relay(nostr_list* list, const char* relay_url, bool
 nostr_error_t nostr_list_add_reference(nostr_list* list, const char* reference,
                                        const char* relay_hint, bool is_private)
 {
-    if (!reference || strlen(reference) == 0) {
+    if (!reference || !*reference) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     return add_item(list, "a", reference, relay_hint, NULL, is_private);
+}
+
+nostr_error_t nostr_list_add_group(nostr_list* list, const char* group_id,
+                                   const char* relay_url, const char* group_name, bool is_private)
+{
+    if (!group_id || !*group_id || !relay_url || !*relay_url) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+    return add_item(list, "group", group_id, relay_url, group_name, is_private);
+}
+
+nostr_error_t nostr_list_add_emoji(nostr_list* list, const char* shortcode,
+                                   const char* image_url, bool is_private)
+{
+    if (!shortcode || !*shortcode || !image_url || !*image_url) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+    return add_item(list, "emoji", shortcode, image_url, NULL, is_private);
 }
 
 size_t nostr_list_count(const nostr_list* list)
@@ -513,6 +564,44 @@ cleanup:
     return err;
 }
 
+static size_t encode_utf8(char* dest, size_t max_len, size_t len, unsigned int cp, bool* truncated)
+{
+    if (cp <= 0x7F) {
+        if (len < max_len) {
+            dest[len++] = (char)cp;
+        } else {
+            *truncated = true;
+        }
+    } else if (cp <= 0x7FF) {
+        if (len + 2 <= max_len) {
+            dest[len++] = (char)(0xC0 | (cp >> 6));
+            dest[len++] = (char)(0x80 | (cp & 0x3F));
+        } else {
+            *truncated = true;
+        }
+    } else if (cp <= 0xFFFF) {
+        if (len + 3 <= max_len) {
+            dest[len++] = (char)(0xE0 | (cp >> 12));
+            dest[len++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+            dest[len++] = (char)(0x80 | (cp & 0x3F));
+        } else {
+            *truncated = true;
+        }
+    } else if (cp <= 0x10FFFF) {
+        if (len + 4 <= max_len) {
+            dest[len++] = (char)(0xF0 | (cp >> 18));
+            dest[len++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+            dest[len++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+            dest[len++] = (char)(0x80 | (cp & 0x3F));
+        } else {
+            *truncated = true;
+        }
+    } else {
+        if (len < max_len) dest[len++] = '?';
+    }
+    return len;
+}
+
 static nostr_error_t parse_private_content(const char* json, nostr_list* list)
 {
     if (!json || strlen(json) < 2) {
@@ -529,9 +618,7 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
     p++;
 
     while (*p) {
-        while (*p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t' || *p == ',')) {
-            p++;
-        }
+        p = skip_json_whitespace(p);
         if (*p == ']') {
             break;
         }
@@ -547,9 +634,7 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
         int field = 0;
 
         while (*p && *p != ']') {
-            while (*p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t' || *p == ',')) {
-                p++;
-            }
+            p = skip_json_whitespace(p);
             if (*p == ']') {
                 break;
             }
@@ -594,96 +679,31 @@ static nostr_error_t parse_private_content(const char* json, nostr_list* list)
                     case '\\': dest[len++] = '\\'; break;
                     case 'u': {
                         p++;
-                        unsigned int codepoint = 0;
-                        int hex_count = 0;
-                        for (int i = 0; i < 4 && *p; i++) {
-                            char c = *p;
-                            unsigned int digit;
-                            if (c >= '0' && c <= '9') {
-                                digit = c - '0';
-                            } else if (c >= 'a' && c <= 'f') {
-                                digit = 10 + (c - 'a');
-                            } else if (c >= 'A' && c <= 'F') {
-                                digit = 10 + (c - 'A');
-                            } else {
-                                break;
-                            }
-                            codepoint = (codepoint << 4) | digit;
-                            hex_count++;
-                            p++;
+                        int hi = parse_hex4(&p);
+                        if (hi < 0) {
+                            if (len < max_len) dest[len++] = '?';
+                            continue;
                         }
-                        if (hex_count == 4) {
-                            if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
-                                if (p[0] == '\\' && p[1] == 'u') {
-                                    p += 2;
-                                    unsigned int low_surrogate = 0;
-                                    int low_count = 0;
-                                    for (int i = 0; i < 4 && *p; i++) {
-                                        char c = *p;
-                                        unsigned int digit;
-                                        if (c >= '0' && c <= '9') {
-                                            digit = c - '0';
-                                        } else if (c >= 'a' && c <= 'f') {
-                                            digit = 10 + (c - 'a');
-                                        } else if (c >= 'A' && c <= 'F') {
-                                            digit = 10 + (c - 'A');
-                                        } else {
-                                            break;
-                                        }
-                                        low_surrogate = (low_surrogate << 4) | digit;
-                                        low_count++;
-                                        p++;
-                                    }
-                                    if (low_count == 4 && low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
-                                        codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + (low_surrogate - 0xDC00);
-                                    } else {
-                                        if (len < max_len) dest[len++] = '?';
-                                        continue;
-                                    }
+                        unsigned int codepoint = (unsigned int)hi;
+                        if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
+                            if (p[0] == '\\' && p[1] == 'u') {
+                                p += 2;
+                                int lo = parse_hex4(&p);
+                                if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                                    codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + ((unsigned int)lo - 0xDC00);
                                 } else {
                                     if (len < max_len) dest[len++] = '?';
                                     continue;
                                 }
-                            } else if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) {
+                            } else {
                                 if (len < max_len) dest[len++] = '?';
                                 continue;
                             }
-                            if (codepoint <= 0x7F) {
-                                if (len < max_len) {
-                                    dest[len++] = (char)codepoint;
-                                } else {
-                                    truncated = true;
-                                }
-                            } else if (codepoint <= 0x7FF) {
-                                if (len + 2 <= max_len) {
-                                    dest[len++] = (char)(0xC0 | (codepoint >> 6));
-                                    dest[len++] = (char)(0x80 | (codepoint & 0x3F));
-                                } else {
-                                    truncated = true;
-                                }
-                            } else if (codepoint <= 0xFFFF) {
-                                if (len + 3 <= max_len) {
-                                    dest[len++] = (char)(0xE0 | (codepoint >> 12));
-                                    dest[len++] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-                                    dest[len++] = (char)(0x80 | (codepoint & 0x3F));
-                                } else {
-                                    truncated = true;
-                                }
-                            } else if (codepoint <= 0x10FFFF) {
-                                if (len + 4 <= max_len) {
-                                    dest[len++] = (char)(0xF0 | (codepoint >> 18));
-                                    dest[len++] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
-                                    dest[len++] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-                                    dest[len++] = (char)(0x80 | (codepoint & 0x3F));
-                                } else {
-                                    truncated = true;
-                                }
-                            } else {
-                                if (len < max_len) dest[len++] = '?';
-                            }
-                        } else {
+                        } else if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) {
                             if (len < max_len) dest[len++] = '?';
+                            continue;
                         }
+                        len = encode_utf8(dest, max_len, len, codepoint, &truncated);
                         continue;
                     }
                     default:
@@ -773,7 +793,7 @@ nostr_error_t nostr_list_from_event(const nostr_event* event, const nostr_keypai
         if (err != NOSTR_OK) goto cleanup;
     }
 
-    if (event->content && strlen(event->content) > 0 && keypair) {
+    if (event->content && *event->content && keypair) {
 #ifdef NOSTR_FEATURE_NIP44
         const nostr_privkey* priv_key = nostr_keypair_private_key(keypair);
         const nostr_key* pub_key = nostr_keypair_public_key(keypair);
@@ -883,6 +903,20 @@ nostr_error_t nostr_list_add_reference(nostr_list* list, const char* reference,
                                        const char* relay_hint, bool is_private)
 {
     (void)list; (void)reference; (void)relay_hint; (void)is_private;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_list_add_group(nostr_list* list, const char* group_id,
+                                   const char* relay_url, const char* group_name, bool is_private)
+{
+    (void)list; (void)group_id; (void)relay_url; (void)group_name; (void)is_private;
+    return NOSTR_ERR_NOT_SUPPORTED;
+}
+
+nostr_error_t nostr_list_add_emoji(nostr_list* list, const char* shortcode,
+                                   const char* image_url, bool is_private)
+{
+    (void)list; (void)shortcode; (void)image_url; (void)is_private;
     return NOSTR_ERR_NOT_SUPPORTED;
 }
 
