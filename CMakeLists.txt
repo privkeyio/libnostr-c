@@ -59,7 +59,7 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(libnostr-c VERSION 0.1.5 LANGUAGES C)
+project(libnostr-c VERSION 0.1.6 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
