@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.6] - 2026-01-27
+
+### Added
+- NIP-50 search filter support
+- NIP-51 Lists support
+- NIP-26 delegated event signing support
+- NIP-49 private key encryption support
+- NIP-18 repost support and `nostr_filter_clone()`
+- NIP-06 BIP39 mnemonic key derivation support
+- NIP-05 DNS-based identity verification
+- NIP-65 relay list metadata support
+- NIP-21 URI scheme support
+- NIP-45 COUNT message support
+- NIP-10 and NIP-25 support
+
+### Fixed
+- NIP-44 decrypt MAC verification and padding calculation
+
+### Changed
+- Split test_relay_protocol.c into logical modules
+
 ## [0.1.5] - 2026-01-14
 
 ### Fixed
