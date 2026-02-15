@@ -78,7 +78,7 @@ static void tag_arena_destroy(nostr_tag_arena* arena)
 
 static void* tag_arena_alloc(nostr_tag_arena* arena, size_t size)
 {
-    if (!arena || arena->used + size > arena->capacity) {
+    if (!arena || arena->used > arena->capacity || size > arena->capacity - arena->used) {
         return NULL;
     }
     
@@ -145,21 +145,34 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    if (count > SIZE_MAX / sizeof(char*)) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
     size_t values_size = sizeof(char*) * count;
     size_t strings_size = 0;
     for (size_t i = 0; i < count; i++) {
         if (!values[i]) {
             return NOSTR_ERR_INVALID_PARAM;
         }
-        strings_size += strlen(values[i]) + 1;
+        size_t slen = strlen(values[i]) + 1;
+        if (strings_size > SIZE_MAX - slen) {
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+        strings_size += slen;
     }
-    
+
+    if (values_size > SIZE_MAX - strings_size) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
     size_t total_size = values_size + strings_size;
     
     if (event->tag_arena->used + total_size > event->tag_arena->capacity) {
         size_t new_capacity = event->tag_arena->capacity;
-        while (new_capacity < event->tag_arena->used + total_size) {
-            new_capacity *= 2;
+        size_t required = event->tag_arena->used + total_size;
+        while (new_capacity < required) {
+            size_t doubled = new_capacity * 2;
+            if (doubled <= new_capacity) return NOSTR_ERR_MEMORY;
+            new_capacity = doubled;
         }
         
         void* old_memory = event->tag_arena->memory;
@@ -171,7 +184,6 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
         if (new_memory != old_memory) {
             ptrdiff_t offset = (char*)new_memory - (char*)old_memory;
             for (size_t i = 0; i < event->tags_count; i++) {
-                // Update the values array pointer
                 event->tags[i].values = (char**)((char*)event->tags[i].values + offset);
                 for (size_t j = 0; j < event->tags[i].count; j++) {
                     if (event->tags[i].values[j]) {
@@ -221,7 +233,8 @@ static char* escape_json_string(const char* input)
     if (!input) return NULL;
 
     size_t len = strlen(input);
-    size_t max_output_len = len * 2 + 1;
+    if (len > SIZE_MAX / 6) return NULL;
+    size_t max_output_len = len * 6 + 1;
     char* output = malloc(max_output_len);
     if (!output) return NULL;
 
@@ -257,7 +270,11 @@ static char* escape_json_string(const char* input)
                 output[j++] = 'f';
                 break;
             default:
-                output[j++] = input[i];
+                if ((unsigned char)input[i] < 0x20) {
+                    j += snprintf(output + j, 7, "\\u%04x", (unsigned char)input[i]);
+                } else {
+                    output[j++] = input[i];
+                }
                 break;
         }
     }
@@ -312,7 +329,7 @@ static char* serialize_for_id(const nostr_event* event)
     size_t json_size = 512 + strlen(content_escaped);
     for (size_t i = 0; i < event->tags_count; i++) {
         for (size_t j = 0; j < event->tags[i].count; j++) {
-            json_size += strlen(event->tags[i].values[j]) + 4;
+            json_size += strlen(event->tags[i].values[j]) * 6 + 4;
         }
     }
     
@@ -330,7 +347,14 @@ static char* serialize_for_id(const nostr_event* event)
         result[pos++] = '[';
         for (size_t j = 0; j < event->tags[i].count; j++) {
             if (j > 0) result[pos++] = ',';
-            pos += snprintf(result + pos, json_size - pos, "\"%s\"", event->tags[i].values[j]);
+            char* tag_escaped = escape_json_string(event->tags[i].values[j]);
+            if (!tag_escaped) {
+                free(result);
+                free(content_escaped);
+                return NULL;
+            }
+            pos += snprintf(result + pos, json_size - pos, "\"%s\"", tag_escaped);
+            free(tag_escaped);
         }
         result[pos++] = ']';
     }
@@ -486,6 +510,12 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
 
     cJSON* content_json = cJSON_GetObjectItem(root, "content");
     if (content_json && cJSON_IsString(content_json)) {
+        const nostr_config* cfg = nostr_config_get_current();
+        if (cfg && strlen(content_json->valuestring) > cfg->max_content_size) {
+            nostr_event_destroy(*event);
+            cJSON_Delete(root);
+            return NOSTR_ERR_INVALID_PARAM;
+        }
         (*event)->content = strdup(content_json->valuestring);
         if (!(*event)->content) {
             nostr_event_destroy(*event);
@@ -577,41 +607,37 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
         }
     }
 
-    // Convert to noscrypt types
     NCSecretKey nc_secret;
     NCPublicKey nc_public;
     memcpy(nc_secret.key, privkey->data, NC_SEC_KEY_SIZE);
 
-    // Get public key using noscrypt
     if (NCGetPublicKey(nc_ctx, &nc_secret, &nc_public) != NC_SUCCESS) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
         return NOSTR_ERR_INVALID_KEY;
     }
 
-    // Copy public key to event
     memcpy(event->pubkey.data, nc_public.key, NOSTR_PUBKEY_SIZE);
 
-    // Compute event ID with the public key set
     nostr_error_t result = nostr_event_compute_id(event);
     if (result != NOSTR_OK) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
         return result;
     }
 
-    // Sign using NCSignDigest since event->id is already a SHA256 digest
     uint8_t random32[32];
     if (nostr_random_bytes(random32, 32) != 1) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
         return NOSTR_ERR_MEMORY;
     }
-    
+
     if (NCSignDigest(nc_ctx, &nc_secret, random32, event->id, event->sig) != NC_SUCCESS) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
+        secure_wipe(random32, sizeof(random32));
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 
-    // Clear sensitive data
-    memset(&nc_secret, 0, sizeof(nc_secret));
+    secure_wipe(&nc_secret, sizeof(nc_secret));
+    secure_wipe(random32, sizeof(random32));
 
 #elif defined(HAVE_SECP256K1)
     if (!secp256k1_ctx) {
@@ -621,45 +647,47 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
         }
     }
 
-    // Create keypair from private key
     secp256k1_keypair keypair;
     if (!secp256k1_keypair_create(secp256k1_ctx, &keypair, privkey->data)) {
         return NOSTR_ERR_INVALID_KEY;
     }
 
-    // Extract x-only public key from keypair
+    nostr_error_t result = NOSTR_OK;
+    unsigned char aux_rand[32] = {0};
+
     secp256k1_xonly_pubkey xonly_pubkey;
     if (!secp256k1_keypair_xonly_pub(secp256k1_ctx, &xonly_pubkey, NULL, &keypair)) {
-        return NOSTR_ERR_INVALID_KEY;
+        result = NOSTR_ERR_INVALID_KEY;
+        goto secp_cleanup;
     }
 
-    // Serialize x-only pubkey
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_ctx, event->pubkey.data, &xonly_pubkey)) {
-        return NOSTR_ERR_INVALID_KEY;
+        result = NOSTR_ERR_INVALID_KEY;
+        goto secp_cleanup;
     }
 
-    // Compute event ID with the public key set
-    nostr_error_t result = nostr_event_compute_id(event);
+    result = nostr_event_compute_id(event);
+    if (result != NOSTR_OK) {
+        goto secp_cleanup;
+    }
+
+    if (nostr_random_bytes(aux_rand, 32) != 1) {
+        result = NOSTR_ERR_MEMORY;
+        goto secp_cleanup;
+    }
+
+    if (!secp256k1_schnorrsig_sign32(secp256k1_ctx, event->sig, event->id, &keypair, aux_rand)) {
+        result = NOSTR_ERR_INVALID_SIGNATURE;
+        goto secp_cleanup;
+    }
+
+secp_cleanup:
+    secure_wipe(aux_rand, sizeof(aux_rand));
+    secure_wipe(&keypair, sizeof(keypair));
     if (result != NOSTR_OK) {
         return result;
     }
-
-    // Generate auxiliary randomness for BIP-340
-    unsigned char aux_rand[32];
-    if (nostr_random_bytes(aux_rand, 32) != 1) {
-        return NOSTR_ERR_MEMORY;
-    }
-
-    // Sign the event ID using Schnorr signatures (BIP-340)
-    if (!secp256k1_schnorrsig_sign32(secp256k1_ctx, event->sig, event->id, &keypair, aux_rand)) {
-        return NOSTR_ERR_INVALID_SIGNATURE;
-    }
-
-    // Clear sensitive data
-    memset(aux_rand, 0, sizeof(aux_rand));
-    memset(&keypair, 0, sizeof(keypair));
 #else
-    // No crypto backend available
     return NOSTR_ERR_NOT_SUPPORTED;
 #endif
 
@@ -680,29 +708,22 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
         }
     }
 
-    // First verify the event ID matches the content
     nostr_event temp_event = *event;
-    
-    // Save original ID
     unsigned char original_id[NOSTR_ID_SIZE];
     memcpy(original_id, event->id, NOSTR_ID_SIZE);
-    
-    // Recompute ID on the copy
+
     nostr_error_t result = nostr_event_compute_id(&temp_event);
     if (result != NOSTR_OK) {
         return result;
     }
 
-    // Compare with original
     if (nostr_constant_time_memcmp(original_id, temp_event.id, NOSTR_ID_SIZE) != 0) {
         return NOSTR_ERR_INVALID_EVENT;
     }
 
-    // Convert to noscrypt types
     NCPublicKey nc_public;
     memcpy(nc_public.key, event->pubkey.data, NC_PUBKEY_SIZE);
 
-    // Verify the signature using noscrypt (event->id is already the SHA256 digest)
     if (NCVerifyDigest(nc_ctx, &nc_public, event->id, event->sig) != NC_SUCCESS) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
@@ -715,38 +736,28 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
         }
     }
 
-    // First verify the event ID matches the content
     nostr_event temp_event = *event;
-    
-    // Save original ID
     unsigned char original_id[NOSTR_ID_SIZE];
     memcpy(original_id, event->id, NOSTR_ID_SIZE);
-    
-    // Recompute ID on the copy
+
     nostr_error_t result = nostr_event_compute_id(&temp_event);
     if (result != NOSTR_OK) {
         return result;
     }
 
-    // Compare with original
     if (nostr_constant_time_memcmp(original_id, temp_event.id, NOSTR_ID_SIZE) != 0) {
         return NOSTR_ERR_INVALID_EVENT;
     }
 
-    // Parse the x-only public key
     secp256k1_xonly_pubkey xonly_pubkey;
     if (!secp256k1_xonly_pubkey_parse(secp256k1_ctx, &xonly_pubkey, event->pubkey.data)) {
         return NOSTR_ERR_INVALID_KEY;
     }
 
-    // Verify the Schnorr signature
-    int is_valid = secp256k1_schnorrsig_verify(secp256k1_ctx, event->sig, event->id, 32, &xonly_pubkey);
-    
-    if (!is_valid) {
+    if (!secp256k1_schnorrsig_verify(secp256k1_ctx, event->sig, event->id, 32, &xonly_pubkey)) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 #else
-    // No crypto backend available - can't verify signatures
     return NOSTR_ERR_NOT_SUPPORTED;
 #endif
     

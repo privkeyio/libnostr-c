@@ -155,8 +155,9 @@ nostr_error_t nostr_zap_parse_receipt(const nostr_event* event, uint64_t* amount
             }
         } else if (strcmp(tag_name, "preimage") == 0 && preimage) {
             size_t len = strlen(tag_value);
-            if (len <= 128) {
-                strcpy(preimage, tag_value);
+            if (len <= 64) {
+                memcpy(preimage, tag_value, len);
+                preimage[len] = '\0';
             }
         } else if (strcmp(tag_name, "description") == 0 && zap_request) {
             nostr_error_t err = nostr_event_from_json(tag_value, zap_request);
@@ -217,7 +218,8 @@ nostr_error_t nostr_zap_verify(const nostr_event* receipt, const nostr_event* re
         return err;
     }
     
-    if (strcmp(receipt_pubkey_hex, server_pubkey) != 0) {
+    if (strlen(server_pubkey) != 64 ||
+        nostr_constant_time_memcmp(receipt_pubkey_hex, server_pubkey, 64) != 0) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
     
@@ -268,7 +270,6 @@ nostr_error_t nostr_zap_verify(const nostr_event* receipt, const nostr_event* re
 
 #else
 
-/* NIP-57 functionality not available */
 nostr_error_t nostr_zap_create_request(nostr_event** request, uint64_t amount_msat, const nostr_key* recipient, const char* lnurl, const char* content, const char** relays, size_t relay_count) {
     (void)request; (void)amount_msat; (void)recipient; (void)lnurl; (void)content; (void)relays; (void)relay_count;
     return NOSTR_ERR_NOT_SUPPORTED;

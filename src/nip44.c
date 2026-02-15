@@ -50,6 +50,9 @@ static uint32_t calc_padded_len(uint32_t unpadded_len)
     
     next_power = 1;
     while (next_power <= unpadded_len) {
+        if (next_power > (UINT32_MAX >> 1)) {
+            return 0;
+        }
         next_power <<= 1;
     }
     next_power >>= 1;
@@ -77,8 +80,6 @@ static int pad_plaintext(const uint8_t* plaintext, size_t plaintext_len,
         return -1;
     }
     
-    /* NIP-44 spec: padded output = 2-byte length + plaintext + zeros
-     * Total size = 2 + calc_padded_len(plaintext_len) */
     pad_len = 2 + calc_padded_len(plaintext_len);
     result = calloc(1, pad_len);
     if (!result) {
@@ -115,8 +116,6 @@ static int unpad_plaintext(const uint8_t* padded, size_t padded_len,
         return -1;
     }
 
-    /* NIP-44 spec: padded output = 2-byte length + plaintext + zeros
-     * Total size = 2 + calc_padded_len(plaintext_len) */
     expected_pad_len = 2 + calc_padded_len(unpadded_len);
     if (padded_len != expected_pad_len) {
         return -1;
@@ -272,121 +271,104 @@ nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nos
     if (!sender_privkey || !recipient_pubkey || !plaintext || !ciphertext) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     if (!nc_ctx) {
         nostr_error_t err = nostr_init();
         if (err != NOSTR_OK) {
             return err;
         }
     }
-    
-    /* Get the IV size for NIP-44 */
+
     uint32_t iv_size = NCEncryptionGetIvSize(NC_ENC_VERSION_NIP44);
     if (iv_size != NIP44_NONCE_SIZE) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     memcpy(nc_secret.key, sender_privkey->data, NC_SEC_KEY_SIZE);
     memcpy(nc_public.key, recipient_pubkey->data, NC_PUBKEY_SIZE);
-    
-    /* Generate random nonce */
+
+    nostr_error_t ret = NOSTR_OK;
+
 #ifdef ESP_PLATFORM
     esp_fill_random(nonce, NIP44_NONCE_SIZE);
 #else
     if (RAND_bytes(nonce, NIP44_NONCE_SIZE) != 1) {
-        return NOSTR_ERR_MEMORY;
+        ret = NOSTR_ERR_MEMORY;
+        goto encrypt_cleanup;
     }
 #endif
-    
-    /* Pad the plaintext */
-    if (pad_plaintext((const uint8_t*)plaintext, plaintext_len, 
+
+    if (pad_plaintext((const uint8_t*)plaintext, plaintext_len,
                      &padded_plaintext, &padded_len) != 0) {
-        return NOSTR_ERR_MEMORY;
-    }
-    
-    encrypted = malloc(padded_len);
-    if (!encrypted) {
-        free(padded_plaintext);
-        return NOSTR_ERR_MEMORY;
-    }
-    
-    /* Set up encryption args */
-    if (NCEncryptionSetProperty(&enc_args, NC_ENC_SET_VERSION, NC_ENC_VERSION_NIP44) != NC_SUCCESS) {
-        free(padded_plaintext);
-        free(encrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
-    if (NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_IV, nonce, NIP44_NONCE_SIZE) != NC_SUCCESS) {
-        free(padded_plaintext);
-        free(encrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
-    /* Set HMAC key output buffer */
-    if (NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_NIP44_MAC_KEY, hmac_key, sizeof(hmac_key)) != NC_SUCCESS) {
-        free(padded_plaintext);
-        free(encrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
-    /* Set data buffers */
-    if (NCEncryptionSetData(&enc_args, padded_plaintext, encrypted, padded_len) != NC_SUCCESS) {
-        free(padded_plaintext);
-        free(encrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-    
-    /* Perform encryption */
-    result = NCEncrypt(nc_ctx, &nc_secret, &nc_public, &enc_args);
-    if (result != NC_SUCCESS) {
-        free(padded_plaintext);
-        free(encrypted);
-        return NOSTR_ERR_INVALID_SIGNATURE;
+        ret = NOSTR_ERR_MEMORY;
+        goto encrypt_cleanup;
     }
 
+    encrypted = malloc(padded_len);
+    if (!encrypted) {
+        ret = NOSTR_ERR_MEMORY;
+        goto encrypt_cleanup;
+    }
+
+    if (NCEncryptionSetProperty(&enc_args, NC_ENC_SET_VERSION, NC_ENC_VERSION_NIP44) != NC_SUCCESS ||
+        NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_IV, nonce, NIP44_NONCE_SIZE) != NC_SUCCESS ||
+        NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_NIP44_MAC_KEY, hmac_key, sizeof(hmac_key)) != NC_SUCCESS ||
+        NCEncryptionSetData(&enc_args, padded_plaintext, encrypted, padded_len) != NC_SUCCESS) {
+        ret = NOSTR_ERR_INVALID_PARAM;
+        goto encrypt_cleanup;
+    }
+
+    result = NCEncrypt(nc_ctx, &nc_secret, &nc_public, &enc_args);
     free(padded_plaintext);
-    
-    /* Compute MAC over nonce || ciphertext */
-    uint8_t* mac_input = malloc(NIP44_NONCE_SIZE + padded_len);
-    if (!mac_input) {
-        free(encrypted);
-        return NOSTR_ERR_MEMORY;
-    }
-    memcpy(mac_input, nonce, NIP44_NONCE_SIZE);
-    memcpy(mac_input + NIP44_NONCE_SIZE, encrypted, padded_len);
-    
-    result = NCComputeMac(nc_ctx, hmac_key, mac_input, NIP44_NONCE_SIZE + padded_len, mac);
-    free(mac_input);
-    
+    padded_plaintext = NULL;
     if (result != NC_SUCCESS) {
-        free(encrypted);
-        return NOSTR_ERR_INVALID_SIGNATURE;
+        ret = NOSTR_ERR_INVALID_SIGNATURE;
+        goto encrypt_cleanup;
     }
-    
-    /* Build final payload: version || nonce || ciphertext || mac */
+
+    {
+        uint8_t* mac_input = malloc(NIP44_NONCE_SIZE + padded_len);
+        if (!mac_input) {
+            ret = NOSTR_ERR_MEMORY;
+            goto encrypt_cleanup;
+        }
+        memcpy(mac_input, nonce, NIP44_NONCE_SIZE);
+        memcpy(mac_input + NIP44_NONCE_SIZE, encrypted, padded_len);
+        result = NCComputeMac(nc_ctx, hmac_key, mac_input, NIP44_NONCE_SIZE + padded_len, mac);
+        free(mac_input);
+    }
+
+    if (result != NC_SUCCESS) {
+        ret = NOSTR_ERR_INVALID_SIGNATURE;
+        goto encrypt_cleanup;
+    }
+
     payload_len = 1 + NIP44_NONCE_SIZE + padded_len + NC_ENCRYPTION_MAC_SIZE;
     payload = malloc(payload_len);
     if (!payload) {
-        free(encrypted);
-        return NOSTR_ERR_MEMORY;
+        ret = NOSTR_ERR_MEMORY;
+        goto encrypt_cleanup;
     }
-    
+
     payload[0] = NIP44_VERSION;
     memcpy(payload + 1, nonce, NIP44_NONCE_SIZE);
     memcpy(payload + 1 + NIP44_NONCE_SIZE, encrypted, padded_len);
     memcpy(payload + 1 + NIP44_NONCE_SIZE + padded_len, mac, NC_ENCRYPTION_MAC_SIZE);
-    
+
     free(encrypted);
-    
-    /* Base64 encode the payload */
+    encrypted = NULL;
+
     if (base64_encode(payload, payload_len, ciphertext) != 0) {
-        free(payload);
-        return NOSTR_ERR_MEMORY;
+        ret = NOSTR_ERR_MEMORY;
     }
-    
+
+encrypt_cleanup:
+    free(padded_plaintext);
+    free(encrypted);
     free(payload);
-    return NOSTR_OK;
+    secure_wipe(&nc_secret, sizeof(nc_secret));
+    secure_wipe(hmac_key, sizeof(hmac_key));
+    return ret;
 }
 
 nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const nostr_key* sender_pubkey,
@@ -418,25 +400,19 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
         }
     }
     
-    /* Check for unsupported format */
     if (ciphertext[0] == '#') {
         return NOSTR_ERR_NOT_SUPPORTED;
     }
     
-    /* Base64 decode */
     if (base64_decode(ciphertext, &payload, &payload_len) != 0) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    /* Validate payload size */
-    /* Min: 1 (version) + 32 (nonce) + 32 (min ciphertext) + 32 (mac) = 97 */
-    /* Max: 1 + 32 + 65535 + 32 = 65600 */
     if (payload_len < 97 || payload_len > 65600) {
         free(payload);
         return NOSTR_ERR_INVALID_PARAM;
     }
     
-    /* Parse payload */
     version = payload[0];
     if (version != NIP44_VERSION) {
         free(payload);
@@ -451,14 +427,12 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     memcpy(nc_secret.key, recipient_privkey->data, NC_SEC_KEY_SIZE);
     memcpy(nc_public.key, sender_pubkey->data, NC_PUBKEY_SIZE);
 
-    /* First verify MAC using NCVerifyMac
-     * NIP-44 spec: MAC = HMAC(hmac_key, nonce || ciphertext)
-     * NCVerifyMac expects the payload to be what we HMAC over, so we need nonce || ciphertext
-     */
+    nostr_error_t ret = NOSTR_OK;
+
     uint8_t* mac_payload = malloc(NIP44_NONCE_SIZE + encrypted_len);
     if (!mac_payload) {
-        free(payload);
-        return NOSTR_ERR_MEMORY;
+        ret = NOSTR_ERR_MEMORY;
+        goto decrypt_cleanup;
     }
     memcpy(mac_payload, nonce, NIP44_NONCE_SIZE);
     memcpy(mac_payload + NIP44_NONCE_SIZE, encrypted_data, encrypted_len);
@@ -473,67 +447,52 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     secure_wipe(mac_payload, NIP44_NONCE_SIZE + encrypted_len);
     free(mac_payload);
     if (result != NC_SUCCESS) {
-        free(payload);
-        return NOSTR_ERR_INVALID_SIGNATURE;
+        ret = NOSTR_ERR_INVALID_SIGNATURE;
+        goto decrypt_cleanup;
     }
 
     decrypted = calloc(1, encrypted_len);
     if (!decrypted) {
-        free(payload);
-        return NOSTR_ERR_MEMORY;
+        ret = NOSTR_ERR_MEMORY;
+        goto decrypt_cleanup;
     }
 
-    /* Set up decryption args */
     memset(&enc_args, 0, sizeof(enc_args));
 
-    if (NCEncryptionSetProperty(&enc_args, NC_ENC_SET_VERSION, NC_ENC_VERSION_NIP44) != NC_SUCCESS) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    if (NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_IV, nonce, NIP44_NONCE_SIZE) != NC_SUCCESS) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_INVALID_PARAM;
-    }
-
-    if (NCEncryptionSetData(&enc_args, encrypted_data, decrypted, encrypted_len) != NC_SUCCESS) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_INVALID_PARAM;
+    if (NCEncryptionSetProperty(&enc_args, NC_ENC_SET_VERSION, NC_ENC_VERSION_NIP44) != NC_SUCCESS ||
+        NCEncryptionSetPropertyEx(&enc_args, NC_ENC_SET_IV, nonce, NIP44_NONCE_SIZE) != NC_SUCCESS ||
+        NCEncryptionSetData(&enc_args, encrypted_data, decrypted, encrypted_len) != NC_SUCCESS) {
+        ret = NOSTR_ERR_INVALID_PARAM;
+        goto decrypt_cleanup;
     }
 
     result = NCDecrypt(nc_ctx, &nc_secret, &nc_public, &enc_args);
     if (result != NC_SUCCESS) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_ENCODING;
+        ret = NOSTR_ERR_ENCODING;
+        goto decrypt_cleanup;
     }
 
-    /* Unpad the decrypted data */
     if (unpad_plaintext(decrypted, encrypted_len, &unpadded, &unpadded_len) != 0) {
-        free(payload);
-        free(decrypted);
-        return NOSTR_ERR_INVALID_PARAM;
+        ret = NOSTR_ERR_INVALID_PARAM;
+        goto decrypt_cleanup;
     }
-    
-    free(payload);
-    free(decrypted);
-    
-    /* Allocate output buffer with null terminator */
+
     *plaintext = malloc(unpadded_len + 1);
     if (!*plaintext) {
-        free(unpadded);
-        return NOSTR_ERR_MEMORY;
+        ret = NOSTR_ERR_MEMORY;
+        goto decrypt_cleanup;
     }
-    
+
     memcpy(*plaintext, unpadded, unpadded_len);
     (*plaintext)[unpadded_len] = '\0';
     *plaintext_len = unpadded_len;
-    
+
+decrypt_cleanup:
+    free(payload);
+    free(decrypted);
     free(unpadded);
-    return NOSTR_OK;
+    secure_wipe(&nc_secret, sizeof(nc_secret));
+    return ret;
 }
 
 #ifdef HAVE_MBEDTLS
@@ -740,7 +699,6 @@ cleanup:
 
 #else
 
-/* Fallback implementations when noscrypt is not available */
 nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nostr_key* recipient_pubkey, 
                                   const char* plaintext, size_t plaintext_len, char** ciphertext)
 {

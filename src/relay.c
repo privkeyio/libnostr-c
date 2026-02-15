@@ -12,6 +12,17 @@
 #include <time.h>
 #include <cjson/cJSON.h>
 
+static int validate_subscription_id(const char* id)
+{
+    if (!id) return 0;
+    size_t len = strlen(id);
+    if (len == 0 || len > 256) return 0;
+    for (const char* p = id; *p; p++) {
+        if (*p == '"' || *p == '\\' || (unsigned char)*p < 0x20) return 0;
+    }
+    return 1;
+}
+
 static char* find_json_array_end(const char* start) {
     if (!start || *start != '[') return NULL;
 
@@ -209,7 +220,7 @@ nostr_error_t nostr_relay_connect(nostr_relay* relay, nostr_relay_callback callb
     memset(&ccinfo, 0, sizeof(ccinfo));
     ccinfo.context = context;
     ccinfo.port = 443;
-    ccinfo.ssl_connection = LCCSCF_USE_SSL | LCCSCF_ALLOW_SELFSIGNED | LCCSCF_SKIP_SERVER_CERT_HOSTNAME_CHECK;
+    ccinfo.ssl_connection = LCCSCF_USE_SSL;
     
     char* url_copy = strdup(relay->url);
     if (strncmp(url_copy, "wss://", 6) == 0) {
@@ -418,6 +429,10 @@ nostr_error_t nostr_subscribe(nostr_relay* relay, const char* subscription_id,
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    if (!validate_subscription_id(subscription_id)) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+
     relay_context* ctx = (relay_context*)relay->ws_handle;
     if (!ctx || !ctx->wsi) {
         return NOSTR_ERR_CONNECTION;
@@ -427,7 +442,16 @@ nostr_error_t nostr_subscribe(nostr_relay* relay, const char* subscription_id,
     if (!sub) {
         return NOSTR_ERR_MEMORY;
     }
-    
+
+    {
+        cJSON* filters_parsed = cJSON_Parse(filters_json);
+        if (!filters_parsed) {
+            free(sub);
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+        cJSON_Delete(filters_parsed);
+    }
+
     sub->id = strdup(subscription_id);
     sub->callback = callback;
     sub->user_data = user_data;
@@ -438,7 +462,7 @@ nostr_error_t nostr_subscribe(nostr_relay* relay, const char* subscription_id,
     if (!msg) {
         return NOSTR_ERR_MEMORY;
     }
-    
+
     sprintf(msg, "[\"REQ\",\"%s\",%s]", subscription_id, filters_json);
     
     size_t msg_len = strlen(msg);
@@ -483,6 +507,10 @@ nostr_error_t nostr_relay_set_message_callback(nostr_relay* relay, nostr_message
 
 nostr_error_t nostr_relay_unsubscribe(nostr_relay* relay, const char* subscription_id) {
     if (!relay || !subscription_id || relay->state != NOSTR_RELAY_CONNECTED) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+
+    if (!validate_subscription_id(subscription_id)) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
@@ -546,8 +574,13 @@ static int callback_nostr_relay(struct lws* wsi, enum lws_callback_reasons reaso
             
         case LWS_CALLBACK_CLIENT_RECEIVE:
             if (relay && ctx && in && len > 0) {
+                const size_t max_buffer_size = 10 * 1024 * 1024;
                 if (ctx->buffer_pos + len >= ctx->buffer_size) {
                     size_t new_size = ctx->buffer_pos + len + 1024;
+                    if (new_size > max_buffer_size) {
+                        ctx->buffer_pos = 0;
+                        break;
+                    }
                     char* new_buffer = realloc(ctx->receive_buffer, new_size);
                     if (!new_buffer) break;
                     ctx->receive_buffer = new_buffer;

@@ -18,7 +18,15 @@ static void* g_config_callback_user_data = NULL;
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
 static CRITICAL_SECTION config_lock;
-static int config_lock_initialized = 0;
+static INIT_ONCE config_init_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK config_init_lock_callback(PINIT_ONCE InitOnce, PVOID Parameter, PVOID *Context) {
+    (void)InitOnce;
+    (void)Parameter;
+    (void)Context;
+    InitializeCriticalSection(&config_lock);
+    return TRUE;
+}
 #else
 static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
@@ -27,10 +35,7 @@ static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 static void lock_config(void) {
 #ifdef NOSTR_FEATURE_THREADING
 #ifdef _WIN32
-    if (!config_lock_initialized) {
-        InitializeCriticalSection(&config_lock);
-        config_lock_initialized = 1;
-    }
+    InitOnceExecuteOnce(&config_init_once, config_init_lock_callback, NULL, NULL);
     EnterCriticalSection(&config_lock);
 #else
     pthread_mutex_lock(&config_lock);
@@ -175,7 +180,11 @@ const nostr_config* nostr_config_get_current(void) {
         unlock_config();
         return NULL;
     }
-    static nostr_config config_copy;
+#ifdef _WIN32
+    static __declspec(thread) nostr_config config_copy;
+#else
+    static __thread nostr_config config_copy;
+#endif
     config_copy = g_config;
     unlock_config();
     return &config_copy;

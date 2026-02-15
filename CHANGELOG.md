@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0] - 2026-02-14
+
+### Security
+- Harden JSON escaping with RFC 8259 control character support
+- Add secure_wipe on all crypto key error paths (secp256k1 keypair, NIP-44 nc_secret/hmac_key)
+- Fix integer overflow in tag arena allocator and tag size calculations
+- Replace strcmp with constant-time comparison for session IDs and zap pubkeys
+- Validate params_json and filters_json as valid JSON before insertion
+- Fix permissions array leak in expired session cleanup
+- Fix permission reset time drift
+
+### Changed
+- Simplify NIP-44 encrypt/decrypt cleanup paths
+- Extract session lookup helper to reduce duplication
+
 ## [0.1.6] - 2026-01-27
 
 ### Added
