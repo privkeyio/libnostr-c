@@ -31,17 +31,23 @@ static size_t max_sessions = 0;
 static pthread_mutex_t sessions_lock = PTHREAD_MUTEX_INITIALIZER;
 static int sessions_initialized = 0;
 
-static void generate_session_id(char* id)
+#define SESSION_RATE_LIMIT_MAX 10
+#define SESSION_RATE_LIMIT_WINDOW 1
+static time_t rate_limit_window_start = 0;
+static int rate_limit_count = 0;
+
+static int generate_session_id(char* id)
 {
     uint8_t random[32];
     if (RAND_bytes(random, 32) != 1) {
-        memset(random, 0, 32);
+        return -1;
     }
-    
+
     for (int i = 0; i < 32; i++) {
         sprintf(id + i*2, "%02x", random[i]);
     }
     id[64] = 0;
+    return 0;
 }
 
 static void cleanup_expired_sessions()
@@ -111,8 +117,21 @@ nostr_error_t nostr_nip47_session_create(const char* connection_uri, char** sess
     }
     
     pthread_mutex_lock(&sessions_lock);
+
+    time_t now = time(NULL);
+    if (now - rate_limit_window_start >= SESSION_RATE_LIMIT_WINDOW) {
+        rate_limit_window_start = now;
+        rate_limit_count = 0;
+    }
+    if (rate_limit_count >= SESSION_RATE_LIMIT_MAX) {
+        pthread_mutex_unlock(&sessions_lock);
+        nostr_nip47_free_connection(conn);
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+    rate_limit_count++;
+
     cleanup_expired_sessions();
-    
+
     int slot = -1;
     for (size_t i = 0; i < max_sessions; i++) {
         if (!sessions[i].active) {
@@ -130,7 +149,12 @@ nostr_error_t nostr_nip47_session_create(const char* connection_uri, char** sess
     nwc_session_t* session = &sessions[slot];
     pthread_mutex_lock(&session->lock);
     
-    generate_session_id(session->session_id);
+    if (generate_session_id(session->session_id) != 0) {
+        pthread_mutex_unlock(&session->lock);
+        pthread_mutex_unlock(&sessions_lock);
+        nostr_nip47_free_connection(conn);
+        return NOSTR_ERR_MEMORY;
+    }
     session->connection = conn;
     session->created_at = time(NULL);
     session->last_used = session->created_at;

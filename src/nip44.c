@@ -50,6 +50,9 @@ static uint32_t calc_padded_len(uint32_t unpadded_len)
     
     next_power = 1;
     while (next_power <= unpadded_len) {
+        if (next_power > (UINT32_MAX >> 1)) {
+            return 0;
+        }
         next_power <<= 1;
     }
     next_power >>= 1;

@@ -155,8 +155,9 @@ nostr_error_t nostr_zap_parse_receipt(const nostr_event* event, uint64_t* amount
             }
         } else if (strcmp(tag_name, "preimage") == 0 && preimage) {
             size_t len = strlen(tag_value);
-            if (len <= 128) {
-                strcpy(preimage, tag_value);
+            if (len <= 64) {
+                memcpy(preimage, tag_value, len);
+                preimage[len] = '\0';
             }
         } else if (strcmp(tag_name, "description") == 0 && zap_request) {
             nostr_error_t err = nostr_event_from_json(tag_value, zap_request);

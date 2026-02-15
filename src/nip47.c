@@ -26,6 +26,38 @@
 #define NWC_KIND_NOTIFICATION_LEGACY 23196
 #define NWC_KIND_NOTIFICATION 23197
 
+static size_t nip47_json_escape(char* dest, size_t dest_size, const char* src)
+{
+    size_t pos = 0;
+    for (size_t i = 0; src[i] && pos < dest_size - 1; i++) {
+        switch (src[i]) {
+            case '"': case '\\':
+                if (pos + 2 > dest_size - 1) goto done;
+                dest[pos++] = '\\';
+                dest[pos++] = src[i];
+                break;
+            case '\n':
+                if (pos + 2 > dest_size - 1) goto done;
+                dest[pos++] = '\\'; dest[pos++] = 'n';
+                break;
+            case '\r':
+                if (pos + 2 > dest_size - 1) goto done;
+                dest[pos++] = '\\'; dest[pos++] = 'r';
+                break;
+            case '\t':
+                if (pos + 2 > dest_size - 1) goto done;
+                dest[pos++] = '\\'; dest[pos++] = 't';
+                break;
+            default:
+                dest[pos++] = src[i];
+                break;
+        }
+    }
+done:
+    dest[pos] = '\0';
+    return pos;
+}
+
 struct nwc_connection {
     char** relays;
     size_t relay_count;
@@ -68,7 +100,7 @@ static void free_connection(struct nwc_connection* conn)
         free(conn->lud16);
     }
     
-    memset(&conn->secret, 0, sizeof(nostr_privkey));
+    secure_wipe(&conn->secret, sizeof(nostr_privkey));
     free(conn);
 }
 
@@ -458,8 +490,18 @@ nostr_error_t nostr_nip47_create_request_event(nostr_event** event, const struct
         }
     }
     
+    char escaped_method[256];
+    size_t em_pos = 0;
+    for (size_t i = 0; method[i] && em_pos < sizeof(escaped_method) - 2; i++) {
+        if (method[i] == '"' || method[i] == '\\') {
+            escaped_method[em_pos++] = '\\';
+        }
+        escaped_method[em_pos++] = method[i];
+    }
+    escaped_method[em_pos] = '\0';
+
     char payload[8192];
-    snprintf(payload, sizeof(payload), "{\"method\":\"%s\",\"params\":%s}", method, params_json);
+    snprintf(payload, sizeof(payload), "{\"method\":\"%s\",\"params\":%s}", escaped_method, params_json);
     
     char* encrypted = NULL;
     if (use_nip44) {
@@ -625,20 +667,22 @@ nostr_error_t nostr_nip47_create_pay_invoice_params(char** params_json, const ch
         return NOSTR_ERR_MEMORY;
     }
 #else
+    char escaped_invoice[4096];
+    nip47_json_escape(escaped_invoice, sizeof(escaped_invoice), invoice);
     char buffer[4096];
     if (amount_msats) {
-        snprintf(buffer, sizeof(buffer), "{\"invoice\":\"%s\",\"amount\":%llu}", 
-                 invoice, (unsigned long long)*amount_msats);
+        snprintf(buffer, sizeof(buffer), "{\"invoice\":\"%s\",\"amount\":%llu}",
+                 escaped_invoice, (unsigned long long)*amount_msats);
     } else {
-        snprintf(buffer, sizeof(buffer), "{\"invoice\":\"%s\"}", invoice);
+        snprintf(buffer, sizeof(buffer), "{\"invoice\":\"%s\"}", escaped_invoice);
     }
-    
+
     *params_json = strdup(buffer);
     if (!*params_json) {
         return NOSTR_ERR_MEMORY;
     }
 #endif
-    
+
     return NOSTR_OK;
 }
 
@@ -692,17 +736,21 @@ nostr_error_t nostr_nip47_create_make_invoice_params(char** params_json, uint64_
     }
 #else
     char buffer[4096];
-    int offset = snprintf(buffer, sizeof(buffer), "{\"amount\":%llu", 
+    int offset = snprintf(buffer, sizeof(buffer), "{\"amount\":%llu",
                          (unsigned long long)amount_msats);
-    
+
     if (description) {
-        offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
-                          ",\"description\":\"%s\"", description);
+        char escaped_desc[2048];
+        nip47_json_escape(escaped_desc, sizeof(escaped_desc), description);
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                          ",\"description\":\"%s\"", escaped_desc);
     }
-    
+
     if (description_hash) {
-        offset += snprintf(buffer + offset, sizeof(buffer) - offset, 
-                          ",\"description_hash\":\"%s\"", description_hash);
+        char escaped_hash[2048];
+        nip47_json_escape(escaped_hash, sizeof(escaped_hash), description_hash);
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                          ",\"description_hash\":\"%s\"", escaped_hash);
     }
     
     if (expiry_secs) {

@@ -336,7 +336,7 @@ nostr_error_t nostr_nip05_verify(const char* identifier, const char* expected_pu
     expected_lower[64] = '\0';
     str_tolower(expected_lower, 64);
 
-    if (memcmp(pubkey_hex, expected_lower, 64) != 0) {
+    if (nostr_constant_time_memcmp(pubkey_hex, expected_lower, 64) != 0) {
         nostr_nip05_free_relays(relays, relay_count);
         return NOSTR_ERR_INVALID_KEY;
     }

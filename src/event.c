@@ -312,7 +312,7 @@ static char* serialize_for_id(const nostr_event* event)
     size_t json_size = 512 + strlen(content_escaped);
     for (size_t i = 0; i < event->tags_count; i++) {
         for (size_t j = 0; j < event->tags[i].count; j++) {
-            json_size += strlen(event->tags[i].values[j]) + 4;
+            json_size += strlen(event->tags[i].values[j]) * 2 + 4;
         }
     }
     
@@ -330,7 +330,14 @@ static char* serialize_for_id(const nostr_event* event)
         result[pos++] = '[';
         for (size_t j = 0; j < event->tags[i].count; j++) {
             if (j > 0) result[pos++] = ',';
-            pos += snprintf(result + pos, json_size - pos, "\"%s\"", event->tags[i].values[j]);
+            char* tag_escaped = escape_json_string(event->tags[i].values[j]);
+            if (!tag_escaped) {
+                free(result);
+                free(content_escaped);
+                return NULL;
+            }
+            pos += snprintf(result + pos, json_size - pos, "\"%s\"", tag_escaped);
+            free(tag_escaped);
         }
         result[pos++] = ']';
     }
@@ -486,6 +493,12 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
 
     cJSON* content_json = cJSON_GetObjectItem(root, "content");
     if (content_json && cJSON_IsString(content_json)) {
+        const nostr_config* cfg = nostr_config_get_current();
+        if (cfg && strlen(content_json->valuestring) > cfg->max_content_size) {
+            nostr_event_destroy(*event);
+            cJSON_Delete(root);
+            return NOSTR_ERR_INVALID_PARAM;
+        }
         (*event)->content = strdup(content_json->valuestring);
         if (!(*event)->content) {
             nostr_event_destroy(*event);
@@ -584,7 +597,7 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
 
     // Get public key using noscrypt
     if (NCGetPublicKey(nc_ctx, &nc_secret, &nc_public) != NC_SUCCESS) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
         return NOSTR_ERR_INVALID_KEY;
     }
 
@@ -594,24 +607,24 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
     // Compute event ID with the public key set
     nostr_error_t result = nostr_event_compute_id(event);
     if (result != NOSTR_OK) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
         return result;
     }
 
-    // Sign using NCSignDigest since event->id is already a SHA256 digest
     uint8_t random32[32];
     if (nostr_random_bytes(random32, 32) != 1) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
         return NOSTR_ERR_MEMORY;
     }
-    
+
     if (NCSignDigest(nc_ctx, &nc_secret, random32, event->id, event->sig) != NC_SUCCESS) {
-        memset(&nc_secret, 0, sizeof(nc_secret));
+        secure_wipe(&nc_secret, sizeof(nc_secret));
+        secure_wipe(random32, sizeof(random32));
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 
-    // Clear sensitive data
-    memset(&nc_secret, 0, sizeof(nc_secret));
+    secure_wipe(&nc_secret, sizeof(nc_secret));
+    secure_wipe(random32, sizeof(random32));
 
 #elif defined(HAVE_SECP256K1)
     if (!secp256k1_ctx) {
@@ -655,9 +668,8 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 
-    // Clear sensitive data
-    memset(aux_rand, 0, sizeof(aux_rand));
-    memset(&keypair, 0, sizeof(keypair));
+    secure_wipe(aux_rand, sizeof(aux_rand));
+    secure_wipe(&keypair, sizeof(keypair));
 #else
     // No crypto backend available
     return NOSTR_ERR_NOT_SUPPORTED;
