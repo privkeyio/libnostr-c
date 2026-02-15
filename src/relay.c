@@ -14,9 +14,11 @@
 
 static int validate_subscription_id(const char* id)
 {
-    if (!id || strlen(id) == 0 || strlen(id) > 256) return 0;
+    if (!id) return 0;
+    size_t len = strlen(id);
+    if (len == 0 || len > 256) return 0;
     for (const char* p = id; *p; p++) {
-        if (*p == '"' || *p == '\\' || *p < 0x20) return 0;
+        if (*p == '"' || *p == '\\' || (unsigned char)*p < 0x20) return 0;
     }
     return 1;
 }

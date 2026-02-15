@@ -78,7 +78,7 @@ static void tag_arena_destroy(nostr_tag_arena* arena)
 
 static void* tag_arena_alloc(nostr_tag_arena* arena, size_t size)
 {
-    if (!arena || size > arena->capacity - arena->used) {
+    if (!arena || arena->used > arena->capacity || size > arena->capacity - arena->used) {
         return NULL;
     }
     
@@ -168,8 +168,11 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
     
     if (event->tag_arena->used + total_size > event->tag_arena->capacity) {
         size_t new_capacity = event->tag_arena->capacity;
-        while (new_capacity < event->tag_arena->used + total_size) {
-            new_capacity *= 2;
+        size_t required = event->tag_arena->used + total_size;
+        while (new_capacity < required) {
+            size_t doubled = new_capacity * 2;
+            if (doubled <= new_capacity) return NOSTR_ERR_MEMORY;
+            new_capacity = doubled;
         }
         
         void* old_memory = event->tag_arena->memory;
@@ -181,7 +184,6 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
         if (new_memory != old_memory) {
             ptrdiff_t offset = (char*)new_memory - (char*)old_memory;
             for (size_t i = 0; i < event->tags_count; i++) {
-                // Update the values array pointer
                 event->tags[i].values = (char**)((char*)event->tags[i].values + offset);
                 for (size_t j = 0; j < event->tags[i].count; j++) {
                     if (event->tags[i].values[j]) {
@@ -231,6 +233,7 @@ static char* escape_json_string(const char* input)
     if (!input) return NULL;
 
     size_t len = strlen(input);
+    if (len > SIZE_MAX / 6) return NULL;
     size_t max_output_len = len * 6 + 1;
     char* output = malloc(max_output_len);
     if (!output) return NULL;
@@ -326,7 +329,7 @@ static char* serialize_for_id(const nostr_event* event)
     size_t json_size = 512 + strlen(content_escaped);
     for (size_t i = 0; i < event->tags_count; i++) {
         for (size_t j = 0; j < event->tags[i].count; j++) {
-            json_size += strlen(event->tags[i].values[j]) * 2 + 4;
+            json_size += strlen(event->tags[i].values[j]) * 6 + 4;
         }
     }
     
@@ -604,21 +607,17 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
         }
     }
 
-    // Convert to noscrypt types
     NCSecretKey nc_secret;
     NCPublicKey nc_public;
     memcpy(nc_secret.key, privkey->data, NC_SEC_KEY_SIZE);
 
-    // Get public key using noscrypt
     if (NCGetPublicKey(nc_ctx, &nc_secret, &nc_public) != NC_SUCCESS) {
         secure_wipe(&nc_secret, sizeof(nc_secret));
         return NOSTR_ERR_INVALID_KEY;
     }
 
-    // Copy public key to event
     memcpy(event->pubkey.data, nc_public.key, NOSTR_PUBKEY_SIZE);
 
-    // Compute event ID with the public key set
     nostr_error_t result = nostr_event_compute_id(event);
     if (result != NOSTR_OK) {
         secure_wipe(&nc_secret, sizeof(nc_secret));
@@ -689,7 +688,6 @@ secp_cleanup:
         return result;
     }
 #else
-    // No crypto backend available
     return NOSTR_ERR_NOT_SUPPORTED;
 #endif
 
@@ -710,29 +708,22 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
         }
     }
 
-    // First verify the event ID matches the content
     nostr_event temp_event = *event;
-    
-    // Save original ID
     unsigned char original_id[NOSTR_ID_SIZE];
     memcpy(original_id, event->id, NOSTR_ID_SIZE);
-    
-    // Recompute ID on the copy
+
     nostr_error_t result = nostr_event_compute_id(&temp_event);
     if (result != NOSTR_OK) {
         return result;
     }
 
-    // Compare with original
     if (nostr_constant_time_memcmp(original_id, temp_event.id, NOSTR_ID_SIZE) != 0) {
         return NOSTR_ERR_INVALID_EVENT;
     }
 
-    // Convert to noscrypt types
     NCPublicKey nc_public;
     memcpy(nc_public.key, event->pubkey.data, NC_PUBKEY_SIZE);
 
-    // Verify the signature using noscrypt (event->id is already the SHA256 digest)
     if (NCVerifyDigest(nc_ctx, &nc_public, event->id, event->sig) != NC_SUCCESS) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
@@ -745,38 +736,28 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
         }
     }
 
-    // First verify the event ID matches the content
     nostr_event temp_event = *event;
-    
-    // Save original ID
     unsigned char original_id[NOSTR_ID_SIZE];
     memcpy(original_id, event->id, NOSTR_ID_SIZE);
-    
-    // Recompute ID on the copy
+
     nostr_error_t result = nostr_event_compute_id(&temp_event);
     if (result != NOSTR_OK) {
         return result;
     }
 
-    // Compare with original
     if (nostr_constant_time_memcmp(original_id, temp_event.id, NOSTR_ID_SIZE) != 0) {
         return NOSTR_ERR_INVALID_EVENT;
     }
 
-    // Parse the x-only public key
     secp256k1_xonly_pubkey xonly_pubkey;
     if (!secp256k1_xonly_pubkey_parse(secp256k1_ctx, &xonly_pubkey, event->pubkey.data)) {
         return NOSTR_ERR_INVALID_KEY;
     }
 
-    // Verify the Schnorr signature
-    int is_valid = secp256k1_schnorrsig_verify(secp256k1_ctx, event->sig, event->id, 32, &xonly_pubkey);
-    
-    if (!is_valid) {
+    if (!secp256k1_schnorrsig_verify(secp256k1_ctx, event->sig, event->id, 32, &xonly_pubkey)) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
 #else
-    // No crypto backend available - can't verify signatures
     return NOSTR_ERR_NOT_SUPPORTED;
 #endif
     

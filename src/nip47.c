@@ -28,6 +28,7 @@
 
 static size_t nip47_json_escape(char* dest, size_t dest_size, const char* src)
 {
+    if (!dest_size) return 0;
     size_t pos = 0;
     for (size_t i = 0; src[i] && pos < dest_size - 1; i++) {
         switch (src[i]) {
@@ -49,7 +50,12 @@ static size_t nip47_json_escape(char* dest, size_t dest_size, const char* src)
                 dest[pos++] = '\\'; dest[pos++] = 't';
                 break;
             default:
-                dest[pos++] = src[i];
+                if ((unsigned char)src[i] < 0x20) {
+                    if (pos + 6 > dest_size - 1) goto done;
+                    pos += snprintf(dest + pos, 7, "\\u%04x", (unsigned char)src[i]);
+                } else {
+                    dest[pos++] = src[i];
+                }
                 break;
         }
     }
@@ -423,7 +429,6 @@ nostr_error_t nostr_nip47_create_request_event(nostr_event** event, const struct
     (*event)->created_at = time(NULL);
     
     nostr_key client_pubkey;
-    // Derive public key from private key
     {
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
         NCPublicKey nc_public;
@@ -491,14 +496,7 @@ nostr_error_t nostr_nip47_create_request_event(nostr_event** event, const struct
     }
     
     char escaped_method[256];
-    size_t em_pos = 0;
-    for (size_t i = 0; method[i] && em_pos < sizeof(escaped_method) - 2; i++) {
-        if (method[i] == '"' || method[i] == '\\') {
-            escaped_method[em_pos++] = '\\';
-        }
-        escaped_method[em_pos++] = method[i];
-    }
-    escaped_method[em_pos] = '\0';
+    nip47_json_escape(escaped_method, sizeof(escaped_method), method);
 
 #ifdef HAVE_CJSON
     {
@@ -529,7 +527,6 @@ nostr_error_t nostr_nip47_create_request_event(nostr_event** event, const struct
             free(encrypted);
         }
     } else {
-        // NIP-04 not implemented in base library
         err = NOSTR_ERR_NOT_SUPPORTED;
     }
     
@@ -597,7 +594,6 @@ nostr_error_t nostr_nip47_parse_response_event(const nostr_event* event, const n
     if (is_nip44) {
         err = nostr_nip44_decrypt(client_secret, &service_pubkey, event->content, &decrypted, &decrypted_len);
     } else {
-        // NIP-04 not implemented in base library
         err = NOSTR_ERR_NOT_SUPPORTED;
     }
     
@@ -805,7 +801,6 @@ nostr_error_t nostr_nip47_parse_notification_event(const nostr_event* event, con
     if (event->kind == NWC_KIND_NOTIFICATION) {
         err = nostr_nip44_decrypt(client_secret, &service_pubkey, event->content, &decrypted, &decrypted_len);
     } else {
-        // NIP-04 not implemented in base library
         err = NOSTR_ERR_NOT_SUPPORTED;
     }
     
@@ -856,7 +851,6 @@ nostr_error_t nostr_nip47_free_connection(struct nwc_connection* conn)
 
 #else
 
-/* NIP-47 functionality not available */
 nostr_error_t nostr_nip47_parse_connection_uri(const char* uri, nostr_nip47_connection* connection) {
     (void)uri; (void)connection;
     return NOSTR_ERR_NOT_SUPPORTED;

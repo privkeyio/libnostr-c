@@ -6,7 +6,6 @@
 #include <openssl/rand.h>
 #include "../include/nostr.h"
 
-
 typedef struct {
     char* name;
     uint64_t limit_msats;
@@ -36,6 +35,16 @@ static int sessions_initialized = 0;
 #define SESSION_RATE_LIMIT_WINDOW 1
 static time_t rate_limit_window_start = 0;
 static int rate_limit_count = 0;
+
+static nwc_session_t* find_session(const char* session_id)
+{
+    for (size_t i = 0; i < max_sessions; i++) {
+        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
+            return &sessions[i];
+        }
+    }
+    return NULL;
+}
 
 static int generate_session_id(char* id)
 {
@@ -184,22 +193,15 @@ nostr_error_t nostr_nip47_session_add_permission(const char* session_id, const c
     
     pthread_mutex_lock(&sessions_lock);
     
-    nwc_session_t* session = NULL;
-    for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
-            session = &sessions[i];
-            break;
-        }
-    }
-    
+    nwc_session_t* session = find_session(session_id);
     if (!session) {
         pthread_mutex_unlock(&sessions_lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     pthread_mutex_lock(&session->lock);
     pthread_mutex_unlock(&sessions_lock);
-    
+
     const nostr_config* config = nostr_config_get_current();
     uint32_t max_perms = config ? config->max_permissions : 32;
     
@@ -238,30 +240,23 @@ nostr_error_t nostr_nip47_session_check_permission(const char* session_id, const
     
     pthread_mutex_lock(&sessions_lock);
     
-    nwc_session_t* session = NULL;
-    for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
-            session = &sessions[i];
-            break;
-        }
-    }
-    
+    nwc_session_t* session = find_session(session_id);
     if (!session) {
         pthread_mutex_unlock(&sessions_lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     pthread_mutex_lock(&session->lock);
     pthread_mutex_unlock(&sessions_lock);
-    
+
     time_t now = time(NULL);
     if (session->expires_at < now) {
         pthread_mutex_unlock(&session->lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     session->last_used = now;
-    
+
     permission_t* perm = NULL;
     for (size_t i = 0; i < session->permission_count; i++) {
         if (strcmp(session->permissions[i].name, method) == 0 ||
@@ -300,28 +295,21 @@ nostr_error_t nostr_nip47_session_get_connection(const char* session_id, struct 
     
     pthread_mutex_lock(&sessions_lock);
     
-    nwc_session_t* session = NULL;
-    for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
-            session = &sessions[i];
-            break;
-        }
-    }
-    
+    nwc_session_t* session = find_session(session_id);
     if (!session) {
         pthread_mutex_unlock(&sessions_lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     pthread_mutex_lock(&session->lock);
     pthread_mutex_unlock(&sessions_lock);
-    
+
     time_t now = time(NULL);
     if (session->expires_at < now) {
         pthread_mutex_unlock(&session->lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     session->last_used = now;
     *connection = session->connection;
     
@@ -336,25 +324,18 @@ nostr_error_t nostr_nip47_session_extend(const char* session_id, uint32_t additi
     }
     
     pthread_mutex_lock(&sessions_lock);
-    
-    nwc_session_t* session = NULL;
-    for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
-            session = &sessions[i];
-            break;
-        }
-    }
-    
+
+    nwc_session_t* session = find_session(session_id);
     if (!session) {
         pthread_mutex_unlock(&sessions_lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     pthread_mutex_lock(&session->lock);
     pthread_mutex_unlock(&sessions_lock);
-    
+
     session->expires_at += additional_secs;
-    
+
     pthread_mutex_unlock(&session->lock);
     return NOSTR_OK;
 }
@@ -364,22 +345,15 @@ nostr_error_t nostr_nip47_session_destroy(const char* session_id)
     if (!session_id) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     pthread_mutex_lock(&sessions_lock);
-    
-    nwc_session_t* session = NULL;
-    for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
-            session = &sessions[i];
-            break;
-        }
-    }
-    
+
+    nwc_session_t* session = find_session(session_id);
     if (!session) {
         pthread_mutex_unlock(&sessions_lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
-    
+
     pthread_mutex_lock(&session->lock);
     pthread_mutex_unlock(&sessions_lock);
     

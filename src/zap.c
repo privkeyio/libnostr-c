@@ -270,7 +270,6 @@ nostr_error_t nostr_zap_verify(const nostr_event* receipt, const nostr_event* re
 
 #else
 
-/* NIP-57 functionality not available */
 nostr_error_t nostr_zap_create_request(nostr_event** request, uint64_t amount_msat, const nostr_key* recipient, const char* lnurl, const char* content, const char** relays, size_t relay_count) {
     (void)request; (void)amount_msat; (void)recipient; (void)lnurl; (void)content; (void)relays; (void)relay_count;
     return NOSTR_ERR_NOT_SUPPORTED;
