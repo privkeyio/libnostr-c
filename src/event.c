@@ -78,7 +78,7 @@ static void tag_arena_destroy(nostr_tag_arena* arena)
 
 static void* tag_arena_alloc(nostr_tag_arena* arena, size_t size)
 {
-    if (!arena || arena->used + size > arena->capacity) {
+    if (!arena || size > arena->capacity - arena->used) {
         return NULL;
     }
     
@@ -145,15 +145,25 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
         return NOSTR_ERR_INVALID_PARAM;
     }
 
+    if (count > SIZE_MAX / sizeof(char*)) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
     size_t values_size = sizeof(char*) * count;
     size_t strings_size = 0;
     for (size_t i = 0; i < count; i++) {
         if (!values[i]) {
             return NOSTR_ERR_INVALID_PARAM;
         }
-        strings_size += strlen(values[i]) + 1;
+        size_t slen = strlen(values[i]) + 1;
+        if (strings_size > SIZE_MAX - slen) {
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+        strings_size += slen;
     }
-    
+
+    if (values_size > SIZE_MAX - strings_size) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
     size_t total_size = values_size + strings_size;
     
     if (event->tag_arena->used + total_size > event->tag_arena->capacity) {
@@ -221,7 +231,7 @@ static char* escape_json_string(const char* input)
     if (!input) return NULL;
 
     size_t len = strlen(input);
-    size_t max_output_len = len * 2 + 1;
+    size_t max_output_len = len * 6 + 1;
     char* output = malloc(max_output_len);
     if (!output) return NULL;
 
@@ -257,7 +267,11 @@ static char* escape_json_string(const char* input)
                 output[j++] = 'f';
                 break;
             default:
-                output[j++] = input[i];
+                if ((unsigned char)input[i] < 0x20) {
+                    j += snprintf(output + j, 7, "\\u%04x", (unsigned char)input[i]);
+                } else {
+                    output[j++] = input[i];
+                }
                 break;
         }
     }
@@ -634,42 +648,46 @@ nostr_error_t nostr_event_sign(nostr_event* event, const nostr_privkey* privkey)
         }
     }
 
-    // Create keypair from private key
     secp256k1_keypair keypair;
     if (!secp256k1_keypair_create(secp256k1_ctx, &keypair, privkey->data)) {
         return NOSTR_ERR_INVALID_KEY;
     }
 
-    // Extract x-only public key from keypair
+    nostr_error_t result = NOSTR_OK;
+    unsigned char aux_rand[32] = {0};
+
     secp256k1_xonly_pubkey xonly_pubkey;
     if (!secp256k1_keypair_xonly_pub(secp256k1_ctx, &xonly_pubkey, NULL, &keypair)) {
-        return NOSTR_ERR_INVALID_KEY;
+        result = NOSTR_ERR_INVALID_KEY;
+        goto secp_cleanup;
     }
 
-    // Serialize x-only pubkey
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_ctx, event->pubkey.data, &xonly_pubkey)) {
-        return NOSTR_ERR_INVALID_KEY;
+        result = NOSTR_ERR_INVALID_KEY;
+        goto secp_cleanup;
     }
 
-    // Compute event ID with the public key set
-    nostr_error_t result = nostr_event_compute_id(event);
+    result = nostr_event_compute_id(event);
+    if (result != NOSTR_OK) {
+        goto secp_cleanup;
+    }
+
+    if (nostr_random_bytes(aux_rand, 32) != 1) {
+        result = NOSTR_ERR_MEMORY;
+        goto secp_cleanup;
+    }
+
+    if (!secp256k1_schnorrsig_sign32(secp256k1_ctx, event->sig, event->id, &keypair, aux_rand)) {
+        result = NOSTR_ERR_INVALID_SIGNATURE;
+        goto secp_cleanup;
+    }
+
+secp_cleanup:
+    secure_wipe(aux_rand, sizeof(aux_rand));
+    secure_wipe(&keypair, sizeof(keypair));
     if (result != NOSTR_OK) {
         return result;
     }
-
-    // Generate auxiliary randomness for BIP-340
-    unsigned char aux_rand[32];
-    if (nostr_random_bytes(aux_rand, 32) != 1) {
-        return NOSTR_ERR_MEMORY;
-    }
-
-    // Sign the event ID using Schnorr signatures (BIP-340)
-    if (!secp256k1_schnorrsig_sign32(secp256k1_ctx, event->sig, event->id, &keypair, aux_rand)) {
-        return NOSTR_ERR_INVALID_SIGNATURE;
-    }
-
-    secure_wipe(aux_rand, sizeof(aux_rand));
-    secure_wipe(&keypair, sizeof(keypair));
 #else
     // No crypto backend available
     return NOSTR_ERR_NOT_SUPPORTED;

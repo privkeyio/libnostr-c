@@ -11,6 +11,7 @@ typedef struct {
     char* name;
     uint64_t limit_msats;
     time_t reset_time;
+    uint32_t reset_interval_secs;
     uint64_t used_msats;
 } permission_t;
 
@@ -65,6 +66,8 @@ static void cleanup_expired_sessions()
             for (size_t j = 0; j < sessions[i].permission_count; j++) {
                 free(sessions[i].permissions[j].name);
             }
+            free(sessions[i].permissions);
+            sessions[i].permissions = NULL;
             sessions[i].permission_count = 0;
             pthread_mutex_unlock(&sessions[i].lock);
         }
@@ -183,7 +186,7 @@ nostr_error_t nostr_nip47_session_add_permission(const char* session_id, const c
     
     nwc_session_t* session = NULL;
     for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && strcmp(sessions[i].session_id, session_id) == 0) {
+        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             session = &sessions[i];
             break;
         }
@@ -216,6 +219,7 @@ nostr_error_t nostr_nip47_session_add_permission(const char* session_id, const c
     permission_t* perm = &session->permissions[session->permission_count];
     perm->name = strdup(permission);
     perm->limit_msats = limit_msats;
+    perm->reset_interval_secs = reset_interval_secs;
     perm->reset_time = time(NULL) + reset_interval_secs;
     perm->used_msats = 0;
     
@@ -236,7 +240,7 @@ nostr_error_t nostr_nip47_session_check_permission(const char* session_id, const
     
     nwc_session_t* session = NULL;
     for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && strcmp(sessions[i].session_id, session_id) == 0) {
+        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             session = &sessions[i];
             break;
         }
@@ -274,7 +278,7 @@ nostr_error_t nostr_nip47_session_check_permission(const char* session_id, const
     
     if (perm->reset_time < now) {
         perm->used_msats = 0;
-        perm->reset_time = now + (perm->reset_time - (now - perm->reset_time));
+        perm->reset_time = now + perm->reset_interval_secs;
     }
     
     if (perm->limit_msats > 0 && perm->used_msats + amount_msats > perm->limit_msats) {
@@ -298,7 +302,7 @@ nostr_error_t nostr_nip47_session_get_connection(const char* session_id, struct 
     
     nwc_session_t* session = NULL;
     for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && strcmp(sessions[i].session_id, session_id) == 0) {
+        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             session = &sessions[i];
             break;
         }
@@ -335,7 +339,7 @@ nostr_error_t nostr_nip47_session_extend(const char* session_id, uint32_t additi
     
     nwc_session_t* session = NULL;
     for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && strcmp(sessions[i].session_id, session_id) == 0) {
+        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             session = &sessions[i];
             break;
         }
@@ -365,7 +369,7 @@ nostr_error_t nostr_nip47_session_destroy(const char* session_id)
     
     nwc_session_t* session = NULL;
     for (size_t i = 0; i < max_sessions; i++) {
-        if (sessions[i].active && strcmp(sessions[i].session_id, session_id) == 0) {
+        if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             session = &sessions[i];
             break;
         }

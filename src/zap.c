@@ -218,7 +218,8 @@ nostr_error_t nostr_zap_verify(const nostr_event* receipt, const nostr_event* re
         return err;
     }
     
-    if (strcmp(receipt_pubkey_hex, server_pubkey) != 0) {
+    if (strlen(server_pubkey) != 64 ||
+        nostr_constant_time_memcmp(receipt_pubkey_hex, server_pubkey, 64) != 0) {
         return NOSTR_ERR_INVALID_SIGNATURE;
     }
     

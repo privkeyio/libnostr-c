@@ -500,6 +500,24 @@ nostr_error_t nostr_nip47_create_request_event(nostr_event** event, const struct
     }
     escaped_method[em_pos] = '\0';
 
+#ifdef HAVE_CJSON
+    {
+        cJSON* params_parsed = cJSON_Parse(params_json);
+        if (!params_parsed) {
+            nostr_event_destroy(*event);
+            *event = NULL;
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+        cJSON_Delete(params_parsed);
+    }
+#else
+    if (params_json[0] != '{' && params_json[0] != '[') {
+        nostr_event_destroy(*event);
+        *event = NULL;
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+#endif
+
     char payload[8192];
     snprintf(payload, sizeof(payload), "{\"method\":\"%s\",\"params\":%s}", escaped_method, params_json);
     

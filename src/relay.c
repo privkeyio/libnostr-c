@@ -441,6 +441,15 @@ nostr_error_t nostr_subscribe(nostr_relay* relay, const char* subscription_id,
         return NOSTR_ERR_MEMORY;
     }
 
+    {
+        cJSON* filters_parsed = cJSON_Parse(filters_json);
+        if (!filters_parsed) {
+            free(sub);
+            return NOSTR_ERR_INVALID_PARAM;
+        }
+        cJSON_Delete(filters_parsed);
+    }
+
     sub->id = strdup(subscription_id);
     sub->callback = callback;
     sub->user_data = user_data;
@@ -451,7 +460,7 @@ nostr_error_t nostr_subscribe(nostr_relay* relay, const char* subscription_id,
     if (!msg) {
         return NOSTR_ERR_MEMORY;
     }
-    
+
     sprintf(msg, "[\"REQ\",\"%s\",%s]", subscription_id, filters_json);
     
     size_t msg_len = strlen(msg);
