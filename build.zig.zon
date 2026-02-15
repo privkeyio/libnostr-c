@@ -1,6 +1,6 @@
 .{
     .name = .libnostr,
-    .version = "0.1.1",
+    .version = "0.2.0",
     .fingerprint = 0x5fdc996820f59181,
     .paths = .{
         "build.zig",

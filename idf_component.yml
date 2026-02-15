@@ -1,4 +1,4 @@
-version: "0.1.6"
+version: "0.2.0"
 description: "Lightweight C library for the Nostr protocol"
 url: "https://github.com/privkeyio/libnostr-c"
 repository: "https://github.com/privkeyio/libnostr-c.git"
