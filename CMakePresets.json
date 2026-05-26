@@ -43,7 +43,6 @@
         {
             "name": "win-base",
             "hidden": true,
-            "generator": "Visual Studio 17 2022",
             "architecture": "x64",
             "binaryDir": "${sourceDir}/build/windows",
             "cacheVariables": {
