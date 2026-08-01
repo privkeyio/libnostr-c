@@ -51,7 +51,49 @@ static BOOL CALLBACK init_lock_callback(PINIT_ONCE InitOnce, PVOID Parameter, PV
 #else
 static pthread_mutex_t ctx_init_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
+/*
+ * Deliberately a SEPARATE lock from ctx_init_lock. nostr_init() holds
+ * ctx_init_lock while it calls nostr_random_bytes() to seed the noscrypt
+ * context, so if the RNG took ctx_init_lock it would re-enter a non-recursive
+ * mutex and hang on the very first API call. ESP-IDF's pthread mutexes are
+ * PTHREAD_MUTEX_NORMAL by default and block forever rather than returning
+ * EDEADLK, and NOSTR_FEATURE_THREADING is compiled in on ESP (it is tested with
+ * #ifdef and defined as 0), so this is a real hang, not a theoretical one.
+ */
+#ifdef _WIN32
+static CRITICAL_SECTION rng_lock;
+static INIT_ONCE rng_lock_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK init_rng_lock_callback(PINIT_ONCE o, PVOID p, PVOID *c) {
+    (void)o; (void)p; (void)c;
+    InitializeCriticalSection(&rng_lock);
+    return TRUE;
+}
+#else
+static pthread_mutex_t rng_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
+#endif
+
+static void lock_rng(void) {
+#ifdef NOSTR_FEATURE_THREADING
+#ifdef _WIN32
+    InitOnceExecuteOnce(&rng_lock_once, init_rng_lock_callback, NULL, NULL);
+    EnterCriticalSection(&rng_lock);
+#else
+    pthread_mutex_lock(&rng_lock);
+#endif
+#endif
+}
+
+static void unlock_rng(void) {
+#ifdef NOSTR_FEATURE_THREADING
+#ifdef _WIN32
+    LeaveCriticalSection(&rng_lock);
+#else
+    pthread_mutex_unlock(&rng_lock);
+#endif
+#endif
+}
 
 static void lock_ctx_init(void) {
 #ifdef NOSTR_FEATURE_THREADING
@@ -121,7 +163,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
      * with respect to the non-volatile writes into rng_ctr_drbg, so another core
      * could observe the flag set before the context was visible.
      */
-    lock_ctx_init();
+    lock_rng();
     if (!rng_initialized) {
         mbedtls_entropy_init(&rng_entropy);
         mbedtls_ctr_drbg_init(&rng_ctr_drbg);
@@ -130,7 +172,7 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
              * struct and drops the accumulator mbedtls_md_setup() allocated. */
             mbedtls_ctr_drbg_free(&rng_ctr_drbg);
             mbedtls_entropy_free(&rng_entropy);
-            unlock_ctx_init();
+            unlock_rng();
             return 0;
         }
         rng_initialized = 1;
@@ -144,13 +186,13 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
     while (len > 0) {
         size_t chunk = len > MBEDTLS_CTR_DRBG_MAX_REQUEST ? MBEDTLS_CTR_DRBG_MAX_REQUEST : len;
         if (mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, chunk) != 0) {
-            unlock_ctx_init();
+            unlock_rng();
             return 0;
         }
         buf += chunk;
         len -= chunk;
     }
-    unlock_ctx_init();
+    unlock_rng();
     return 1;
 #else
     while (len > 0) {
