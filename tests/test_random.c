@@ -9,9 +9,38 @@
  */
 #include "unity.h"
 #include "../include/nostr.h"
-#include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+/*
+ * A minimal thread shim. The concurrency case below is the regression test for
+ * an unsynchronised DRBG draw, and the RNG takes a different lock on Windows
+ * (CRITICAL_SECTION) than on POSIX, so the case is worth running on both rather
+ * than compiling it out for MSVC, which has no pthread.h.
+ */
+#ifdef _WIN32
+#include <windows.h>
+typedef HANDLE thread_t;
+typedef DWORD WINAPI thread_ret_t;
+#define THREAD_CALL WINAPI
+static int thread_start(thread_t *t, thread_ret_t(THREAD_CALL *fn)(void *), void *arg) {
+    *t = CreateThread(NULL, 0, fn, arg, 0, NULL);
+    return *t == NULL ? -1 : 0;
+}
+static void thread_join(thread_t t) { WaitForSingleObject(t, INFINITE); CloseHandle(t); }
+#define THREAD_RETURN return 0
+#else
+#include <pthread.h>
+typedef pthread_t thread_t;
+typedef void *thread_ret_t;
+#define THREAD_CALL
+static int thread_start(thread_t *t, thread_ret_t(THREAD_CALL *fn)(void *), void *arg) {
+    return pthread_create(t, NULL, fn, arg);
+}
+static void thread_join(thread_t t) { pthread_join(t, NULL); }
+#define THREAD_RETURN return NULL
+#endif
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -78,27 +107,27 @@ static void test_zero_length_is_not_an_error(void) {
 static uint8_t g_draws[RNG_THREADS][RNG_DRAWS_PER_THREAD][RNG_DRAW_LEN];
 static int g_failures[RNG_THREADS];
 
-static void *draw_thread(void *arg) {
-    long t = (long)arg;
+static thread_ret_t THREAD_CALL draw_thread(void *arg) {
+    intptr_t t = (intptr_t)arg;
     for (int i = 0; i < RNG_DRAWS_PER_THREAD; i++) {
         if (nostr_random_bytes(g_draws[t][i], RNG_DRAW_LEN) != 1) {
             g_failures[t]++;
         }
     }
-    return NULL;
+    THREAD_RETURN;
 }
 
 static void test_concurrent_draws_are_all_distinct(void) {
-    pthread_t th[RNG_THREADS];
+    thread_t th[RNG_THREADS];
 
     memset(g_draws, 0, sizeof(g_draws));
     memset(g_failures, 0, sizeof(g_failures));
 
-    for (long t = 0; t < RNG_THREADS; t++) {
-        TEST_ASSERT_EQUAL(0, pthread_create(&th[t], NULL, draw_thread, (void *)t));
+    for (intptr_t t = 0; t < RNG_THREADS; t++) {
+        TEST_ASSERT_EQUAL(0, thread_start(&th[t], draw_thread, (void *)t));
     }
     for (int t = 0; t < RNG_THREADS; t++) {
-        pthread_join(th[t], NULL);
+        thread_join(th[t]);
     }
     for (int t = 0; t < RNG_THREADS; t++) {
         TEST_ASSERT_EQUAL(0, g_failures[t]);

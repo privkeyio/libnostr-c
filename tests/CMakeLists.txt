@@ -147,9 +147,15 @@ add_test(NAME random_tests COMMAND test_random)
 
 # Present in the tree but never registered, so it had never been built or run.
 # It covers concurrent nostr_init() and concurrent nostr_key_generate().
-add_executable(test_thread_safety test_thread_safety.c)
-target_link_libraries(test_thread_safety nostr_static Threads::Threads)
-add_test(NAME thread_safety_tests COMMAND test_thread_safety)
+#
+# POSIX only: the file uses pthread.h directly, which MSVC does not provide, and
+# that is most likely why it was never wired up. test_random.c carries a shim so
+# its concurrency case still runs on Windows; porting this one is left separate.
+if(NOT WIN32)
+    add_executable(test_thread_safety test_thread_safety.c)
+    target_link_libraries(test_thread_safety nostr_static Threads::Threads)
+    add_test(NAME thread_safety_tests COMMAND test_thread_safety)
+endif()
 
 target_link_libraries(test_runner nostr_static)
 target_compile_definitions(test_runner PRIVATE TEST_RUNNER_INCLUDED)
