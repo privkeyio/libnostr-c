@@ -103,8 +103,16 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     name: "Linux mbedTLS crypto paths"
+    # Read-only: this job builds third-party sources with sudo, so it should not
+    # be able to write anything back with the job token.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Otherwise the token is written into .git/config, where any later
+          # step, including the third-party build below, can read it.
+          persist-credentials: false
 
       - name: Install dependencies
         run: |
@@ -113,8 +121,11 @@ jobs:
 
       - name: Install secp256k1
         run: |
+          # Pinned: this is built and `sudo make install`ed, so an unpinned
+          # default branch would run whatever upstream pushed, as root.
           git clone https://github.com/bitcoin-core/secp256k1.git
           cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
           ./autogen.sh
           ./configure --enable-module-schnorrsig --enable-module-extrakeys
           make -j$(nproc)
