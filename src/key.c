@@ -106,20 +106,52 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
      * software layer here can detect that. Enable an entropy source before
      * generating keys.
      */
+    /*
+     * The lock is held across the DRAW, not just initialisation.
+     * mbedtls_ctr_drbg_random() mutates the generator's counter and key, and its
+     * own mutex is compiled out unless MBEDTLS_THREADING_C is set, which ESP-IDF
+     * leaves off by default (components/mbedtls/Kconfig: "default n"). The
+     * esp_fill_random() this replaced was reentrant, so without this the change
+     * would introduce a data race on dual-core parts: two tasks generating keys
+     * concurrently could be handed the same AES-CTR block, i.e. identical private
+     * keys or identical BIP-340 aux_rand.
+     *
+     * Taking the lock unconditionally also fixes the fast-path read of
+     * rng_initialized, which had no acquire barrier: `volatile` orders nothing
+     * with respect to the non-volatile writes into rng_ctr_drbg, so another core
+     * could observe the flag set before the context was visible.
+     */
+    lock_ctx_init();
     if (!rng_initialized) {
-        lock_ctx_init();
-        if (!rng_initialized) {
-            mbedtls_entropy_init(&rng_entropy);
-            mbedtls_ctr_drbg_init(&rng_ctr_drbg);
-            if (mbedtls_ctr_drbg_seed(&rng_ctr_drbg, mbedtls_entropy_func, &rng_entropy, NULL, 0) != 0) {
-                unlock_ctx_init();
-                return 0;
-            }
-            rng_initialized = 1;
+        mbedtls_entropy_init(&rng_entropy);
+        mbedtls_ctr_drbg_init(&rng_ctr_drbg);
+        if (mbedtls_ctr_drbg_seed(&rng_ctr_drbg, mbedtls_entropy_func, &rng_entropy, NULL, 0) != 0) {
+            /* Free both, or the next attempt's mbedtls_entropy_init() memsets the
+             * struct and drops the accumulator mbedtls_md_setup() allocated. */
+            mbedtls_ctr_drbg_free(&rng_ctr_drbg);
+            mbedtls_entropy_free(&rng_entropy);
+            unlock_ctx_init();
+            return 0;
         }
-        unlock_ctx_init();
+        rng_initialized = 1;
     }
-    return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
+
+    /* Chunked: mbedtls_ctr_drbg_random() refuses more than
+     * MBEDTLS_CTR_DRBG_MAX_REQUEST (1024) bytes and does not split internally.
+     * nostr_random_bytes takes a size_t and the esp_fill_random() it replaced
+     * accepted any length, so without this a caller asking for >1KB would start
+     * failing. Mirrors the OpenSSL branch below. */
+    while (len > 0) {
+        size_t chunk = len > MBEDTLS_CTR_DRBG_MAX_REQUEST ? MBEDTLS_CTR_DRBG_MAX_REQUEST : len;
+        if (mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, chunk) != 0) {
+            unlock_ctx_init();
+            return 0;
+        }
+        buf += chunk;
+        len -= chunk;
+    }
+    unlock_ctx_init();
+    return 1;
 #else
     while (len > 0) {
         int chunk = (len > INT_MAX) ? INT_MAX : (int)len;
