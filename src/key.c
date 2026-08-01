@@ -22,9 +22,6 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/sha256.h>
-#ifdef ESP_PLATFORM
-#include <esp_random.h>
-#endif
 #else
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -78,19 +75,37 @@ static void unlock_ctx_init(void) {
 }
 
 #ifdef HAVE_MBEDTLS
-#ifndef ESP_PLATFORM
 static mbedtls_entropy_context rng_entropy;
 static mbedtls_ctr_drbg_context rng_ctr_drbg;
 static volatile int rng_initialized = 0;
 #endif
-#endif
 
 int nostr_random_bytes(uint8_t *buf, size_t len) {
 #ifdef HAVE_MBEDTLS
-#ifdef ESP_PLATFORM
-    esp_fill_random(buf, len);
-    return 1;
-#else
+    /*
+     * One path for every mbedTLS target, ESP32 included.
+     *
+     * This used to special-case ESP_PLATFORM to call esp_fill_random() and
+     * `return 1` unconditionally -- the only backend here incapable of
+     * reporting failure, feeding private key generation (nostr_key_generate),
+     * BIP-39 mnemonic entropy (hd_key.c), and BIP-340 aux_rand (event.c).
+     * Callers all check the return value, so the failure simply never arrived.
+     *
+     * The special case was never needed. ESP-IDF defines
+     * MBEDTLS_ENTROPY_HARDWARE_ALT for every non-Linux target and supplies
+     * mbedtls_hardware_poll() backed by esp_fill_random(), so mbedtls_entropy_func
+     * resolves to the hardware RNG on ESP32 exactly as it does elsewhere. This is
+     * the same construction ESP-IDF's own TLS stack uses. Going through CTR-DRBG
+     * adds a real error return, plus mbedTLS's entropy conditioning, and removes a
+     * platform divergence rather than adding one.
+     *
+     * NOTE FOR ESP32 CONSUMERS: this makes the RNG *fail loudly*, not magically
+     * strong. esp_fill_random() only yields true random numbers while an entropy
+     * source is running -- the RF subsystem, or bootloader_random_enable(). An
+     * air-gapped device that brings up neither draws pseudo-random bytes, and no
+     * software layer here can detect that. Enable an entropy source before
+     * generating keys.
+     */
     if (!rng_initialized) {
         lock_ctx_init();
         if (!rng_initialized) {
@@ -105,7 +120,6 @@ int nostr_random_bytes(uint8_t *buf, size_t len) {
         unlock_ctx_init();
     }
     return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
-#endif
 #else
     while (len > 0) {
         int chunk = (len > INT_MAX) ? INT_MAX : (int)len;
