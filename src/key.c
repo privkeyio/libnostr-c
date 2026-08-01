@@ -22,9 +22,6 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/sha256.h>
-#ifdef ESP_PLATFORM
-#include <esp_random.h>
-#endif
 #else
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -54,7 +51,49 @@ static BOOL CALLBACK init_lock_callback(PINIT_ONCE InitOnce, PVOID Parameter, PV
 #else
 static pthread_mutex_t ctx_init_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
+/*
+ * Deliberately a SEPARATE lock from ctx_init_lock. nostr_init() holds
+ * ctx_init_lock while it calls nostr_random_bytes() to seed the noscrypt
+ * context, so if the RNG took ctx_init_lock it would re-enter a non-recursive
+ * mutex and hang on the very first API call. ESP-IDF's pthread mutexes are
+ * PTHREAD_MUTEX_NORMAL by default and block forever rather than returning
+ * EDEADLK, and NOSTR_FEATURE_THREADING is compiled in on ESP (it is tested with
+ * #ifdef and defined as 0), so this is a real hang, not a theoretical one.
+ */
+#ifdef _WIN32
+static CRITICAL_SECTION rng_lock;
+static INIT_ONCE rng_lock_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK init_rng_lock_callback(PINIT_ONCE o, PVOID p, PVOID *c) {
+    (void)o; (void)p; (void)c;
+    InitializeCriticalSection(&rng_lock);
+    return TRUE;
+}
+#else
+static pthread_mutex_t rng_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
+#endif
+
+static void lock_rng(void) {
+#ifdef NOSTR_FEATURE_THREADING
+#ifdef _WIN32
+    InitOnceExecuteOnce(&rng_lock_once, init_rng_lock_callback, NULL, NULL);
+    EnterCriticalSection(&rng_lock);
+#else
+    pthread_mutex_lock(&rng_lock);
+#endif
+#endif
+}
+
+static void unlock_rng(void) {
+#ifdef NOSTR_FEATURE_THREADING
+#ifdef _WIN32
+    LeaveCriticalSection(&rng_lock);
+#else
+    pthread_mutex_unlock(&rng_lock);
+#endif
+#endif
+}
 
 static void lock_ctx_init(void) {
 #ifdef NOSTR_FEATURE_THREADING
@@ -78,34 +117,83 @@ static void unlock_ctx_init(void) {
 }
 
 #ifdef HAVE_MBEDTLS
-#ifndef ESP_PLATFORM
 static mbedtls_entropy_context rng_entropy;
 static mbedtls_ctr_drbg_context rng_ctr_drbg;
 static volatile int rng_initialized = 0;
 #endif
-#endif
 
 int nostr_random_bytes(uint8_t *buf, size_t len) {
 #ifdef HAVE_MBEDTLS
-#ifdef ESP_PLATFORM
-    esp_fill_random(buf, len);
-    return 1;
-#else
+    /*
+     * One path for every mbedTLS target, ESP32 included.
+     *
+     * This used to special-case ESP_PLATFORM to call esp_fill_random() and
+     * `return 1` unconditionally -- the only backend here incapable of
+     * reporting failure, feeding private key generation (nostr_key_generate),
+     * BIP-39 mnemonic entropy (hd_key.c), and BIP-340 aux_rand (event.c).
+     * Callers all check the return value, so the failure simply never arrived.
+     *
+     * The special case was never needed. ESP-IDF defines
+     * MBEDTLS_ENTROPY_HARDWARE_ALT for every non-Linux target and supplies
+     * mbedtls_hardware_poll() backed by esp_fill_random(), so mbedtls_entropy_func
+     * resolves to the hardware RNG on ESP32 exactly as it does elsewhere. This is
+     * the same construction ESP-IDF's own TLS stack uses. Going through CTR-DRBG
+     * adds a real error return, plus mbedTLS's entropy conditioning, and removes a
+     * platform divergence rather than adding one.
+     *
+     * NOTE FOR ESP32 CONSUMERS: this makes the RNG *fail loudly*, not magically
+     * strong. esp_fill_random() only yields true random numbers while an entropy
+     * source is running -- the RF subsystem, or bootloader_random_enable(). An
+     * air-gapped device that brings up neither draws pseudo-random bytes, and no
+     * software layer here can detect that. Enable an entropy source before
+     * generating keys.
+     */
+    /*
+     * The lock is held across the DRAW, not just initialisation.
+     * mbedtls_ctr_drbg_random() mutates the generator's counter and key, and its
+     * own mutex is compiled out unless MBEDTLS_THREADING_C is set, which ESP-IDF
+     * leaves off by default (components/mbedtls/Kconfig: "default n"). The
+     * esp_fill_random() this replaced was reentrant, so without this the change
+     * would introduce a data race on dual-core parts: two tasks generating keys
+     * concurrently could be handed the same AES-CTR block, i.e. identical private
+     * keys or identical BIP-340 aux_rand.
+     *
+     * Taking the lock unconditionally also fixes the fast-path read of
+     * rng_initialized, which had no acquire barrier: `volatile` orders nothing
+     * with respect to the non-volatile writes into rng_ctr_drbg, so another core
+     * could observe the flag set before the context was visible.
+     */
+    lock_rng();
     if (!rng_initialized) {
-        lock_ctx_init();
-        if (!rng_initialized) {
-            mbedtls_entropy_init(&rng_entropy);
-            mbedtls_ctr_drbg_init(&rng_ctr_drbg);
-            if (mbedtls_ctr_drbg_seed(&rng_ctr_drbg, mbedtls_entropy_func, &rng_entropy, NULL, 0) != 0) {
-                unlock_ctx_init();
-                return 0;
-            }
-            rng_initialized = 1;
+        mbedtls_entropy_init(&rng_entropy);
+        mbedtls_ctr_drbg_init(&rng_ctr_drbg);
+        if (mbedtls_ctr_drbg_seed(&rng_ctr_drbg, mbedtls_entropy_func, &rng_entropy, NULL, 0) != 0) {
+            /* Free both, or the next attempt's mbedtls_entropy_init() memsets the
+             * struct and drops the accumulator mbedtls_md_setup() allocated. */
+            mbedtls_ctr_drbg_free(&rng_ctr_drbg);
+            mbedtls_entropy_free(&rng_entropy);
+            unlock_rng();
+            return 0;
         }
-        unlock_ctx_init();
+        rng_initialized = 1;
     }
-    return mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, len) == 0 ? 1 : 0;
-#endif
+
+    /* Chunked: mbedtls_ctr_drbg_random() refuses more than
+     * MBEDTLS_CTR_DRBG_MAX_REQUEST (1024) bytes and does not split internally.
+     * nostr_random_bytes takes a size_t and the esp_fill_random() it replaced
+     * accepted any length, so without this a caller asking for >1KB would start
+     * failing. Mirrors the OpenSSL branch below. */
+    while (len > 0) {
+        size_t chunk = len > MBEDTLS_CTR_DRBG_MAX_REQUEST ? MBEDTLS_CTR_DRBG_MAX_REQUEST : len;
+        if (mbedtls_ctr_drbg_random(&rng_ctr_drbg, buf, chunk) != 0) {
+            unlock_rng();
+            return 0;
+        }
+        buf += chunk;
+        len -= chunk;
+    }
+    unlock_rng();
+    return 1;
 #else
     while (len > 0) {
         int chunk = (len > INT_MAX) ? INT_MAX : (int)len;

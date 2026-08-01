@@ -9,24 +9,17 @@
 #ifdef HAVE_MBEDTLS
 #include <mbedtls/base64.h>
 #include <mbedtls/cipher.h>
-#ifdef ESP_PLATFORM
-#include <esp_random.h>
-#define RAND_bytes(buf, len) (esp_fill_random(buf, len), 1)
-#else
-#include <mbedtls/entropy.h>
-#include <mbedtls/ctr_drbg.h>
-static int RAND_bytes(uint8_t* buf, size_t len) {
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr_drbg;
-    mbedtls_entropy_init(&entropy);
-    mbedtls_ctr_drbg_init(&ctr_drbg);
-    int ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0);
-    if (ret == 0) ret = mbedtls_ctr_drbg_random(&ctr_drbg, buf, len);
-    mbedtls_ctr_drbg_free(&ctr_drbg);
-    mbedtls_entropy_free(&entropy);
-    return ret == 0 ? 1 : 0;
-}
-#endif
+/*
+ * Use the library's own RNG rather than a local shim. This file previously had
+ * two: an ESP macro that discarded esp_fill_random()'s (absent) status and
+ * hardcoded success, and a non-ESP function that seeded and freed a fresh
+ * CTR-DRBG on every call. The first meant a NIP-44 nonce could be drawn from an
+ * unchecked source with no way to fail -- and a repeated nonce under a fixed
+ * conversation key is ChaCha20 keystream reuse, which is worse than a weak
+ * keygen draw. Same pattern event.c and nip26.c already use.
+ */
+extern int nostr_random_bytes(uint8_t* buf, size_t len);
+#define RAND_bytes(buf, len) nostr_random_bytes((buf), (len))
 #else
 #include <openssl/rand.h>
 #include <openssl/evp.h>
@@ -289,14 +282,10 @@ nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nos
 
     nostr_error_t ret = NOSTR_OK;
 
-#ifdef ESP_PLATFORM
-    esp_fill_random(nonce, NIP44_NONCE_SIZE);
-#else
     if (RAND_bytes(nonce, NIP44_NONCE_SIZE) != 1) {
         ret = NOSTR_ERR_MEMORY;
         goto encrypt_cleanup;
     }
-#endif
 
     if (pad_plaintext((const uint8_t*)plaintext, plaintext_len,
                      &padded_plaintext, &padded_len) != 0) {
