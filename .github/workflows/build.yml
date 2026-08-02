@@ -209,7 +209,11 @@ jobs:
         working-directory: libnostr-c/test/esp-idf
         run: |
           set -uo pipefail
-          docker run --rm -v "$PWD":/p -w /p espressif/idf:v5.4.1 bash -lc '
+          # Mounted at the SAME absolute path the build used. CMake caches
+          # absolute paths in build/, so mounting elsewhere (e.g. /p) silently
+          # invalidates the cache and idf.py regenerates nothing, which surfaces
+          # only as a missing flash image.
+          docker run --rm -v "$GITHUB_WORKSPACE":"$GITHUB_WORKSPACE" -w "$PWD" espressif/idf:v5.4.1 bash -lc '
             set -eu
             # Install errors are NOT discarded: a silent failure here would
             # leave the run looking like a QEMU problem rather than a missing
@@ -223,9 +227,14 @@ jobs:
 
             # Only to generate qemu_flash.bin and qemu_efuse.bin; its own launch
             # attempt wants an interactive terminal and is discarded.
-            timeout 60 idf.py qemu --qemu-extra-args="-nographic" >/dev/null 2>&1 || true
-            test -f build/qemu_flash.bin \
-              || { echo "flash image was never generated" >&2; exit 1; }
+            # Output kept: when this failed, discarding it left only "flash
+            # image was never generated" with no cause.
+            timeout 60 idf.py qemu --qemu-extra-args="-nographic" > qemu-gen.log 2>&1 || true
+            if [ ! -f build/qemu_flash.bin ]; then
+              echo "flash image was never generated; idf.py qemu said:" >&2
+              tail -30 qemu-gen.log >&2
+              exit 1
+            fi
 
             # -nographic already routes serial to stdio. Passing -serial stdio
             # as well makes the machine boot with no console output at all.
