@@ -210,14 +210,26 @@ jobs:
         run: |
           set -uo pipefail
           docker run --rm -v "$PWD":/p -w /p espressif/idf:v5.4.1 bash -lc '
-            set -u
-            python $IDF_PATH/tools/idf_tools.py install qemu-xtensa >/dev/null 2>&1
-            . $IDF_PATH/export.sh >/dev/null 2>&1
-            qemu_bin=$(find $HOME/.espressif/tools/qemu-xtensa -name qemu-system-xtensa | head -1)
-            export PATH="$(dirname "$qemu_bin"):$PATH"
+            set -eu
+            # Install errors are NOT discarded: a silent failure here would
+            # leave the run looking like a QEMU problem rather than a missing
+            # tool. IDF_TOOLS_PATH is /opt/esp in this image, not ~/.espressif,
+            # so the tool is located through PATH after export.sh rather than
+            # by guessing a directory.
+            python "$IDF_PATH/tools/idf_tools.py" install qemu-xtensa
+            . "$IDF_PATH/export.sh" >/dev/null
+            command -v qemu-system-xtensa >/dev/null \
+              || { echo "qemu-system-xtensa not on PATH after install" >&2; exit 1; }
+
+            # Only to generate qemu_flash.bin and qemu_efuse.bin; its own launch
+            # attempt wants an interactive terminal and is discarded.
             timeout 60 idf.py qemu --qemu-extra-args="-nographic" >/dev/null 2>&1 || true
-            test -f build/qemu_flash.bin || { echo "flash image was never generated" >&2; exit 1; }
-            timeout 90 "$qemu_bin" -M esp32s3 \
+            test -f build/qemu_flash.bin \
+              || { echo "flash image was never generated" >&2; exit 1; }
+
+            # -nographic already routes serial to stdio. Passing -serial stdio
+            # as well makes the machine boot with no console output at all.
+            timeout 90 qemu-system-xtensa -M esp32s3 \
               -drive file=build/qemu_flash.bin,if=mtd,format=raw \
               -drive file=build/qemu_efuse.bin,if=none,format=raw,id=efuse \
               -global driver=nvram.esp32c3.efuse,property=drive,value=efuse \
