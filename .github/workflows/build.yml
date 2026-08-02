@@ -189,12 +189,59 @@ jobs:
           ref: 746dbbea5c34dde963c9bd55bc7474b2d50fa597 # esp-idf-support
           path: secp256k1-frost
 
-      - uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v5.4.1
-          target: esp32s3
-          path: libnostr-c/test/esp-idf
-        
+      # Build and run in ONE container. The esp-idf-ci-action builds inside
+      # its own container at /app/..., and CMake bakes that absolute path into
+      # build/, so the directory cannot be reused from any other mount: idf.py
+      # rejects it with "configured for project /app/... not /home/runner/...".
+      # Doing both here keeps the paths consistent by construction, and is one
+      # build rather than two.
+      #
+      # Running matters, not just building: the mbedTLS RNG path compiles only
+      # for ESP targets, so until this job ran it, that code had never executed
+      # anywhere. Three defects reached main through that gap. The host mbedTLS
+      # job covers the same logic against 2.x; this covers the 3.x ESP-IDF
+      # ships, on the FreeRTOS scheduler the data-race case needs.
+      - name: Build and run the on-target smoke test under QEMU
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$GITHUB_WORKSPACE":/w -w /w/libnostr-c/test/esp-idf \
+            espressif/idf:v5.4.1 bash -lc '
+              set -eu
+              . "$IDF_PATH/export.sh" >/dev/null
+              idf.py set-target esp32s3 >/dev/null
+              idf.py build
+
+              python "$IDF_PATH/tools/idf_tools.py" install qemu-xtensa
+              . "$IDF_PATH/export.sh" >/dev/null
+              command -v qemu-system-xtensa >/dev/null \
+                || { echo "qemu-system-xtensa not on PATH after install" >&2; exit 1; }
+
+              # Only to generate qemu_flash.bin and qemu_efuse.bin; its own
+              # launch wants an interactive terminal and is discarded. Output is
+              # kept, because discarding it left an earlier failure with no cause.
+              timeout 60 idf.py qemu --qemu-extra-args="-nographic" > qemu-gen.log 2>&1 || true
+              if [ ! -f build/qemu_flash.bin ]; then
+                echo "flash image was never generated; idf.py qemu said:" >&2
+                tail -30 qemu-gen.log >&2
+                exit 1
+              fi
+
+              # -nographic already routes serial to stdio. Passing -serial stdio
+              # as well makes the machine boot with no console output at all.
+              timeout 90 qemu-system-xtensa -M esp32s3 \
+                -drive file=build/qemu_flash.bin,if=mtd,format=raw \
+                -drive file=build/qemu_efuse.bin,if=none,format=raw,id=efuse \
+                -global driver=nvram.esp32c3.efuse,property=drive,value=efuse \
+                -nographic > qemu.log 2>&1 || true
+            '
+          echo "--- smoke output ---"
+          sed -n '/SMOKE-BEGIN/,/SMOKE-\(PASS\|FAIL-TOTAL\)/p' libnostr-c/test/esp-idf/qemu.log || true
+          if ! grep -q 'SMOKE-PASS' libnostr-c/test/esp-idf/qemu.log; then
+            echo "::error::on-target smoke test did not report SMOKE-PASS (assertion failure, crash, or hang)" >&2
+            tail -40 libnostr-c/test/esp-idf/qemu.log >&2
+            exit 1
+          fi
+
   build-windows:
     # Builds third-party sources; no reason to hold a writable job token.
     permissions:
