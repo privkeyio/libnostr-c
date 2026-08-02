@@ -168,6 +168,23 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 find_package(PkgConfig QUIET)
 find_package(OpenSSL REQUIRED)
 
+# HAVE_MBEDTLS gates the crypto in key.c, event.c, nip44.c and nip26.c. It was
+# set in exactly one place, inside the ESP_PLATFORM branch below, so host CI
+# never compiled those paths and nothing ever executed them: a self-deadlock, an
+# unsynchronised DRBG draw and a >1024-byte regression all reached main through
+# that gap. This option builds the same branches for the host so the existing
+# test suite covers them.
+#
+# The host's mbedTLS is 2.x while ESP-IDF ships 3.x, so this exercises the logic
+# rather than proving the ESP build. That is where the defects above lived.
+option(NOSTR_CRYPTO_MBEDTLS "Build the mbedTLS crypto paths instead of OpenSSL's (host testing of the ESP32 code paths)" OFF)
+if(NOSTR_CRYPTO_MBEDTLS)
+    find_library(MBEDCRYPTO_LIB mbedcrypto REQUIRED)
+    find_path(MBEDTLS_INCLUDE_DIR mbedtls/ctr_drbg.h REQUIRED)
+    set(HAVE_MBEDTLS 1)
+    message(STATUS "Building the mbedTLS crypto paths: ${MBEDCRYPTO_LIB}")
+endif()
+
 # Always required
 find_package(Threads REQUIRED)
 
@@ -786,6 +803,10 @@ endif()
 
 # Link required libraries
 set(NOSTR_LINK_LIBRARIES OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+if(NOSTR_CRYPTO_MBEDTLS)
+    list(APPEND NOSTR_LINK_LIBRARIES ${MBEDCRYPTO_LIB})
+    include_directories(${MBEDTLS_INCLUDE_DIR})
+endif()
 
 
 # Add optional libraries if they exist

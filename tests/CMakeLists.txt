@@ -136,6 +136,31 @@ if(NOSTR_FEATURE_RELAY_PROTOCOL)
     add_test(NAME nip50_tests COMMAND test_nip50)
 endif()
 
+# nostr_random_bytes() produces every private key, BIP-39 mnemonic, BIP-340
+# aux_rand and NIP-44 nonce, and had no direct test on any platform. Threads are
+# required for the concurrency case, which is the regression test for an
+# unsynchronised DRBG draw.
+find_package(Threads REQUIRED)
+add_executable(test_random test_random.c)
+target_link_libraries(test_random nostr_static Threads::Threads)
+add_test(NAME random_tests COMMAND test_random)
+# The deadlock case would hang rather than fail if that bug returned, and
+# ctest's default timeout is 1500s. Cap it so a regression reports quickly.
+set_tests_properties(random_tests PROPERTIES TIMEOUT 120)
+
+# Present in the tree but never registered, so it had never been built or run.
+# It covers concurrent nostr_init() and concurrent nostr_key_generate().
+#
+# POSIX only: the file uses pthread.h directly, which MSVC does not provide, and
+# that is most likely why it was never wired up. test_random.c carries a shim so
+# its concurrency case still runs on Windows; porting this one is left separate.
+if(NOT WIN32)
+    add_executable(test_thread_safety test_thread_safety.c)
+    target_link_libraries(test_thread_safety nostr_static Threads::Threads)
+    add_test(NAME thread_safety_tests COMMAND test_thread_safety)
+    set_tests_properties(thread_safety_tests PROPERTIES TIMEOUT 180)
+endif()
+
 target_link_libraries(test_runner nostr_static)
 target_compile_definitions(test_runner PRIVATE TEST_RUNNER_INCLUDED)
 if(UNITY_FOUND)

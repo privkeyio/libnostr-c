@@ -91,6 +91,74 @@ jobs:
           cd build
           ctest --output-on-failure
 
+  # The mbedTLS branches in key.c, event.c, nip44.c and nip26.c were previously
+  # compiled only by build-esp-idf, which is build-only, so nothing ever executed
+  # them. A self-deadlock, an unsynchronised DRBG draw and a >1024-byte
+  # regression all reached main through that gap. This runs the same test suite
+  # against those branches on the host.
+  #
+  # Host mbedTLS is 2.x and ESP-IDF ships 3.x, so this covers the logic rather
+  # than the ESP toolchain. Every defect above was logic.
+  build-mbedtls:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    name: "Linux mbedTLS crypto paths"
+    # Read-only: this job builds third-party sources with sudo, so it should not
+    # be able to write anything back with the job token.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Otherwise the token is written into .git/config, where any later
+          # step, including the third-party build below, can read it.
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev libmbedtls-dev libcjson-dev libwebsockets-dev autotools-dev autoconf libtool
+
+      - name: Install secp256k1
+        run: |
+          # Pinned: this is built and `sudo make install`ed, so an unpinned
+          # default branch would run whatever upstream pushed, as root.
+          git clone https://github.com/bitcoin-core/secp256k1.git
+          cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
+          ./autogen.sh
+          ./configure --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=OFF -DNOSTR_CRYPTO_MBEDTLS=ON
+
+      - name: Confirm the mbedTLS paths are actually enabled
+        run: |
+          grep -q '^#define HAVE_MBEDTLS' build/include/nostr_features.h \
+            || { echo "::error::HAVE_MBEDTLS not defined; this job would test the OpenSSL paths instead" >&2; exit 1; }
+          echo "HAVE_MBEDTLS is defined"
+
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc)
+
+      - name: Confirm the binary links mbedTLS
+        run: |
+          ldd build/tests/test_random | grep -q mbedcrypto \
+            || { echo "::error::test_random is not linked against mbedcrypto" >&2; exit 1; }
+          ldd build/tests/test_random | grep mbedcrypto
+
+      - name: Test
+        run: |
+          cd build
+          ctest --output-on-failure
+
   build-esp-idf:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
