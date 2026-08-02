@@ -9,6 +9,9 @@ on:
 
 jobs:
   build-linux:
+    # Builds third-party sources; no reason to hold a writable job token.
+    permissions:
+      contents: read
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     name: "Linux ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
@@ -24,6 +27,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       
       - name: Install dependencies
         run: |
@@ -34,6 +39,7 @@ jobs:
         run: |
           git clone https://github.com/bitcoin-core/secp256k1.git
           cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
           ./autogen.sh
           ./configure --enable-module-schnorrsig --enable-module-extrakeys
           make -j$(nproc)
@@ -52,14 +58,10 @@ jobs:
           echo "Starting noscrypt build for matrix.noscrypt=${{ matrix.noscrypt }}"
           git clone https://github.com/VnUgE/noscrypt.git
           cd noscrypt
-          git tag -l
-          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "")
-          if [ -n "$LATEST_TAG" ]; then
-            git checkout "$LATEST_TAG"
-            echo "Checked out tag: $LATEST_TAG"
-          else
-            echo "No tags found, using latest commit"
-          fi
+          # Pinned. This previously checked out whichever tag upstream had created
+          # most recently, so a new noscrypt release was adopted by CI with no
+          # review, in a crypto library's own dependency chain.
+          git checkout 04a5c7b4d0151b9105e5afd6bc0e4dd89ac616bc # v0.1.15
           
           chmod +x ../.github/scripts/fix-noscrypt-headers.sh
           ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
@@ -126,6 +128,7 @@ jobs:
           git clone https://github.com/bitcoin-core/secp256k1.git
           cd secp256k1
           git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
           ./autogen.sh
           ./configure --enable-module-schnorrsig --enable-module-extrakeys
           make -j$(nproc)
@@ -160,23 +163,30 @@ jobs:
           ctest --output-on-failure
 
   build-esp-idf:
+    # Builds third-party sources; no reason to hold a writable job token.
+    permissions:
+      contents: read
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           path: libnostr-c
 
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: privkeyio/noscrypt
-          ref: esp-idf-support
+          # Commit, not branch: the same revision keep-esp32 pins.
+          ref: 45fcbef32f958145d6797f384a225c0d43616886 # esp-idf-support
           path: noscrypt
 
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: privkeyio/secp256k1-frost
-          ref: esp-idf-support
+          ref: 746dbbea5c34dde963c9bd55bc7474b2d50fa597 # esp-idf-support
           path: secp256k1-frost
 
       - uses: espressif/esp-idf-ci-action@v1
@@ -186,6 +196,9 @@ jobs:
           path: libnostr-c/test/esp-idf
         
   build-windows:
+    # Builds third-party sources; no reason to hold a writable job token.
+    permissions:
+      contents: read
     if: github.event.pull_request.draft == false
     runs-on: windows-latest
     strategy:
@@ -200,6 +213,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       
       - name: Setup MSVC
         uses: microsoft/setup-msbuild@v1.3
@@ -216,6 +231,7 @@ jobs:
         run: |
           git clone https://github.com/bitcoin-core/secp256k1.git
           cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
           mkdir build && cd build
           cmake .. -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON -DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON -DCMAKE_INSTALL_PREFIX="C:/vcpkg/installed/x64-windows"
           cmake --build . --config Release
@@ -226,6 +242,7 @@ jobs:
         run: |
           git clone https://github.com/bitcoin-core/secp256k1.git
           cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
           mkdir build && cd build
           cmake .. -DSECP256K1_ENABLE_MODULE_SCHNORRSIG=ON -DSECP256K1_ENABLE_MODULE_EXTRAKEYS=ON -DCMAKE_INSTALL_PREFIX="C:/Program Files/secp256k1"
           cmake --build . --config Release
@@ -245,6 +262,9 @@ jobs:
           ctest --preset win-release || echo "Tests completed with warnings"
         
   build-macos:
+    # Builds third-party sources; no reason to hold a writable job token.
+    permissions:
+      contents: read
     if: github.event.pull_request.draft == false
     runs-on: macos-latest
     name: "macOS ${{ matrix.build_type }} (${{ matrix.noscrypt_name }})"
@@ -260,6 +280,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
         
       - name: Install dependencies
         run: |
@@ -269,6 +291,7 @@ jobs:
         run: |
           git clone https://github.com/bitcoin-core/secp256k1.git
           cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
           ./autogen.sh
           ./configure --enable-module-schnorrsig --enable-module-extrakeys --prefix=/usr/local
           make -j$(sysctl -n hw.ncpu)
@@ -283,13 +306,9 @@ jobs:
         run: |
           git clone https://github.com/VnUgE/noscrypt.git
           cd noscrypt
-          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "")
-          if [ -n "$LATEST_TAG" ]; then
-            git checkout "$LATEST_TAG"
-            echo "Checked out tag: $LATEST_TAG"
-          else
-            echo "No tags found, using latest commit"
-          fi
+          # Pinned; see the Linux job for why the previous latest-tag lookup was
+          # replaced.
+          git checkout 04a5c7b4d0151b9105e5afd6bc0e4dd89ac616bc # v0.1.15
           
           chmod +x ../.github/scripts/fix-noscrypt-headers.sh
           ../.github/scripts/fix-noscrypt-headers.sh . 1.1.1
