@@ -194,6 +194,42 @@ jobs:
           esp_idf_version: v5.4.1
           target: esp32s3
           path: libnostr-c/test/esp-idf
+
+      # Building alone is what let three defects reach main: the mbedTLS RNG
+      # path compiles only for ESP targets, so until this ran, that code had
+      # never executed anywhere. The host mbedTLS job covers the same logic
+      # against 2.x; this covers the 3.x ESP-IDF ships, on the FreeRTOS
+      # scheduler the data-race case needs.
+      #
+      # QEMU is driven directly rather than through `idf.py qemu monitor`,
+      # which expects an interactive terminal and a TCP serial socket. The
+      # `idf.py qemu` call before it is only to generate qemu_flash.bin and
+      # qemu_efuse.bin; its own launch attempt is discarded.
+      - name: Run the on-target smoke test under QEMU
+        working-directory: libnostr-c/test/esp-idf
+        run: |
+          set -uo pipefail
+          docker run --rm -v "$PWD":/p -w /p espressif/idf:v5.4.1 bash -lc '
+            set -u
+            python $IDF_PATH/tools/idf_tools.py install qemu-xtensa >/dev/null 2>&1
+            . $IDF_PATH/export.sh >/dev/null 2>&1
+            qemu_bin=$(find $HOME/.espressif/tools/qemu-xtensa -name qemu-system-xtensa | head -1)
+            export PATH="$(dirname "$qemu_bin"):$PATH"
+            timeout 60 idf.py qemu --qemu-extra-args="-nographic" >/dev/null 2>&1 || true
+            test -f build/qemu_flash.bin || { echo "flash image was never generated" >&2; exit 1; }
+            timeout 90 "$qemu_bin" -M esp32s3 \
+              -drive file=build/qemu_flash.bin,if=mtd,format=raw \
+              -drive file=build/qemu_efuse.bin,if=none,format=raw,id=efuse \
+              -global driver=nvram.esp32c3.efuse,property=drive,value=efuse \
+              -nographic > qemu.log 2>&1 || true
+          '
+          echo "--- smoke output ---"
+          sed -n '/SMOKE-BEGIN/,/SMOKE-\(PASS\|FAIL-TOTAL\)/p' qemu.log || true
+          if ! grep -q 'SMOKE-PASS' qemu.log; then
+            echo "::error::on-target smoke test did not report SMOKE-PASS (assertion failure, crash, or hang)" >&2
+            tail -40 qemu.log >&2
+            exit 1
+          fi
         
   build-windows:
     # Builds third-party sources; no reason to hold a writable job token.
