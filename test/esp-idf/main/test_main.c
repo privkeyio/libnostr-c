@@ -92,14 +92,28 @@ void app_main(void) {
     g_done = xSemaphoreCreateCounting(DRAW_TASKS, 0);
     check(g_done != NULL, "semaphore created");
 
+    int started = 0;
     for (int t = 0; t < DRAW_TASKS; t++) {
         /* 4096 is generous on purpose: ctr_drbg_reseed_internal puts a
          * 384-byte seed buffer on the caller's stack, plus the entropy gather. */
-        xTaskCreate(draw_task, "draw", 4096, (void *)(intptr_t)t, 5, NULL);
+        if (xTaskCreate(draw_task, "draw", 4096, (void *)(intptr_t)t, 5, NULL) == pdPASS) {
+            started++;
+        }
     }
-    for (int t = 0; t < DRAW_TASKS; t++) {
-        xSemaphoreTake(g_done, portMAX_DELAY);
+    /* Unchecked, a failed create meant one fewer xSemaphoreGive and a
+     * portMAX_DELAY wait that never returns: a CI timeout with no message,
+     * which is the failure mode this whole file exists to avoid. */
+    check(started == DRAW_TASKS, "all draw tasks were created");
+
+    int joined = 0;
+    for (int t = 0; t < started; t++) {
+        /* Bounded rather than portMAX_DELAY, so a task that hangs reports a
+         * missing result instead of stalling the run to the job timeout. */
+        if (xSemaphoreTake(g_done, pdMS_TO_TICKS(10000)) == pdTRUE) {
+            joined++;
+        }
     }
+    check(joined == started, "every draw task finished within the timeout");
 
     int draw_errors = 0;
     for (int t = 0; t < DRAW_TASKS; t++) draw_errors += g_task_failures[t];
