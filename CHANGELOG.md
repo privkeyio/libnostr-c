@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.1] - 2026-08-03
+
+### Security
+- Fail closed when the NIP-17 timestamp cannot be fuzzed. A failed RNG draw previously let sealing and wrapping continue with an unfuzzed timestamp; both call sites now destroy the partial event, clear the out-parameter and wipe the ephemeral private key
+- Let the ESP32 RNG report failure like every other backend, so a degraded draw surfaces instead of being silently accepted
+
+### Fixed
+- Report a failed FreeRTOS task create instead of waiting forever on a semaphore that can no longer be given
+- Build macOS against a supported OpenSSL; openssl@1.1 has been end of life since September 2023 and was removed from Homebrew
+- Fix Windows CI by removing the hardcoded VS 2022 generator
+- Correct the license badge to MIT, matching LICENSE
+
+### Changed
+- Run the ESP-IDF smoke test under QEMU rather than only building it, so the mbedTLS RNG path is executed on the target it is compiled for
+- Exercise the mbedTLS crypto paths on the host and test the RNG directly
+- Pin every third-party source CI builds
+- Document the ESP stack cost of seeding the DRBG
+
 ## [0.2.0] - 2026-02-14
 
 ### Security
