@@ -46,8 +46,10 @@ On ESP targets the RNG goes through a cached mbedTLS CTR-DRBG rather than
 `esp_fill_random()`, so that a failed draw can be reported instead of silently
 returning zeros. That costs stack in the task that happens to seed it.
 
-**Call `nostr_random_bytes()`, `nostr_key_generate()` or any signing entry point
-from a task with at least 4 KB of stack.** The first call in the process seeds
+**Call `nostr_random_bytes()`, `nostr_key_generate()`, `nostr_keypair_generate()`
+or any signing entry point from a task with at least 4 KB of stack.**
+(`nostr_keypair_generate()` delegates to `nostr_key_generate()`, so either
+reaches the same draw.) The first call in the process seeds
 the DRBG, and `ctr_drbg_reseed_internal()` puts a 384-byte
 `MBEDTLS_CTR_DRBG_MAX_SEED_INPUT` buffer on the *caller's* stack
 (`mbedtls/library/ctr_drbg.c:452`), plus the entropy gather. Roughly 500 bytes
@@ -70,8 +72,14 @@ This is measured, not estimated. Under QEMU on ESP32-S3:
 | first caller | result |
 | ------------ | ------ |
 | 2 KB task drawing from an already-seeded DRBG | passes |
-| 2 KB task that seeds the DRBG itself | `Guru Meditation Error: Core 1 panic'ed (LoadProhibited)` |
+| 2 KB task that seeds the DRBG itself | crashes, `Guru Meditation Error: Core 1 panic'ed (LoadProhibited)` |
+| 3 KB task that seeds | passes |
+| 4 KB task that seeds | passes |
 | 8 KB task (`app_main`) seeding, then 2 KB tasks drawing | passes |
+
+The threshold is between 2 KB and 3 KB on this build. 4 KB is the recommendation
+because it leaves margin for your own frames on top of the seed, not because
+3 KB was observed to fail.
 
 So the hazard is specifically the *first* caller, which is why seeding from a
 task whose depth you control is worth doing deliberately.
