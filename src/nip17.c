@@ -122,6 +122,7 @@ nostr_error_t nostr_nip17_create_seal(nostr_event** seal, const nostr_event* rum
     if (err != NOSTR_OK) {
         nostr_event_destroy(*seal);
         *seal = NULL;
+        free(encrypted_rumor);
         return err;
     }
     
@@ -237,6 +238,8 @@ nostr_error_t nostr_nip17_create_gift_wrap(nostr_event** wrap, const nostr_event
     if (err != NOSTR_OK) {
         nostr_event_destroy(*wrap);
         *wrap = NULL;
+        secure_wipe(&ephemeral_privkey, sizeof(ephemeral_privkey));
+        free(encrypted_seal);
         return err;
     }
     memcpy(&(*wrap)->pubkey, &ephemeral_pubkey, sizeof(nostr_key));
