@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include <openssl/rand.h>
+#include <openssl/err.h>
 
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
 #include <noscrypt.h>
@@ -25,17 +26,30 @@ extern secp256k1_context* secp256k1_ctx;
 
 extern nostr_error_t nostr_init(void);
 
-static int64_t random_timestamp_past_two_days()
+/*
+ * NIP-17 back-dates seals and gift wraps by a random offset so a relay observer
+ * cannot correlate send times. Returning the exact current time on RNG failure
+ * removed that property silently: the event still sent, still validated, and
+ * the timing metadata it exists to hide was published in the clear.
+ *
+ * Fails closed instead. The caller aborts rather than emitting an event whose
+ * timestamp is not fuzzed.
+ */
+static nostr_error_t random_timestamp_past_two_days(int64_t* out)
 {
-    int64_t now = (int64_t)time(NULL);
     uint32_t random_offset;
-    
+
     if (RAND_bytes((unsigned char*)&random_offset, sizeof(random_offset)) != 1) {
-        return now;
+        ERR_clear_error();
+        /* NOSTR_ERR_MEMORY is what key.c and event.c already return for an RNG
+         * failure. Semantically loose, but consistent; a dedicated code would
+         * be a public enum change and belongs in its own commit. */
+        return NOSTR_ERR_MEMORY;
     }
-    
+
     random_offset %= TWO_DAYS_SECONDS;
-    return now - random_offset;
+    *out = (int64_t)time(NULL) - random_offset;
+    return NOSTR_OK;
 }
 
 nostr_error_t nostr_nip17_create_rumor(nostr_event** rumor, uint16_t kind, const nostr_key* pubkey, 
@@ -104,7 +118,13 @@ nostr_error_t nostr_nip17_create_seal(nostr_event** seal, const nostr_event* rum
     }
     
     (*seal)->kind = KIND_SEAL;
-    (*seal)->created_at = random_timestamp_past_two_days();
+    err = random_timestamp_past_two_days(&(*seal)->created_at);
+    if (err != NOSTR_OK) {
+        nostr_event_destroy(*seal);
+        *seal = NULL;
+        free(encrypted_rumor);
+        return err;
+    }
     
     /* Derive pubkey from privkey */
 #ifdef NOSTR_FEATURE_CRYPTO_NOSCRYPT
@@ -214,7 +234,14 @@ nostr_error_t nostr_nip17_create_gift_wrap(nostr_event** wrap, const nostr_event
     }
     
     (*wrap)->kind = KIND_GIFT_WRAP;
-    (*wrap)->created_at = random_timestamp_past_two_days();
+    err = random_timestamp_past_two_days(&(*wrap)->created_at);
+    if (err != NOSTR_OK) {
+        nostr_event_destroy(*wrap);
+        *wrap = NULL;
+        secure_wipe(&ephemeral_privkey, sizeof(ephemeral_privkey));
+        free(encrypted_seal);
+        return err;
+    }
     memcpy(&(*wrap)->pubkey, &ephemeral_pubkey, sizeof(nostr_key));
     
     err = nostr_event_set_content(*wrap, encrypted_seal);
