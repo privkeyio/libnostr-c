@@ -81,3 +81,11 @@ external/
 # Performance benchmarking
 performance_baseline.txt
 callgrind.out*
+# ESP-IDF build byproducts. `idf.py build` and the QEMU smoke test generate
+# these in test/esp-idf; sdkconfig in particular is per-developer (target,
+# flash size) and does not belong in the tree. sdkconfig.defaults is tracked
+# and is what CI and a fresh checkout actually use.
+test/esp-idf/sdkconfig
+test/esp-idf/sdkconfig.old
+test/esp-idf/dependencies.lock
+test/esp-idf/managed_components/
