@@ -457,7 +457,7 @@ nostr_error_t nostr_key_ecdh(const nostr_privkey* privkey, const nostr_key* pubk
     uint8_t shared_point[NC_SHARED_SEC_SIZE];
     
     memcpy(nc_secret.key, privkey->data, NC_SEC_KEY_SIZE);
-    memcpy(nc_public.key, pubkey->data, NC_PUBKEY_SIZE);
+    memcpy(nc_public.key, pubkey->data, NOSTR_PUBKEY_SIZE);
     
     if (NCGetSharedSecret(nc_ctx, &nc_secret, &nc_public, shared_point) != NC_SUCCESS) {
         secure_wipe(nc_secret.key, NC_SEC_KEY_SIZE);
@@ -637,7 +637,7 @@ nostr_error_t nostr_keypair_validate(const nostr_keypair* keypair)
     NCPublicKey derived_public;
     
     memcpy(nc_secret.key, keypair->privkey.data, NC_SEC_KEY_SIZE);
-    memcpy(nc_public.key, keypair->pubkey.data, NC_PUBKEY_SIZE);
+    memcpy(nc_public.key, keypair->pubkey.data, NOSTR_PUBKEY_SIZE);
     
     if (NCValidateSecretKey(nc_ctx, &nc_secret) != NC_SUCCESS) {
         secure_wipe(nc_secret.key, NC_SEC_KEY_SIZE);
@@ -649,7 +649,7 @@ nostr_error_t nostr_keypair_validate(const nostr_keypair* keypair)
         return NOSTR_ERR_INVALID_KEY;
     }
     
-    int keys_match = (nostr_constant_time_memcmp(nc_public.key, derived_public.key, NC_PUBKEY_SIZE) == 0);
+    int keys_match = (nostr_constant_time_memcmp(nc_public.key, derived_public.key, NOSTR_PUBKEY_SIZE) == 0);
     secure_wipe(nc_secret.key, NC_SEC_KEY_SIZE);
     
     return keys_match ? NOSTR_OK : NOSTR_ERR_INVALID_KEY;

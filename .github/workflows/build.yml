@@ -179,7 +179,7 @@ jobs:
           persist-credentials: false
           repository: privkeyio/noscrypt
           # Commit, not branch: the same revision keep-esp32 pins.
-          ref: 45fcbef32f958145d6797f384a225c0d43616886 # esp-idf-support
+          ref: 02e47e81eb9338d8cb9ae84a14a3992f00f4a651 # esp-idf-support (v0.1.15)
           path: noscrypt
 
       - uses: actions/checkout@v4
