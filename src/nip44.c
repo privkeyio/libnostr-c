@@ -278,7 +278,7 @@ nostr_error_t nostr_nip44_encrypt(const nostr_privkey* sender_privkey, const nos
     }
 
     memcpy(nc_secret.key, sender_privkey->data, NC_SEC_KEY_SIZE);
-    memcpy(nc_public.key, recipient_pubkey->data, NC_PUBKEY_SIZE);
+    memcpy(nc_public.key, recipient_pubkey->data, NOSTR_PUBKEY_SIZE);
 
     nostr_error_t ret = NOSTR_OK;
 
@@ -414,7 +414,7 @@ nostr_error_t nostr_nip44_decrypt(const nostr_privkey* recipient_privkey, const 
     mac = payload + payload_len - NC_ENCRYPTION_MAC_SIZE;
     
     memcpy(nc_secret.key, recipient_privkey->data, NC_SEC_KEY_SIZE);
-    memcpy(nc_public.key, sender_pubkey->data, NC_PUBKEY_SIZE);
+    memcpy(nc_public.key, sender_pubkey->data, NOSTR_PUBKEY_SIZE);
 
     nostr_error_t ret = NOSTR_OK;
 

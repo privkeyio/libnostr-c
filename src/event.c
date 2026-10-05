@@ -719,7 +719,7 @@ nostr_error_t nostr_event_verify(const nostr_event* event)
     }
 
     NCPublicKey nc_public;
-    memcpy(nc_public.key, event->pubkey.data, NC_PUBKEY_SIZE);
+    memcpy(nc_public.key, event->pubkey.data, NOSTR_PUBKEY_SIZE);
 
     if (NCVerifyDigest(nc_ctx, &nc_public, event->id, event->sig) != NC_SUCCESS) {
         return NOSTR_ERR_INVALID_SIGNATURE;
