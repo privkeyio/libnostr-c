@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2026-10-04
+
+### Changed
+- Build the ESP-IDF component against noscrypt v0.1.15, picking up libsecp256k1 0.7.1, mbedTLS 3.6.6, stricter span bounds checks and an improved fixed-time fallback
+- Replace the deprecated `NC_PUBKEY_SIZE` with `NOSTR_PUBKEY_SIZE`. noscrypt v0.1.15 marks the old macro deprecated in a way GCC rejects inside an expression, so v0.2.1 does not compile against it
+
 ## [0.2.1] - 2026-08-03
 
 ### Security
