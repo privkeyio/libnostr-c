@@ -174,7 +174,7 @@ static void test_zap_verify(void)
     nostr_key recipient;
     memset(&recipient, 0x42, sizeof(recipient));
     const char* relays[] = {"wss://relay.damus.io"};
-    err = nostr_zap_create_request(&request, 21000, &recipient, "lnurl1test", "Test", relays, 1);
+    err = nostr_zap_create_request(&request, 21000000, &recipient, "lnurl1test", "Test", relays, 1);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     TEST_ASSERT_NOT_NULL(request);
     
@@ -210,7 +210,7 @@ static void test_zap_verify(void)
     err = nostr_event_add_tag(receipt, bolt11_tag, 2);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     
-    const char* p_tag[] = {"p", "42424242424242424242424242424242424242424242424242424242424242"};
+    const char* p_tag[] = {"p", "4242424242424242424242424242424242424242424242424242424242424242"};
     err = nostr_event_add_tag(receipt, p_tag, 2);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     
@@ -287,7 +287,7 @@ static void test_zap_verify_invalid_amount(void)
     err = nostr_event_add_tag(receipt, bolt11_tag, 2);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     
-    const char* p_tag[] = {"p", "42424242424242424242424242424242424242424242424242424242424242"};
+    const char* p_tag[] = {"p", "4242424242424242424242424242424242424242424242424242424242424242"};
     err = nostr_event_add_tag(receipt, p_tag, 2);
     TEST_ASSERT_EQUAL(NOSTR_OK, err);
     
