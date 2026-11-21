@@ -233,7 +233,7 @@ sudo dnf install cmake openssl-devel cjson-devel libwebsockets-devel
 - `CMAKE_BUILD_TYPE`: Set to `Release` for optimized builds or `Debug` for debugging
 - `CMAKE_INSTALL_PREFIX`: Installation directory (default: `/usr/local`)
 - `BUILD_SHARED_LIBS`: Build shared libraries (default: ON)
-- `BUILD_TESTING`: Build test suite (default: ON)
+- `BUILD_TESTING`: Build test suite (default: ON; only when libnostr-c is the top-level project, never under `add_subdirectory`)
 
 Example:
 ```bash
