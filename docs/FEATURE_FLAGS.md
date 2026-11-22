@@ -49,7 +49,7 @@ cmake -DNOSTR_FEATURE_ALL_NIPS=ON .
 - `NOSTR_FEATURE_THREADING` - Multi-threaded operations (ON by default)
 
 ### Cryptography Backends
-- `NOSTR_FEATURE_CRYPTO_NOSCRYPT` - Use noscrypt (preferred, OFF by default if not available)
+- `NOSTR_FEATURE_CRYPTO_NOSCRYPT` - Use noscrypt (preferred). `AUTO` (default) uses it when found and otherwise warns and falls back to secp256k1, `ON` fails configure if it is not found, `OFF` never uses it
 - `NOSTR_FEATURE_CRYPTO_SECP256K1` - Use secp256k1 (fallback, ON by default)
 
 ### Meta Options

@@ -132,7 +132,11 @@ set(CJSON_LIB_DIR "" CACHE STRING "Path to cJSON library directory if not global
 set(SECP256K1_LIB_DIR "" CACHE STRING "Path to secp256k1 library directory if not globally available")
 
 # Cryptography backend options (one must be enabled)
-option(NOSTR_FEATURE_CRYPTO_NOSCRYPT "Use noscrypt for cryptography (preferred)" ON)
+# Guarded so a parent project's normal variable survives; under CMP0126 OLD, set(CACHE) would drop it.
+if(NOT DEFINED NOSTR_FEATURE_CRYPTO_NOSCRYPT)
+    set(NOSTR_FEATURE_CRYPTO_NOSCRYPT AUTO CACHE STRING "Use noscrypt for cryptography: AUTO when found, ON required, OFF never")
+    set_property(CACHE NOSTR_FEATURE_CRYPTO_NOSCRYPT PROPERTY STRINGS AUTO ON OFF)
+endif()
 option(NOSTR_FEATURE_CRYPTO_SECP256K1 "Use secp256k1 for basic cryptography (fallback)" ON)
 
 # Handle all-nips flag
@@ -221,58 +225,63 @@ if(PkgConfig_FOUND AND NOT (CJSON_FOUND AND LIBWEBSOCKETS_FOUND))
     if(NOT LIBWEBSOCKETS_FOUND)
         pkg_check_modules(LIBWEBSOCKETS libwebsockets)
     endif()
+endif()
+
+# Outside the block above, which a reconfigure skips once cJSON and libwebsockets are cached.
+if(PkgConfig_FOUND)
     pkg_check_modules(NOSCRYPT noscrypt)
     pkg_check_modules(UTF8PROC libutf8proc)
+endif()
 
-    # Check for noscrypt in common development locations
-    if(NOT NOSCRYPT_FOUND)
-        # Check environment variable first
-        if(DEFINED ENV{NOSCRYPT_DIR})
-            set(NOSCRYPT_SEARCH_PATHS 
-                $ENV{NOSCRYPT_DIR}/lib 
-                $ENV{NOSCRYPT_DIR}/build
-                $ENV{NOSCRYPT_DIR}
-            )
-        else()
-            # Check common relative locations for development
-            set(NOSCRYPT_SEARCH_PATHS 
-                ${CMAKE_CURRENT_SOURCE_DIR}/../noscrypt/lib
-                ${CMAKE_CURRENT_SOURCE_DIR}/../noscrypt/build
-                ${CMAKE_CURRENT_SOURCE_DIR}/../noscrypt
-                ${CMAKE_CURRENT_SOURCE_DIR}/external/noscrypt/lib
-                ${CMAKE_CURRENT_SOURCE_DIR}/external/noscrypt/build
-                ${CMAKE_CURRENT_SOURCE_DIR}/vendor/noscrypt/lib
-                ${CMAKE_CURRENT_SOURCE_DIR}/vendor/noscrypt/build
-            )
-        endif()
+# Check for noscrypt in common development locations
+if(NOT NOSCRYPT_FOUND)
+    # Check environment variable first
+    if(DEFINED ENV{NOSCRYPT_DIR})
+        set(NOSCRYPT_SEARCH_PATHS 
+            $ENV{NOSCRYPT_DIR}/lib 
+            $ENV{NOSCRYPT_DIR}/build
+            $ENV{NOSCRYPT_DIR}
+        )
+    else()
+        # Check common relative locations for development
+        set(NOSCRYPT_SEARCH_PATHS 
+            ${CMAKE_CURRENT_SOURCE_DIR}/../noscrypt/lib
+            ${CMAKE_CURRENT_SOURCE_DIR}/../noscrypt/build
+            ${CMAKE_CURRENT_SOURCE_DIR}/../noscrypt
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/noscrypt/lib
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/noscrypt/build
+            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/noscrypt/lib
+            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/noscrypt/build
+        )
+    endif()
+    
+    find_library(NOSCRYPT_LOCAL_LIB 
+        NAMES noscrypt libnoscrypt
+        PATHS ${NOSCRYPT_SEARCH_PATHS}
+        NO_DEFAULT_PATH
+    )
+    
+    if(NOSCRYPT_LOCAL_LIB)
+        # Determine include search paths based on found library location
+        get_filename_component(NOSCRYPT_LIB_DIR ${NOSCRYPT_LOCAL_LIB} DIRECTORY)
+        get_filename_component(NOSCRYPT_ROOT_DIR ${NOSCRYPT_LIB_DIR} DIRECTORY)
         
-        find_library(NOSCRYPT_LOCAL_LIB 
-            NAMES noscrypt libnoscrypt
-            PATHS ${NOSCRYPT_SEARCH_PATHS}
+        find_path(NOSCRYPT_LOCAL_INCLUDE
+            NAMES noscrypt.h
+            PATHS 
+                ${NOSCRYPT_ROOT_DIR}/include
+                ${NOSCRYPT_ROOT_DIR}
+                ${NOSCRYPT_LIB_DIR}/../include
+            PATH_SUFFIXES noscrypt
             NO_DEFAULT_PATH
         )
         
-        if(NOSCRYPT_LOCAL_LIB)
-            # Determine include search paths based on found library location
-            get_filename_component(NOSCRYPT_LIB_DIR ${NOSCRYPT_LOCAL_LIB} DIRECTORY)
-            get_filename_component(NOSCRYPT_ROOT_DIR ${NOSCRYPT_LIB_DIR} DIRECTORY)
-            
-            find_path(NOSCRYPT_LOCAL_INCLUDE
-                NAMES noscrypt.h
-                PATHS 
-                    ${NOSCRYPT_ROOT_DIR}/include
-                    ${NOSCRYPT_ROOT_DIR}
-                    ${NOSCRYPT_LIB_DIR}/../include
-                NO_DEFAULT_PATH
-            )
-            
-            if(NOSCRYPT_LOCAL_INCLUDE)
-                set(NOSCRYPT_FOUND TRUE)
-                set(NOSCRYPT_LIBRARIES ${NOSCRYPT_LOCAL_LIB})
-                set(NOSCRYPT_INCLUDE_DIRS ${NOSCRYPT_LOCAL_INCLUDE})
-                message(STATUS "Found local noscrypt: ${NOSCRYPT_LOCAL_LIB}")
-                message(STATUS "Using noscrypt headers: ${NOSCRYPT_LOCAL_INCLUDE}")
-            endif()
+        if(NOSCRYPT_LOCAL_INCLUDE)
+            set(NOSCRYPT_FOUND TRUE)
+            set(NOSCRYPT_LIBRARIES ${NOSCRYPT_LOCAL_LIB})
+            set(NOSCRYPT_INCLUDE_DIRS ${NOSCRYPT_LOCAL_INCLUDE})
+            message(STATUS "Found local noscrypt: ${NOSCRYPT_LOCAL_LIB}")
+            message(STATUS "Using noscrypt headers: ${NOSCRYPT_LOCAL_INCLUDE}")
         endif()
     endif()
 endif()
@@ -514,7 +523,7 @@ endif()
 if(NOT NOSCRYPT_FOUND)
     find_library(NOSCRYPT_LIBRARIES noscrypt PATHS /usr/local/lib NO_DEFAULT_PATH)
     if(NOSCRYPT_LIBRARIES AND NOT NOSCRYPT_LIBRARIES MATCHES "-NOTFOUND$")
-        find_path(NOSCRYPT_INCLUDE_DIRS noscrypt.h PATHS /usr/local/include NO_DEFAULT_PATH)
+        find_path(NOSCRYPT_INCLUDE_DIRS noscrypt.h PATHS /usr/local/include PATH_SUFFIXES noscrypt NO_DEFAULT_PATH)
         if(NOSCRYPT_INCLUDE_DIRS)
             set(NOSCRYPT_FOUND TRUE)
         else()
@@ -548,11 +557,28 @@ endif()
 
 # Validate cryptography backend
 set(HAVE_CRYPTO_BACKEND OFF)
+set(HAVE_NOSCRYPT OFF)
 
-if(NOSTR_FEATURE_CRYPTO_NOSCRYPT AND NOSCRYPT_FOUND)
+string(TOUPPER "${NOSTR_FEATURE_CRYPTO_NOSCRYPT}" _nostr_noscrypt_mode)
+if(_nostr_noscrypt_mode STREQUAL "AUTO")
+    if(NOSCRYPT_FOUND)
+        set(HAVE_NOSCRYPT ON)
+    else()
+        message(WARNING "noscrypt not found, falling back to secp256k1. Pass -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=ON to require noscrypt, or OFF to silence this.")
+    endif()
+elseif(NOSTR_FEATURE_CRYPTO_NOSCRYPT)
+    if(NOT NOSCRYPT_FOUND)
+        message(FATAL_ERROR "NOSTR_FEATURE_CRYPTO_NOSCRYPT=${NOSTR_FEATURE_CRYPTO_NOSCRYPT} but noscrypt was not found. Install noscrypt, or pass AUTO or OFF to build with secp256k1. A build directory configured by an older version may still have ON cached.")
+    endif()
     set(HAVE_NOSCRYPT ON)
+endif()
+# The sources test NOSTR_FEATURE_CRYPTO_NOSCRYPT, so define it only for the backend actually selected.
+if(HAVE_NOSCRYPT)
     set(HAVE_CRYPTO_BACKEND ON)
+    set(NOSTR_FEATURE_CRYPTO_NOSCRYPT ON)
     message(STATUS "Using noscrypt for cryptography")
+else()
+    set(NOSTR_FEATURE_CRYPTO_NOSCRYPT OFF)
 endif()
 
 if(NOSTR_FEATURE_CRYPTO_SECP256K1 AND (SECP256K1_FOUND OR (SECP256K1_LIBRARIES AND NOT SECP256K1_LIBRARIES STREQUAL "NOTFOUND")))
@@ -791,7 +817,7 @@ if(LIBWEBSOCKETS_FOUND)
     target_include_directories(nostr_static PRIVATE ${LIBWEBSOCKETS_INCLUDE_DIRS})
 endif()
 
-if(NOSCRYPT_FOUND)
+if(HAVE_NOSCRYPT)
     target_include_directories(nostr PRIVATE ${NOSCRYPT_INCLUDE_DIRS})
     target_include_directories(nostr_static PRIVATE ${NOSCRYPT_INCLUDE_DIRS})
 endif()
@@ -887,7 +913,7 @@ if(HAVE_LIBWEBSOCKETS)
     endif()
 endif()
 
-if(NOSCRYPT_LIBRARIES AND NOT NOSCRYPT_LIBRARIES STREQUAL "NOTFOUND")
+if(HAVE_NOSCRYPT)
     list(APPEND NOSTR_LINK_LIBRARIES ${NOSCRYPT_LIBRARIES})
 endif()
 

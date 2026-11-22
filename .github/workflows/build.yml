@@ -81,8 +81,8 @@ jobs:
       - name: Configure
         run: |
           mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=${{ matrix.noscrypt }}
-          
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=${{ matrix.noscrypt }} -DNOSTR_FEATURE_ALL_NIPS=${{ matrix.noscrypt }}
+
       - name: Build
         run: |
           cd build
@@ -398,8 +398,8 @@ jobs:
               break
             fi
           done
-          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=${{ matrix.noscrypt }} -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/local" -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include;/opt/homebrew/opt/openssl@3/include;/opt/local/include" -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib;/opt/homebrew/opt/openssl@3/lib;/opt/local/lib" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}"
-          
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=${{ matrix.noscrypt }} -DNOSTR_FEATURE_ALL_NIPS=${{ matrix.noscrypt }} -DCMAKE_PREFIX_PATH="/usr/local;/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/local" -DCMAKE_INCLUDE_PATH="/usr/local/include;/opt/homebrew/include;/opt/homebrew/opt/openssl@3/include;/opt/local/include" -DCMAKE_LIBRARY_PATH="/usr/local/lib;/opt/homebrew/lib;/opt/homebrew/opt/openssl@3/lib;/opt/local/lib" -DSECP256K1_LIB_DIR="${SECP256K1_PATH:-/usr/local/lib}"
+
       - name: Build
         run: |
           cd build
