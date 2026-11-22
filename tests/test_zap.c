@@ -105,6 +105,10 @@ static void test_zap_parse_receipt(void)
 
 static void test_zap_verify(void)
 {
+#ifndef HAVE_CJSON
+    /* The receipt carries the request as JSON, which needs cJSON. */
+    TEST_IGNORE_MESSAGE("needs cJSON");
+#endif
     nostr_privkey server_privkey;
     nostr_key server_pubkey;
     nostr_error_t err = nostr_key_generate(&server_privkey, &server_pubkey);
@@ -188,6 +192,10 @@ static void test_zap_verify(void)
 
 static void test_zap_verify_invalid_amount(void)
 {
+#ifndef HAVE_CJSON
+    /* The receipt carries the request as JSON, which needs cJSON. */
+    TEST_IGNORE_MESSAGE("needs cJSON");
+#endif
     nostr_privkey server_privkey;
     nostr_key server_pubkey;
     nostr_error_t err = nostr_key_generate(&server_privkey, &server_pubkey);

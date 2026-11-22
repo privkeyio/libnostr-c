@@ -203,7 +203,7 @@ void test_event_to_json(void)
     TEST_ASSERT_TRUE(strstr(json, "\"kind\"") != NULL);
     free(json);
     #else
-    TEST_ASSERT_EQUAL(NOSTR_ERR_ENCODING, result);
+    TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_SUPPORTED, result);
     #endif
     
     nostr_event_destroy(event);
@@ -234,7 +234,7 @@ void test_event_from_json(void)
     TEST_ASSERT_EQUAL_STRING("e", event->tags[0].values[0]);
     nostr_event_destroy(event);
     #else
-    TEST_ASSERT_EQUAL(NOSTR_ERR_ENCODING, result);
+    TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_SUPPORTED, result);
     #endif
 }
 
@@ -248,7 +248,7 @@ void test_event_from_json_invalid(void)
     #ifdef HAVE_CJSON
     TEST_ASSERT_EQUAL(NOSTR_ERR_JSON_PARSE, nostr_event_from_json("invalid json", &event));
     #else
-    TEST_ASSERT_EQUAL(NOSTR_ERR_ENCODING, nostr_event_from_json("invalid json", &event));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_SUPPORTED, nostr_event_from_json("invalid json", &event));
     #endif
 }
 
