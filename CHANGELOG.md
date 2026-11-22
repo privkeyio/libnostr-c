@@ -2,14 +2,23 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
 ### Security
 - Fix a heap buffer overflow in `nostr_event_compute_id`, and so in signing and verification, on builds that use the basic JSON serializer (cJSON absent, or relay and JSON_ENHANCED off). The buffer size left out the brackets and comma around each tag, so an event with a few hundred tags wrote past the end of the heap buffer. `nostr_init()` alone sets no tag limit
+
+### Added
+- A `BUILD_TESTING` option (default ON) to skip the test suite. The tests build only when libnostr-c is the top-level project, so a project that adds it with `add_subdirectory()` no longer builds them
+
+### Changed
+- `NOSTR_FEATURE_CRYPTO_NOSCRYPT` takes `AUTO` (the new default), `ON` or `OFF`. `ON` now fails the configure when noscrypt is not found instead of quietly building with secp256k1, and `AUTO` falls back to secp256k1 with a warning. A build directory configured by an older version may still have `ON` cached
 
 ### Fixed
 - An empty `ids`, `authors`, `kinds`, `#e` or `#p` list in a filter now matches nothing, as NIP-01 requires, instead of being treated as absent and matching every event. So does a list whose items are all of the wrong type, such as `{"ids":[1]}`. A present list is now marked by a non-NULL pointer, even when its count is 0, and `nostr_filter_clone` and `nostr_filter_has_tag_filters` follow the same rule. Code that builds a `nostr_filter_t` by hand must leave an unused list NULL
 - `nostr_filter_parse`, and so REQ and COUNT, reject a filter that is not a JSON object, and a list key whose value is not an array (such as `{"kinds":1}` or `{"#e":"x"}`). Both were read as an unconstrained filter that matched every event
 - Filter keys are matched case-sensitively, so `"Ids"` no longer shadows `"ids"` and `#E` is read only as the uppercase tag rather than also as `#e`
 - Each tag's value array is now pointer-aligned inside the event's tag arena. It was placed right after the previous tag's strings, so an event whose earlier tags' strings did not end on a pointer boundary stored and read `char*` values at misaligned addresses, which is undefined behavior (reported by UBSan in seven of the test programs). NIP-13 nonce tags that grow a target value had the same problem
+- The ESP-IDF component compiles at `-O2` (`CONFIG_COMPILER_OPTIMIZATION_PERF`). GCC reported a false `maybe-uninitialized` error in the NIP-21 bech32 decoder, which ESP-IDF builds treat as fatal
 
 ## [0.2.2] - 2026-10-04
 
