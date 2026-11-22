@@ -30,7 +30,7 @@ Thank you for contributing to libnostr-c! This guide covers the essentials for g
 3. Build for development:
    ```bash
    mkdir build-dev && cd build-dev
-   cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON ..
+   cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON ..
    make -j$(nproc)
    ```
 
