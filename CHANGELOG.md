@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- An empty `ids`, `authors`, `kinds`, `#e` or `#p` list in a filter now matches nothing, as NIP-01 requires, instead of being treated as absent and matching every event. So does a list whose items are all of the wrong type, such as `{"ids":[1]}`. A present list is now marked by a non-NULL pointer, even when its count is 0, and `nostr_filter_clone` and `nostr_filter_has_tag_filters` follow the same rule. Code that builds a `nostr_filter_t` by hand must leave an unused list NULL
+- `nostr_filter_parse`, and so REQ and COUNT, reject a filter that is not a JSON object, and a list key whose value is not an array (such as `{"kinds":1}` or `{"#e":"x"}`). Both were read as an unconstrained filter that matched every event
+- Filter keys are matched case-sensitively, so `"Ids"` no longer shadows `"ids"` and `#E` is read only as the uppercase tag rather than also as `#e`
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

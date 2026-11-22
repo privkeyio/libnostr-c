@@ -17,24 +17,22 @@
 
 static nostr_relay_error_t parse_string_array(cJSON* arr, char*** out_arr, size_t* out_count)
 {
-    if (!arr || !cJSON_IsArray(arr)) {
-        *out_arr = NULL;
-        *out_count = 0;
+    *out_arr = NULL;
+    *out_count = 0;
+    if (!arr) {
         return NOSTR_RELAY_OK;
+    }
+    if (!cJSON_IsArray(arr)) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
     int count = cJSON_GetArraySize(arr);
-    if (count == 0) {
-        *out_arr = NULL;
-        *out_count = 0;
-        return NOSTR_RELAY_OK;
-    }
-
     if (count > NOSTR_MAX_TAG_FILTER_VALUES) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
-    *out_arr = calloc((size_t)count, sizeof(char*));
+    /* A present list is non-NULL even when empty, so it matches nothing (NIP-01). */
+    *out_arr = calloc(count > 0 ? (size_t)count : 1, sizeof(char*));
     if (!*out_arr) {
         return NOSTR_RELAY_ERR_MEMORY;
     }
@@ -62,24 +60,21 @@ static nostr_relay_error_t parse_string_array(cJSON* arr, char*** out_arr, size_
 
 static nostr_relay_error_t parse_int_array(cJSON* arr, int32_t** out_arr, size_t* out_count)
 {
-    if (!arr || !cJSON_IsArray(arr)) {
-        *out_arr = NULL;
-        *out_count = 0;
+    *out_arr = NULL;
+    *out_count = 0;
+    if (!arr) {
         return NOSTR_RELAY_OK;
+    }
+    if (!cJSON_IsArray(arr)) {
+        return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
     int count = cJSON_GetArraySize(arr);
-    if (count == 0) {
-        *out_arr = NULL;
-        *out_count = 0;
-        return NOSTR_RELAY_OK;
-    }
-
     if (count > NOSTR_MAX_TAG_FILTER_VALUES) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
-    *out_arr = calloc((size_t)count, sizeof(int32_t));
+    *out_arr = calloc(count > 0 ? (size_t)count : 1, sizeof(int32_t));
     if (!*out_arr) {
         return NOSTR_RELAY_ERR_MEMORY;
     }
@@ -107,22 +102,26 @@ nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_
     if (!root) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
+    if (!cJSON_IsObject(root)) {
+        cJSON_Delete(root);
+        return NOSTR_RELAY_ERR_INVALID_JSON;
+    }
 
     nostr_relay_error_t err;
 
-    err = parse_string_array(cJSON_GetObjectItem(root, "ids"), &filter->ids, &filter->ids_count);
+    err = parse_string_array(cJSON_GetObjectItemCaseSensitive(root, "ids"), &filter->ids, &filter->ids_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    err = parse_string_array(cJSON_GetObjectItem(root, "authors"), &filter->authors, &filter->authors_count);
+    err = parse_string_array(cJSON_GetObjectItemCaseSensitive(root, "authors"), &filter->authors, &filter->authors_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    err = parse_int_array(cJSON_GetObjectItem(root, "kinds"), &filter->kinds, &filter->kinds_count);
+    err = parse_int_array(cJSON_GetObjectItemCaseSensitive(root, "kinds"), &filter->kinds, &filter->kinds_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    err = parse_string_array(cJSON_GetObjectItem(root, "#e"), &filter->e_tags, &filter->e_tags_count);
+    err = parse_string_array(cJSON_GetObjectItemCaseSensitive(root, "#e"), &filter->e_tags, &filter->e_tags_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    err = parse_string_array(cJSON_GetObjectItem(root, "#p"), &filter->p_tags, &filter->p_tags_count);
+    err = parse_string_array(cJSON_GetObjectItemCaseSensitive(root, "#p"), &filter->p_tags, &filter->p_tags_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
     size_t generic_count = 0;
@@ -167,22 +166,22 @@ nostr_relay_error_t nostr_filter_parse(const char* json, size_t json_len, nostr_
         filter->generic_tags_count = generic_count;
     }
 
-    cJSON* since = cJSON_GetObjectItem(root, "since");
+    cJSON* since = cJSON_GetObjectItemCaseSensitive(root, "since");
     if (since && cJSON_IsNumber(since)) {
         filter->since = (int64_t)since->valuedouble;
     }
 
-    cJSON* until = cJSON_GetObjectItem(root, "until");
+    cJSON* until = cJSON_GetObjectItemCaseSensitive(root, "until");
     if (until && cJSON_IsNumber(until)) {
         filter->until = (int64_t)until->valuedouble;
     }
 
-    cJSON* limit = cJSON_GetObjectItem(root, "limit");
+    cJSON* limit = cJSON_GetObjectItemCaseSensitive(root, "limit");
     if (limit && cJSON_IsNumber(limit)) {
         filter->limit = limit->valueint;
     }
 
-    cJSON* search = cJSON_GetObjectItem(root, "search");
+    cJSON* search = cJSON_GetObjectItemCaseSensitive(root, "search");
     if (search && cJSON_IsString(search) && search->valuestring) {
         if (strlen(search->valuestring) > NOSTR_DEFAULT_MAX_CONTENT_LENGTH) {
             err = NOSTR_RELAY_ERR_INVALID_JSON;
@@ -349,7 +348,7 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
 
     char hex_buf[65];
 
-    if (filter->ids_count > 0) {
+    if (filter->ids) {
         nostr_bytes_to_hex(event->id, NOSTR_ID_SIZE, hex_buf);
         bool matched = false;
         for (size_t i = 0; i < filter->ids_count; i++) {
@@ -361,7 +360,7 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
         if (!matched) return false;
     }
 
-    if (filter->authors_count > 0) {
+    if (filter->authors) {
         nostr_bytes_to_hex(event->pubkey.data, NOSTR_PUBKEY_SIZE, hex_buf);
         bool matched = false;
         for (size_t i = 0; i < filter->authors_count; i++) {
@@ -373,7 +372,7 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
         if (!matched) return false;
     }
 
-    if (filter->kinds_count > 0) {
+    if (filter->kinds) {
         bool matched = false;
         for (size_t i = 0; i < filter->kinds_count; i++) {
             if (filter->kinds[i] == (int32_t)event->kind) {
@@ -392,7 +391,7 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
         return false;
     }
 
-    if (filter->e_tags_count > 0) {
+    if (filter->e_tags) {
         bool matched = false;
         const char* e_values[NOSTR_MAX_TAG_FILTER_VALUES];
         size_t e_count = nostr_event_get_tag_values(event, "e", e_values, NOSTR_MAX_TAG_FILTER_VALUES);
@@ -408,7 +407,7 @@ bool nostr_filter_matches(const nostr_filter_t* filter, const nostr_event* event
         if (!matched) return false;
     }
 
-    if (filter->p_tags_count > 0) {
+    if (filter->p_tags) {
         bool matched = false;
         const char* p_values[NOSTR_MAX_TAG_FILTER_VALUES];
         size_t p_count = nostr_event_get_tag_values(event, "p", p_values, NOSTR_MAX_TAG_FILTER_VALUES);
@@ -533,8 +532,8 @@ bool nostr_filter_has_tag_filters(const nostr_filter_t* filter)
 {
     if (!filter) return false;
 
-    return (filter->e_tags_count > 0 ||
-            filter->p_tags_count > 0 ||
+    return (filter->e_tags != NULL ||
+            filter->p_tags != NULL ||
             filter->generic_tags_count > 0);
 }
 
@@ -604,13 +603,10 @@ static nostr_relay_error_t clone_string_array(char*** dst, size_t* dst_count,
     *dst = NULL;
     *dst_count = 0;
 
-    if (src_count == 0)
-        return NOSTR_RELAY_OK;
-
     if (!src)
-        return NOSTR_RELAY_ERR_INVALID_JSON;
+        return src_count == 0 ? NOSTR_RELAY_OK : NOSTR_RELAY_ERR_INVALID_JSON;
 
-    *dst = calloc(src_count, sizeof(char*));
+    *dst = calloc(src_count > 0 ? src_count : 1, sizeof(char*));
     if (!*dst)
         return NOSTR_RELAY_ERR_MEMORY;
 
@@ -653,8 +649,8 @@ nostr_relay_error_t nostr_filter_clone(nostr_filter_t* dst, const nostr_filter_t
     err = clone_string_array(&dst->authors, &dst->authors_count, src->authors, src->authors_count);
     if (err != NOSTR_RELAY_OK) goto cleanup;
 
-    if (src->kinds_count > 0) {
-        dst->kinds = calloc(src->kinds_count, sizeof(int32_t));
+    if (src->kinds) {
+        dst->kinds = calloc(src->kinds_count > 0 ? src->kinds_count : 1, sizeof(int32_t));
         if (!dst->kinds) {
             err = NOSTR_RELAY_ERR_MEMORY;
             goto cleanup;
