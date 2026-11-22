@@ -167,9 +167,11 @@ nostr_error_t nostr_nip13_add_nonce_tag(nostr_event* event, uint64_t nonce_value
             if (event->tags[nonce_idx].count < 3) {
                 // Need to expand values array - allocate new array from arena
                 size_t new_values_size = 3 * sizeof(char*);
-                if (arena_ensure_capacity(event, new_values_size) != 0) {
+                size_t pad = (sizeof(char*) - event->tag_arena->used % sizeof(char*)) % sizeof(char*);
+                if (arena_ensure_capacity(event, pad + new_values_size) != 0) {
                     return NOSTR_ERR_MEMORY;
                 }
+                event->tag_arena->used += pad;
                 char** new_values = (char**)((char*)event->tag_arena->memory + event->tag_arena->used);
                 event->tag_arena->used += new_values_size;
                 new_values[0] = event->tags[nonce_idx].values[0];

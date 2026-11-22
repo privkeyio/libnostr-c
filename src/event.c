@@ -161,8 +161,12 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
     if (values_size > SIZE_MAX - strings_size) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    size_t total_size = values_size + strings_size;
-    
+    size_t pad = (sizeof(char*) - event->tag_arena->used % sizeof(char*)) % sizeof(char*);
+    if (values_size + strings_size > SIZE_MAX - pad) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+    size_t total_size = pad + values_size + strings_size;
+
     if (event->tag_arena->used + total_size > event->tag_arena->capacity) {
         size_t new_capacity = event->tag_arena->capacity;
         size_t required = event->tag_arena->used + total_size;
@@ -201,7 +205,8 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
     event->tags = new_tags;
 
     nostr_tag* tag = &event->tags[event->tags_count];
-    
+
+    event->tag_arena->used += pad;
     tag->values = (char**)tag_arena_alloc(event->tag_arena, values_size);
     if (!tag->values) {
         return NOSTR_ERR_MEMORY;
