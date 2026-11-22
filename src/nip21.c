@@ -26,7 +26,7 @@ static nostr_error_t decode_bech32_to_bytes(const char* bech32, const char* expe
     }
 
     size_t data_alloc = len - hrp_len - 1;
-    uint8_t* data = malloc(data_alloc);
+    uint8_t* data = calloc(data_alloc, 1);
     if (!data) return NOSTR_ERR_MEMORY;
 
     size_t data_pos = 0;
