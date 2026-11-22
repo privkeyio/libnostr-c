@@ -165,6 +165,39 @@ void test_event_compute_id(void)
     nostr_event_destroy(event);
 }
 
+void test_event_compute_id_many_tags(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+    event->kind = 1;
+    event->created_at = 1234567890;
+    nostr_event_set_content(event, "x");
+    for (int i = 0; i < 32; i += 8) {
+        const uint8_t chunk[8] = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0};
+        memcpy(event->pubkey.data + i, chunk, 8);
+    }
+
+    const char* empty[1] = {""};
+    for (int i = 0; i < 600; i++) {
+        if (nostr_event_add_tag(event, empty, 1) != NOSTR_OK) abort();
+    }
+    const char* escaped[2] = {"e", "a\"b\\\n"};
+    if (nostr_event_add_tag(event, escaped, 2) != NOSTR_OK) abort();
+
+    if (nostr_event_compute_id(event) != NOSTR_OK) abort();
+
+    const uint8_t expected[32] = {
+        0x4a, 0x56, 0x0c, 0xd0, 0xb3, 0xf6, 0xe5, 0x68, 0xe1, 0x46, 0x47, 0xc0, 0x8a, 0x86, 0xf4, 0xf8,
+        0xcf, 0x9e, 0x21, 0x53, 0x4a, 0x75, 0x4f, 0x96, 0x41, 0x75, 0x9d, 0xd1, 0x79, 0x10, 0x0f, 0x89};
+    /* abort, not TEST_ASSERT, because the fallback assert macros do not fail ctest */
+    if (memcmp(event->id, expected, 32) != 0) {
+        fprintf(stderr, "event ID mismatch for many-tags event\n");
+        abort();
+    }
+
+    nostr_event_destroy(event);
+}
+
 void test_event_to_json(void)
 {
     nostr_event* event = NULL;
@@ -265,6 +298,9 @@ void run_event_tests(void)
     
     test_event_compute_id();
     printf("  Success: Event compute ID\n");
+
+    test_event_compute_id_many_tags();
+    printf("  Success: Event compute ID with many tags\n");
     
     test_event_to_json();
     printf("  Success: Event to JSON\n");

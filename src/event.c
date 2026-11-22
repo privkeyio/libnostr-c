@@ -317,26 +317,33 @@ static char* serialize_for_id(const nostr_event* event)
 #else
     char pubkey_hex[65];
     char* content_escaped = escape_json_string(event->content ? event->content : "");
-    
+    if (!content_escaped) return NULL;
+
     for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
         sprintf(pubkey_hex + i * 2, "%02x", event->pubkey.data[i]);
     }
     pubkey_hex[64] = '\0';
 
+    /* Per tag: comma and brackets. Per value: comma, quotes, and up to 6 bytes per escaped char. */
     size_t json_size = 512 + strlen(content_escaped);
     for (size_t i = 0; i < event->tags_count; i++) {
+        if (json_size > SIZE_MAX - 3) { free(content_escaped); return NULL; }
+        json_size += 3;
         for (size_t j = 0; j < event->tags[i].count; j++) {
-            json_size += strlen(event->tags[i].values[j]) * 6 + 4;
+            const char* value = event->tags[i].values[j] ? event->tags[i].values[j] : "";
+            size_t len = strlen(value);
+            if (json_size > SIZE_MAX - 3 || len > (SIZE_MAX - 3 - json_size) / 6) { free(content_escaped); return NULL; }
+            json_size += len * 6 + 3;
         }
     }
-    
+
     char* result = malloc(json_size);
     if (!result) {
         free(content_escaped);
         return NULL;
     }
-    
-    int pos = snprintf(result, json_size, "[0,\"%s\",%" PRId64 ",%d,[", 
+
+    size_t pos = (size_t)snprintf(result, json_size, "[0,\"%s\",%" PRId64 ",%d,[",
                       pubkey_hex, event->created_at, event->kind);
     
     for (size_t i = 0; i < event->tags_count; i++) {
@@ -344,7 +351,7 @@ static char* serialize_for_id(const nostr_event* event)
         result[pos++] = '[';
         for (size_t j = 0; j < event->tags[i].count; j++) {
             if (j > 0) result[pos++] = ',';
-            char* tag_escaped = escape_json_string(event->tags[i].values[j]);
+            char* tag_escaped = escape_json_string(event->tags[i].values[j] ? event->tags[i].values[j] : "");
             if (!tag_escaped) {
                 free(result);
                 free(content_escaped);

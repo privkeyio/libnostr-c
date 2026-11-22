@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Security
+- Fix a heap buffer overflow in `nostr_event_compute_id`, and so in signing and verification, on builds that use the basic JSON serializer (cJSON absent, or relay and JSON_ENHANCED off). The buffer size left out the brackets and comma around each tag, so an event with a few hundred tags wrote past the end of the heap buffer. `nostr_init()` alone sets no tag limit
+
 ### Fixed
 - An empty `ids`, `authors`, `kinds`, `#e` or `#p` list in a filter now matches nothing, as NIP-01 requires, instead of being treated as absent and matching every event. So does a list whose items are all of the wrong type, such as `{"ids":[1]}`. A present list is now marked by a non-NULL pointer, even when its count is 0, and `nostr_filter_clone` and `nostr_filter_has_tag_filters` follow the same rule. Code that builds a `nostr_filter_t` by hand must leave an unused list NULL
 - `nostr_filter_parse`, and so REQ and COUNT, reject a filter that is not a JSON object, and a list key whose value is not an array (such as `{"kinds":1}` or `{"#e":"x"}`). Both were read as an unconstrained filter that matched every event

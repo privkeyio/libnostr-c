@@ -93,6 +93,58 @@ jobs:
           cd build
           ctest --output-on-failure
 
+  # Every other host job has cJSON and relay on, which selects the cJSON
+  # serializer, so the basic JSON fallback in event.c only ran on Windows and
+  # without a sanitizer. Leak detection stays off until the tests stop leaking.
+  build-basic-json-asan:
+    permissions:
+      contents: read
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    name: "Linux basic JSON (ASan)"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev libcjson-dev autotools-dev autoconf libtool
+
+      - name: Install secp256k1
+        run: |
+          git clone https://github.com/bitcoin-core/secp256k1.git
+          cd secp256k1
+          git checkout 1a53f4961f337b4d166c25fce72ef0dc88806618 # v0.7.1
+          ./autogen.sh
+          ./configure --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=OFF -DNOSTR_FEATURE_JSON_ENHANCED=OFF -DNOSTR_FEATURE_RELAY=OFF -DNOSTR_FEATURE_RELAY_PROTOCOL=OFF "-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer"
+          test -f include/nostr_features.h
+          if grep -q '^#define NOSTR_FEATURE_JSON_ENHANCED' include/nostr_features.h; then
+            echo "JSON_ENHANCED is on, so this job would not test the basic serializer"
+            exit 1
+          fi
+
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc)
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          cd build
+          ctest --output-on-failure
+
   # The mbedTLS branches in key.c, event.c, nip44.c and nip26.c were previously
   # compiled only by build-esp-idf, which is build-only, so nothing ever executed
   # them. A self-deadlock, an unsynchronised DRBG draw and a >1024-byte
