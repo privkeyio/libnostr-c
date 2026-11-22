@@ -263,6 +263,8 @@ make test
 ./tests/test_nip59
 ```
 
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) 2.6 or later (MIT). CMake uses an installed copy if it finds one (a CMake package, or pkg-config); otherwise it downloads v2.6.0, pinned by commit, and only when the tests are being built (`BUILD_TESTING`, on by default when libnostr-c is the top-level project). That first configure needs internet access; later builds reuse the copy in the build folder. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+
 ## Using in Your Project
 
 ### CMake

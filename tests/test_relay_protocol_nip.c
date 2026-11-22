@@ -3,9 +3,7 @@
  * @brief NIP-specific tests: NIP-09 deletion, NIP-11 relay info
  */
 
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,81 +11,6 @@
 #include "../include/nostr.h"
 #include "../include/nostr_relay_protocol.h"
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_FALSE(condition) \
-    do { \
-        if ((condition)) { \
-            printf("Condition should be false: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", expected, actual); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("  FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("  Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 void test_deletion_parse_basic(void)
 {
@@ -680,16 +603,11 @@ void test_relay_info_serialize_with_retention(void)
 
 #endif
 
-int run_relay_protocol_nip_tests(void)
+void run_relay_protocol_nip_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("Running relay protocol NIP tests...\n");
 
     printf("  Running NIP-09 deletion tests...\n");
-#ifdef HAVE_UNITY
     RUN_TEST(test_deletion_parse_basic);
     RUN_TEST(test_deletion_parse_with_addresses);
     RUN_TEST(test_deletion_parse_invalid_kind);
@@ -701,40 +619,17 @@ int run_relay_protocol_nip_tests(void)
     RUN_TEST(test_deletion_unauthorized_address_different_pubkey);
     RUN_TEST(test_deletion_unauthorized_address_non_addressable);
     RUN_TEST(test_deletion_free_null);
-#else
-    RUN_TEST(test_deletion_parse_basic, "deletion_parse_basic");
-    RUN_TEST(test_deletion_parse_with_addresses, "deletion_parse_with_addresses");
-    RUN_TEST(test_deletion_parse_invalid_kind, "deletion_parse_invalid_kind");
-    RUN_TEST(test_deletion_parse_null_params, "deletion_parse_null_params");
-    RUN_TEST(test_deletion_authorized_same_pubkey, "deletion_authorized_same_pubkey");
-    RUN_TEST(test_deletion_unauthorized_different_pubkey, "deletion_unauthorized_different_pubkey");
-    RUN_TEST(test_deletion_unauthorized_event_not_listed, "deletion_unauthorized_event_not_listed");
-    RUN_TEST(test_deletion_authorized_address, "deletion_authorized_address");
-    RUN_TEST(test_deletion_unauthorized_address_different_pubkey, "deletion_unauthorized_address_different_pubkey");
-    RUN_TEST(test_deletion_unauthorized_address_non_addressable, "deletion_unauthorized_address_non_addressable");
-    RUN_TEST(test_deletion_free_null, "deletion_free_null");
-#endif
 
     printf("  Running NIP-11 relay information tests...\n");
-#ifdef HAVE_UNITY
     RUN_TEST(test_relay_limitation_init);
     RUN_TEST(test_relay_info_init);
     RUN_TEST(test_relay_info_set_nips);
     RUN_TEST(test_relay_info_add_nip);
     RUN_TEST(test_relay_info_free);
     RUN_TEST(test_relay_info_free_null);
-#else
-    RUN_TEST(test_relay_limitation_init, "relay_limitation_init");
-    RUN_TEST(test_relay_info_init, "relay_info_init");
-    RUN_TEST(test_relay_info_set_nips, "relay_info_set_nips");
-    RUN_TEST(test_relay_info_add_nip, "relay_info_add_nip");
-    RUN_TEST(test_relay_info_free, "relay_info_free");
-    RUN_TEST(test_relay_info_free_null, "relay_info_free_null");
-#endif
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
     printf("  Running NIP-11 serialization tests...\n");
-#ifdef HAVE_UNITY
     RUN_TEST(test_relay_limitation_serialize);
     RUN_TEST(test_relay_limitation_serialize_buffer_too_small);
     RUN_TEST(test_relay_info_serialize_minimal);
@@ -745,36 +640,20 @@ int run_relay_protocol_nip_tests(void)
     RUN_TEST(test_relay_info_serialize_with_fees);
     RUN_TEST(test_relay_info_serialize_with_retention);
 #else
-    RUN_TEST(test_relay_limitation_serialize, "relay_limitation_serialize");
-    RUN_TEST(test_relay_limitation_serialize_buffer_too_small, "relay_limitation_serialize_buffer_too_small");
-    RUN_TEST(test_relay_info_serialize_minimal, "relay_info_serialize_minimal");
-    RUN_TEST(test_relay_info_serialize_full, "relay_info_serialize_full");
-    RUN_TEST(test_relay_info_serialize_with_countries_and_tags, "relay_info_serialize_with_countries_and_tags");
-    RUN_TEST(test_relay_info_serialize_buffer_too_small, "relay_info_serialize_buffer_too_small");
-    RUN_TEST(test_relay_info_serialize_null_fields_omitted, "relay_info_serialize_null_fields_omitted");
-    RUN_TEST(test_relay_info_serialize_with_fees, "relay_info_serialize_with_fees");
-    RUN_TEST(test_relay_info_serialize_with_retention, "relay_info_serialize_with_retention");
-#endif
-#else
     printf("  (NIP-11 serialization tests skipped - NOSTR_FEATURE_JSON_ENHANCED not enabled)\n");
 #endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("All relay protocol NIP tests passed!\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     nostr_init();
-    int result = run_relay_protocol_nip_tests();
+    run_relay_protocol_nip_tests();
     nostr_cleanup();
-    return result;
+    return UNITY_END();
 }
 #endif

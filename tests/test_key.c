@@ -2,41 +2,7 @@
 #include <string.h>
 #include "../include/nostr.h"
 
-#ifdef HAVE_UNITY
-#include <unity.h>
-#else
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_MEMORY(expected, actual, len) \
-    do { \
-        if (memcmp(expected, actual, len) != 0) { \
-            printf("Memory comparison failed\n"); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            return; \
-        } \
-    } while(0)
-#endif
+#include "unity.h"
 
 void test_key_generation(void)
 {
@@ -211,15 +177,8 @@ void run_key_tests(void)
 {
     printf("Running key tests...\n");
     
-    test_key_generation();
-    printf("   Key generation\n");
-    
-    test_event_signing_and_verification();
-    printf("   Event signing and verification\n");
-    
-    test_multiple_signatures();
-    printf("   Multiple signatures\n");
-    
-    test_deterministic_event_ids();
-    printf("   Deterministic event IDs\n");
+    RUN_TEST(test_key_generation);
+    RUN_TEST(test_event_signing_and_verification);
+    RUN_TEST(test_multiple_signatures);
+    RUN_TEST(test_deterministic_event_ids);
 }

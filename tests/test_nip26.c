@@ -1,6 +1,4 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,63 +8,6 @@
 
 #ifdef NOSTR_FEATURE_NIP26
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", \
-                   #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        const char* _exp = (expected); \
-        const char* _act = (actual); \
-        if (_exp == NULL && _act == NULL) break; \
-        if (_exp == NULL || _act == NULL || strcmp(_exp, _act) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", \
-                   _exp ? _exp : "NULL", _act ? _act : "NULL"); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("     FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("     Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
 
 static void test_delegation_create_and_verify(void)
 {
@@ -410,15 +351,10 @@ static void test_nip26_spec_example(void)
     nostr_keypair_destroy(&delegatee);
 }
 
-int run_nip26_tests(void)
+void run_nip26_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("   Running NIP-26 tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_delegation_create_and_verify);
     RUN_TEST(test_delegation_verify_wrong_delegatee);
     RUN_TEST(test_delegation_check_conditions_kind);
@@ -431,45 +367,25 @@ int run_nip26_tests(void)
     RUN_TEST(test_invalid_params);
     RUN_TEST(test_unknown_condition_rejected);
     RUN_TEST(test_nip26_spec_example);
-#else
-    RUN_TEST(test_delegation_create_and_verify, "test_delegation_create_and_verify");
-    RUN_TEST(test_delegation_verify_wrong_delegatee, "test_delegation_verify_wrong_delegatee");
-    RUN_TEST(test_delegation_check_conditions_kind, "test_delegation_check_conditions_kind");
-    RUN_TEST(test_delegation_check_conditions_created_at, "test_delegation_check_conditions_created_at");
-    RUN_TEST(test_event_add_delegation, "test_event_add_delegation");
-    RUN_TEST(test_event_get_delegation, "test_event_get_delegation");
-    RUN_TEST(test_event_verify_delegation, "test_event_verify_delegation");
-    RUN_TEST(test_event_verify_delegation_wrong_kind, "test_event_verify_delegation_wrong_kind");
-    RUN_TEST(test_event_no_delegation, "test_event_no_delegation");
-    RUN_TEST(test_invalid_params, "test_invalid_params");
-    RUN_TEST(test_unknown_condition_rejected, "test_unknown_condition_rejected");
-    RUN_TEST(test_nip26_spec_example, "test_nip26_spec_example");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("   FAILED: %d NIP-26 test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("   All NIP-26 tests passed!\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
-    printf("Running NIP-26 tests...\n\n");
-    return run_nip26_tests();
+    UNITY_BEGIN();
+    run_nip26_tests();
+    return UNITY_END();
 }
 #endif
 
 #else
 
-int run_nip26_tests(void)
+void run_nip26_tests(void)
 {
     printf("   NIP-26 tests skipped (NIP-26 not enabled)\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED

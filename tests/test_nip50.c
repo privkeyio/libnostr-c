@@ -1,102 +1,10 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../include/nostr.h"
 #include "../include/nostr_relay_protocol.h"
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_FALSE(condition) \
-    do { \
-        if ((condition)) { \
-            printf("Condition should be false: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        const char* _exp = (expected); \
-        const char* _act = (actual); \
-        if (_exp == NULL && _act == NULL) { \
-            break; \
-        } \
-        if (_exp == NULL) { \
-            printf("String comparison failed: expected is NULL, actual is '%s'\n", _act); \
-            g_test_failed = 1; \
-            return; \
-        } \
-        if (_act == NULL) { \
-            printf("String comparison failed: expected is '%s', actual is NULL\n", _exp); \
-            g_test_failed = 1; \
-            return; \
-        } \
-        if (strcmp(_exp, _act) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", _exp, _act); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("  FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("  Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
@@ -418,15 +326,10 @@ static void test_search_with_extensions(void)
     nostr_filter_free(&filter);
 }
 
-int run_nip50_tests(void)
+void run_nip50_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("Running NIP-50 search capability tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_filter_parse_search);
     RUN_TEST(test_filter_parse_no_search);
     RUN_TEST(test_filter_parse_empty_search);
@@ -444,52 +347,27 @@ int run_nip50_tests(void)
     RUN_TEST(test_client_msg_parse_req_with_search);
     RUN_TEST(test_client_msg_parse_multiple_filters_with_search);
     RUN_TEST(test_search_with_extensions);
-#else
-    RUN_TEST(test_filter_parse_search, "filter_parse_search");
-    RUN_TEST(test_filter_parse_no_search, "filter_parse_no_search");
-    RUN_TEST(test_filter_parse_empty_search, "filter_parse_empty_search");
-    RUN_TEST(test_filter_get_search, "filter_get_search");
-    RUN_TEST(test_filter_get_search_null_filter, "filter_get_search_null_filter");
-    RUN_TEST(test_filter_clone_with_search, "filter_clone_with_search");
-    RUN_TEST(test_filter_clone_no_search, "filter_clone_no_search");
-    RUN_TEST(test_filter_matches_with_search_callback, "filter_matches_with_search_callback");
-    RUN_TEST(test_filter_matches_with_search_no_callback, "filter_matches_with_search_no_callback");
-    RUN_TEST(test_filter_matches_with_search_empty_search, "filter_matches_with_search_empty_search");
-    RUN_TEST(test_filter_matches_without_search, "filter_matches_without_search");
-    RUN_TEST(test_filter_matches_search_with_kind_filter, "filter_matches_search_with_kind_filter");
-    RUN_TEST(test_filters_match_with_search, "filters_match_with_search");
-    RUN_TEST(test_filter_matches_basic_still_works, "filter_matches_basic_still_works");
-    RUN_TEST(test_client_msg_parse_req_with_search, "client_msg_parse_req_with_search");
-    RUN_TEST(test_client_msg_parse_multiple_filters_with_search, "client_msg_parse_multiple_filters_with_search");
-    RUN_TEST(test_search_with_extensions, "search_with_extensions");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("All NIP-50 tests passed!\n");
-    return 0;
 }
 
 #else
 
-int run_nip50_tests(void)
+void run_nip50_tests(void)
 {
     printf("NIP-50 tests skipped (NOSTR_FEATURE_JSON_ENHANCED not enabled)\n");
-    return 0;
 }
 
 #endif
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     nostr_init();
-    int result = run_nip50_tests();
+    run_nip50_tests();
     nostr_cleanup();
-    return result;
+    return UNITY_END();
 }
 #endif

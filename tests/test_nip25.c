@@ -1,6 +1,4 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,40 +10,6 @@
 #define TEST_EVENT_ID "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"
 #define TEST_PUBKEY   "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"
 #define TEST_RELAY    "wss://relay.example.com"
-
-#ifndef HAVE_UNITY
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: %s != %s\n", expected, actual); \
-            return; \
-        } \
-    } while(0)
-#endif
 
 static void test_reaction_create_like(void)
 {
@@ -243,47 +207,28 @@ void run_nip25_tests(void)
 {
     printf("   Running NIP-25 tests...\n");
 
-    test_reaction_create_like();
-    printf("     Success: test_reaction_create_like\n");
-
-    test_reaction_create_dislike();
-    printf("     Success: test_reaction_create_dislike\n");
-
-    test_reaction_create_emoji();
-    printf("     Success: test_reaction_create_emoji\n");
-
-    test_reaction_create_default();
-    printf("     Success: test_reaction_create_default\n");
-
-    test_reaction_parse();
-    printf("     Success: test_reaction_parse\n");
-
-    test_reaction_is_like();
-    printf("     Success: test_reaction_is_like\n");
-
-    test_reaction_is_like_empty();
-    printf("     Success: test_reaction_is_like_empty\n");
-
-    test_reaction_is_dislike();
-    printf("     Success: test_reaction_is_dislike\n");
-
-    test_reaction_emoji_not_like();
-    printf("     Success: test_reaction_emoji_not_like\n");
-
-    test_reaction_parse_invalid_kind();
-    printf("     Success: test_reaction_parse_invalid_kind\n");
-
-    test_invalid_params();
-    printf("     Success: test_invalid_params\n");
+    RUN_TEST(test_reaction_create_like);
+    RUN_TEST(test_reaction_create_dislike);
+    RUN_TEST(test_reaction_create_emoji);
+    RUN_TEST(test_reaction_create_default);
+    RUN_TEST(test_reaction_parse);
+    RUN_TEST(test_reaction_is_like);
+    RUN_TEST(test_reaction_is_like_empty);
+    RUN_TEST(test_reaction_is_dislike);
+    RUN_TEST(test_reaction_emoji_not_like);
+    RUN_TEST(test_reaction_parse_invalid_kind);
+    RUN_TEST(test_invalid_params);
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
-    printf("Running NIP-25 tests...\n\n");
+    UNITY_BEGIN();
     run_nip25_tests();
-    printf("\nAll NIP-25 tests completed!\n");
-    return 0;
+    return UNITY_END();
 }
 #endif
 

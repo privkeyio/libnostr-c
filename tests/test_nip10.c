@@ -1,6 +1,4 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,40 +12,6 @@
 #define TEST_PUBKEY  "cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333"
 #define TEST_RELAY_1 "wss://relay.example.com"
 #define TEST_RELAY_2 "wss://relay2.example.com"
-
-#ifndef HAVE_UNITY
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: %s != %s\n", expected, actual); \
-            return; \
-        } \
-    } while(0)
-#endif
 
 static void test_get_root_id_marked(void)
 {
@@ -266,44 +230,27 @@ void run_nip10_tests(void)
 {
     printf("   Running NIP-10 tests...\n");
 
-    test_get_root_id_marked();
-    printf("     Success: test_get_root_id_marked\n");
-
-    test_get_reply_id_marked();
-    printf("     Success: test_get_reply_id_marked\n");
-
-    test_get_root_id_positional();
-    printf("     Success: test_get_root_id_positional\n");
-
-    test_get_reply_id_positional();
-    printf("     Success: test_get_reply_id_positional\n");
-
-    test_add_reply_tags_direct_reply();
-    printf("     Success: test_add_reply_tags_direct_reply\n");
-
-    test_add_reply_tags_threaded();
-    printf("     Success: test_add_reply_tags_threaded\n");
-
-    test_add_mention_tag();
-    printf("     Success: test_add_mention_tag\n");
-
-    test_is_reply();
-    printf("     Success: test_is_reply\n");
-
-    test_no_e_tags();
-    printf("     Success: test_no_e_tags\n");
-
-    test_invalid_params();
-    printf("     Success: test_invalid_params\n");
+    RUN_TEST(test_get_root_id_marked);
+    RUN_TEST(test_get_reply_id_marked);
+    RUN_TEST(test_get_root_id_positional);
+    RUN_TEST(test_get_reply_id_positional);
+    RUN_TEST(test_add_reply_tags_direct_reply);
+    RUN_TEST(test_add_reply_tags_threaded);
+    RUN_TEST(test_add_mention_tag);
+    RUN_TEST(test_is_reply);
+    RUN_TEST(test_no_e_tags);
+    RUN_TEST(test_invalid_params);
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
-    printf("Running NIP-10 tests...\n\n");
+    UNITY_BEGIN();
     run_nip10_tests();
-    printf("\nAll NIP-10 tests completed!\n");
-    return 0;
+    return UNITY_END();
 }
 #endif
 

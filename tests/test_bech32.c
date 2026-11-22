@@ -113,6 +113,4 @@ void run_bech32_tests(void) {
     RUN_TEST(test_invalid_bech32_format);
     RUN_TEST(test_null_parameters);
     RUN_TEST(test_buffer_size_checks);
-    
-    printf("   Bech32 tests completed\n");
 }

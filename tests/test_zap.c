@@ -1,6 +1,4 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,56 +6,6 @@
 #include "../include/nostr_features.h"
 
 #ifdef NOSTR_FEATURE_NIP57
-
-#ifndef HAVE_UNITY
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: %s != %s\n", expected, actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_UINT64(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Uint64 comparison failed: %lu != %lu\n", (unsigned long)(expected), (unsigned long)(actual)); \
-            return; \
-        } \
-    } while(0)
-#endif
 
 static void test_zap_create_request(void)
 {
@@ -322,23 +270,12 @@ void run_zap_tests(void)
 {
     printf("   Running zap tests...\n");
     
-    test_zap_create_request();
-    printf("     Success: test_zap_create_request\n");
-    
-    test_zap_validate_lnurl();
-    printf("     Success: test_zap_validate_lnurl\n");
-    
-    test_zap_parse_receipt();
-    printf("     Success: test_zap_parse_receipt\n");
-    
-    test_zap_verify();
-    printf("     Success: test_zap_verify\n");
-    
-    test_zap_verify_invalid_amount();
-    printf("     Success: test_zap_verify_invalid_amount\n");
-    
-    test_zap_verify_null_params();
-    printf("     Success: test_zap_verify_null_params\n");
+    RUN_TEST(test_zap_create_request);
+    RUN_TEST(test_zap_validate_lnurl);
+    RUN_TEST(test_zap_parse_receipt);
+    RUN_TEST(test_zap_verify);
+    RUN_TEST(test_zap_verify_invalid_amount);
+    RUN_TEST(test_zap_verify_null_params);
 }
 
 #else // NOSTR_FEATURE_NIP57

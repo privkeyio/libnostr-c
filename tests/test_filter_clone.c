@@ -1,79 +1,10 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../include/nostr.h"
 #include "../include/nostr_relay_protocol.h"
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        const char* _exp = (expected); \
-        const char* _act = (actual); \
-        if (_exp == NULL && _act == NULL) { \
-            break; \
-        } \
-        if (_exp == NULL) { \
-            printf("String comparison failed: expected is NULL, actual='%s'\n", _act); \
-            g_test_failed = 1; \
-            return; \
-        } \
-        if (_act == NULL) { \
-            printf("String comparison failed: expected='%s', actual is NULL\n", _exp); \
-            g_test_failed = 1; \
-            return; \
-        } \
-        if (strcmp(_exp, _act) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", _exp, _act); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("  FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("  Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
 
 static void test_filter_clone_empty(void)
 {
@@ -324,15 +255,10 @@ static void test_filter_clone_independence(void)
     free(ids[0]);
 }
 
-int run_filter_clone_tests(void)
+void run_filter_clone_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("Running filter_clone tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_filter_clone_empty);
     RUN_TEST(test_filter_clone_ids);
     RUN_TEST(test_filter_clone_kinds);
@@ -343,35 +269,18 @@ int run_filter_clone_tests(void)
     RUN_TEST(test_filter_clone_full);
     RUN_TEST(test_filter_clone_null_params);
     RUN_TEST(test_filter_clone_independence);
-#else
-    RUN_TEST(test_filter_clone_empty, "filter_clone_empty");
-    RUN_TEST(test_filter_clone_ids, "filter_clone_ids");
-    RUN_TEST(test_filter_clone_kinds, "filter_clone_kinds");
-    RUN_TEST(test_filter_clone_scalar_fields, "filter_clone_scalar_fields");
-    RUN_TEST(test_filter_clone_e_tags, "filter_clone_e_tags");
-    RUN_TEST(test_filter_clone_p_tags, "filter_clone_p_tags");
-    RUN_TEST(test_filter_clone_generic_tags, "filter_clone_generic_tags");
-    RUN_TEST(test_filter_clone_full, "filter_clone_full");
-    RUN_TEST(test_filter_clone_null_params, "filter_clone_null_params");
-    RUN_TEST(test_filter_clone_independence, "filter_clone_independence");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("All filter_clone tests passed!\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     nostr_init();
-    int result = run_filter_clone_tests();
+    run_filter_clone_tests();
     nostr_cleanup();
-    return result;
+    return UNITY_END();
 }
 #endif

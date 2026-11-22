@@ -3,9 +3,7 @@
  * @brief Accessor function tests: hex conversion, filter/event/message accessors
  */
 
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,81 +11,6 @@
 #include "../include/nostr.h"
 #include "../include/nostr_relay_protocol.h"
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_FALSE(condition) \
-    do { \
-        if ((condition)) { \
-            printf("Condition should be false: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", expected, actual); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("  FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("  Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 void test_nostr_hex_to_bytes(void)
 {
@@ -345,15 +268,10 @@ void test_event_binary_tag_extractors_no_tags(void)
     nostr_event_destroy(event);
 }
 
-int run_relay_protocol_accessor_tests(void)
+void run_relay_protocol_accessor_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("Running relay protocol accessor tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_nostr_hex_to_bytes);
     RUN_TEST(test_nostr_bytes_to_hex);
     RUN_TEST(test_nostr_version);
@@ -368,39 +286,18 @@ int run_relay_protocol_accessor_tests(void)
     RUN_TEST(test_event_is_deletion);
     RUN_TEST(test_event_binary_tag_extractors);
     RUN_TEST(test_event_binary_tag_extractors_no_tags);
-#else
-    RUN_TEST(test_nostr_hex_to_bytes, "nostr_hex_to_bytes");
-    RUN_TEST(test_nostr_bytes_to_hex, "nostr_bytes_to_hex");
-    RUN_TEST(test_nostr_version, "nostr_version");
-    RUN_TEST(test_nostr_free, "nostr_free");
-    RUN_TEST(test_nostr_free_strings, "nostr_free_strings");
-    RUN_TEST(test_filter_accessors, "filter_accessors");
-    RUN_TEST(test_filter_accessors_null, "filter_accessors_null");
-    RUN_TEST(test_client_msg_accessors, "client_msg_accessors");
-    RUN_TEST(test_client_msg_accessors_null, "client_msg_accessors_null");
-    RUN_TEST(test_event_accessors, "event_accessors");
-    RUN_TEST(test_event_accessors_null, "event_accessors_null");
-    RUN_TEST(test_event_is_deletion, "event_is_deletion");
-    RUN_TEST(test_event_binary_tag_extractors, "event_binary_tag_extractors");
-    RUN_TEST(test_event_binary_tag_extractors_no_tags, "event_binary_tag_extractors_no_tags");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("All relay protocol accessor tests passed!\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     nostr_init();
-    int result = run_relay_protocol_accessor_tests();
+    run_relay_protocol_accessor_tests();
     nostr_cleanup();
-    return result;
+    return UNITY_END();
 }
 #endif

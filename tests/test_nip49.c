@@ -2,49 +2,7 @@
 #include <string.h>
 #include "../include/nostr.h"
 
-#ifdef HAVE_UNITY
-#include <unity.h>
-#else
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s at %s:%d\n", #expected, #actual, __FILE__, __LINE__); \
-            tests_failed++; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_MEMORY(expected, actual, len) \
-    do { \
-        if (memcmp(expected, actual, len) != 0) { \
-            printf("Memory comparison failed at %s:%d\n", __FILE__, __LINE__); \
-            tests_failed++; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s at %s:%d\n", #condition, __FILE__, __LINE__); \
-            tests_failed++; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String mismatch at %s:%d:\n  expected: %s\n  actual: %s\n", \
-                   __FILE__, __LINE__, expected, actual); \
-            tests_failed++; \
-            return; \
-        } \
-    } while(0)
-#endif
-
-static int tests_passed = 0;
-static int tests_failed = 0;
+#include "unity.h"
 
 void test_ncryptsec_encrypt_decrypt(void)
 {
@@ -68,8 +26,6 @@ void test_ncryptsec_encrypt_decrypt(void)
     secure_wipe(&original_privkey, sizeof(original_privkey));
     secure_wipe(&decrypted_privkey, sizeof(decrypted_privkey));
 
-    tests_passed++;
-    printf("   Encrypt/decrypt round-trip\n");
 }
 
 void test_ncryptsec_wrong_password(void)
@@ -88,8 +44,6 @@ void test_ncryptsec_wrong_password(void)
 
     secure_wipe(&original_privkey, sizeof(original_privkey));
 
-    tests_passed++;
-    printf("   Wrong password rejected\n");
 }
 
 void test_ncryptsec_validate(void)
@@ -111,8 +65,6 @@ void test_ncryptsec_validate(void)
 
     secure_wipe(&privkey, sizeof(privkey));
 
-    tests_passed++;
-    printf("   Format validation\n");
 }
 
 void test_ncryptsec_known_vector(void)
@@ -136,8 +88,6 @@ void test_ncryptsec_known_vector(void)
 
     secure_wipe(&decrypted_privkey, sizeof(decrypted_privkey));
 
-    tests_passed++;
-    printf("   NIP-49 test vector\n");
 }
 
 void test_ncryptsec_different_log_n(void)
@@ -159,8 +109,6 @@ void test_ncryptsec_different_log_n(void)
     secure_wipe(&original_privkey, sizeof(original_privkey));
     secure_wipe(&decrypted_privkey, sizeof(decrypted_privkey));
 
-    tests_passed++;
-    printf("   Different log_n values\n");
 }
 
 void test_ncryptsec_invalid_params(void)
@@ -189,8 +137,6 @@ void test_ncryptsec_invalid_params(void)
 
     secure_wipe(&privkey, sizeof(privkey));
 
-    tests_passed++;
-    printf("   Invalid parameters rejected\n");
 }
 
 void test_ncryptsec_unicode_password(void)
@@ -212,29 +158,29 @@ void test_ncryptsec_unicode_password(void)
     secure_wipe(&original_privkey, sizeof(original_privkey));
     secure_wipe(&decrypted_privkey, sizeof(decrypted_privkey));
 
-    tests_passed++;
-    printf("   Unicode password support\n");
 }
 
 void run_nip49_tests(void)
 {
     printf("Running NIP-49 tests...\n");
 
-    test_ncryptsec_encrypt_decrypt();
-    test_ncryptsec_wrong_password();
-    test_ncryptsec_validate();
-    test_ncryptsec_known_vector();
-    test_ncryptsec_different_log_n();
-    test_ncryptsec_invalid_params();
-    test_ncryptsec_unicode_password();
-
-    printf("NIP-49 tests completed: %d passed, %d failed\n", tests_passed, tests_failed);
+    RUN_TEST(test_ncryptsec_encrypt_decrypt);
+    RUN_TEST(test_ncryptsec_wrong_password);
+    RUN_TEST(test_ncryptsec_validate);
+    RUN_TEST(test_ncryptsec_known_vector);
+    RUN_TEST(test_ncryptsec_different_log_n);
+    RUN_TEST(test_ncryptsec_invalid_params);
+    RUN_TEST(test_ncryptsec_unicode_password);
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     run_nip49_tests();
-    return tests_failed > 0 ? 1 : 0;
+    return UNITY_END();
 }
 #endif

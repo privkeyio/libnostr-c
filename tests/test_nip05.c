@@ -284,8 +284,6 @@ static void test_nip05_parse_response_ws_relay(void) {
 void run_nip05_tests(void) {
     printf("   Running NIP-05 DNS identity verification tests...\n");
 
-    UNITY_BEGIN();
-
     RUN_TEST(test_nip05_parse_basic);
     RUN_TEST(test_nip05_parse_root_identifier);
     RUN_TEST(test_nip05_parse_subdomain);
@@ -317,15 +315,15 @@ void run_nip05_tests(void) {
     RUN_TEST(test_nip05_parse_response_invalid_relay_url);
     RUN_TEST(test_nip05_parse_response_json_injection);
     RUN_TEST(test_nip05_parse_response_ws_relay);
-
-    UNITY_END();
-
-    printf("   NIP-05 tests completed\n");
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void) {
+    UNITY_BEGIN();
     run_nip05_tests();
-    return 0;
+    return UNITY_END();
 }
 #endif
