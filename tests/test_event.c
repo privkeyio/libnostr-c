@@ -2,6 +2,7 @@
 #include "unity.h"
 #endif
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -126,6 +127,41 @@ void test_event_add_tag(void)
     TEST_ASSERT_EQUAL(2, event->tags_count);
     TEST_ASSERT_EQUAL_STRING("p", event->tags[1].values[0]);
     
+    nostr_event_destroy(event);
+}
+
+static void require_aligned_values(const nostr_event* event)
+{
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if ((uintptr_t)event->tags[i].values % sizeof(char*) != 0) {
+            printf("FAIL: tag %zu values array is misaligned\n", i);
+            abort();
+        }
+    }
+}
+
+void test_event_tag_values_aligned(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+
+    char value[80];
+    for (size_t n = 1; n < sizeof(value); n++) {
+        memset(value, 'x', n);
+        value[n] = '\0';
+        const char* tag[] = {"t", value};
+        TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, tag, 2));
+    }
+    require_aligned_values(event);
+    TEST_ASSERT_EQUAL_STRING("xxx", event->tags[2].values[1]);
+
+#ifdef NOSTR_FEATURE_NIP13
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip13_add_nonce_tag(event, 1, 0));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip13_add_nonce_tag(event, 123, 8));
+    require_aligned_values(event);
+    TEST_ASSERT_EQUAL_STRING("8", event->tags[event->tags_count - 1].values[2]);
+#endif
+
     nostr_event_destroy(event);
 }
 
@@ -295,6 +331,9 @@ void run_event_tests(void)
     
     test_event_add_tag_invalid_params();
     printf("  Success: Event add tag invalid params\n");
+
+    test_event_tag_values_aligned();
+    printf("  Success: Event tag values aligned\n");
     
     test_event_compute_id();
     printf("  Success: Event compute ID\n");
