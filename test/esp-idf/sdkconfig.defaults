@@ -1,1 +1,4 @@
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# Build at -O2 like firmware that embeds the library: -Og hides
+# -Werror=maybe-uninitialized failures that -O2 reports.
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
