@@ -913,7 +913,10 @@ if(HAVE_LIBWEBSOCKETS)
     endif()
 endif()
 
-if(HAVE_NOSCRYPT)
+if(HAVE_NOSCRYPT AND NOSCRYPT_LINK_LIBRARIES)
+    # pkg-config: NOSCRYPT_LIBRARIES holds bare names and would drop the library directory.
+    list(APPEND NOSTR_LINK_LIBRARIES ${NOSCRYPT_LINK_LIBRARIES})
+elseif(HAVE_NOSCRYPT)
     list(APPEND NOSTR_LINK_LIBRARIES ${NOSCRYPT_LIBRARIES})
 endif()
 
