@@ -267,6 +267,140 @@ void test_filter_matches_e_tags(void)
     nostr_filter_free(&filter);
 }
 
+void test_filter_empty_lists_match_nothing(void)
+{
+    const char* cases[] = {
+        "{\"ids\":[]}",
+        "{\"authors\":[]}",
+        "{\"kinds\":[]}",
+        "{\"#e\":[]}",
+        "{\"#p\":[]}",
+        "{\"#t\":[]}",
+        "{\"ids\":[1]}",
+        "{\"authors\":[null]}",
+        "{\"kinds\":[\"1\"]}",
+        "{\"#e\":[5]}",
+        "{\"kinds\":[1],\"#p\":[]}",
+    };
+
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+    event->kind = 1;
+    const char* e_tag[] = {"e", "0000000000000000000000000000000000000000000000000000000000000001"};
+    const char* p_tag[] = {"p", "0000000000000000000000000000000000000000000000000000000000000002"};
+    const char* t_tag[] = {"t", "x"};
+    nostr_event_add_tag(event, e_tag, 2);
+    nostr_event_add_tag(event, p_tag, 2);
+    nostr_event_add_tag(event, t_tag, 2);
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        nostr_filter_t filter;
+        TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(cases[i], strlen(cases[i]), &filter));
+        TEST_ASSERT_FALSE(nostr_filter_matches(&filter, event));
+
+        nostr_filter_t copy;
+        TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_clone(&copy, &filter));
+        TEST_ASSERT_FALSE(nostr_filter_matches(&copy, event));
+        nostr_filter_free(&copy);
+        nostr_filter_free(&filter);
+    }
+
+    const char* empty_e = "{\"#e\":[]}";
+    nostr_filter_t filter;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(empty_e, strlen(empty_e), &filter));
+    TEST_ASSERT_TRUE(nostr_filter_has_tag_filters(&filter));
+    size_t count = 99;
+    TEST_ASSERT_NOT_NULL(nostr_filter_get_e_tags(&filter, &count));
+    TEST_ASSERT_EQUAL(0, count);
+    nostr_filter_free(&filter);
+
+    const char* empty_t = "{\"#t\":[]}";
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(empty_t, strlen(empty_t), &filter));
+    TEST_ASSERT_TRUE(nostr_filter_has_tag_filters(&filter));
+    count = 99;
+    nostr_filter_get_tag_values(&filter, 't', &count);
+    TEST_ASSERT_EQUAL(0, count);
+    TEST_ASSERT_EQUAL(1, filter.generic_tags_count);
+    nostr_filter_free(&filter);
+
+    const char* empty_kinds = "{\"kinds\":[]}";
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(empty_kinds, strlen(empty_kinds), &filter));
+    count = 99;
+    TEST_ASSERT_NOT_NULL(nostr_filter_get_kinds(&filter, &count));
+    TEST_ASSERT_EQUAL(0, count);
+    nostr_filter_free(&filter);
+
+    const char* match = "{\"kinds\":[1],\"#t\":[\"x\"],\"#e\":[\"0000000000000000000000000000000000000000000000000000000000000001\"]}";
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(match, strlen(match), &filter));
+    TEST_ASSERT_TRUE(nostr_filter_matches(&filter, event));
+    nostr_filter_free(&filter);
+
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse("{}", 2, &filter));
+    TEST_ASSERT_NULL(filter.ids);
+    TEST_ASSERT_NULL(filter.kinds);
+    TEST_ASSERT_FALSE(nostr_filter_has_tag_filters(&filter));
+    TEST_ASSERT_TRUE(nostr_filter_matches(&filter, event));
+    nostr_filter_free(&filter);
+
+    nostr_event_destroy(event);
+}
+
+void test_filter_rejects_malformed_lists(void)
+{
+    const char* bad[] = {
+        "1",
+        "null",
+        "\"x\"",
+        "[]",
+        "{\"kinds\":1}",
+        "{\"ids\":\"abc\"}",
+        "{\"authors\":{}}",
+        "{\"#e\":\"x\"}",
+        "{\"#p\":null}",
+        "{\"#t\":\"x\"}",
+    };
+    for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+        nostr_filter_t filter;
+        TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_INVALID_JSON, nostr_filter_parse(bad[i], strlen(bad[i]), &filter));
+    }
+
+    const char* reqs[] = {
+        "[\"REQ\",\"s\",1]",
+        "[\"REQ\",\"s\",null]",
+        "[\"REQ\",\"s\",[]]",
+        "[\"COUNT\",\"s\",\"x\"]",
+        "[\"REQ\",\"s\",{\"kinds\":1}]",
+    };
+    for (size_t i = 0; i < sizeof(reqs) / sizeof(reqs[0]); i++) {
+        nostr_client_msg_t msg;
+        TEST_ASSERT_TRUE(nostr_client_msg_parse(reqs[i], strlen(reqs[i]), &msg) != NOSTR_RELAY_OK);
+    }
+}
+
+void test_filter_keys_are_case_sensitive(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+    const char* big_e[] = {"E", "0000000000000000000000000000000000000000000000000000000000000001"};
+    nostr_event_add_tag(event, big_e, 2);
+
+    const char* shadow = "{\"Ids\":\"x\",\"ids\":[\"ab\"]}";
+    nostr_filter_t filter;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(shadow, strlen(shadow), &filter));
+    TEST_ASSERT_EQUAL(1, filter.ids_count);
+    TEST_ASSERT_FALSE(nostr_filter_matches(&filter, event));
+    nostr_filter_free(&filter);
+
+    const char* upper = "{\"#E\":[\"0000000000000000000000000000000000000000000000000000000000000001\"]}";
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_filter_parse(upper, strlen(upper), &filter));
+    TEST_ASSERT_NULL(filter.e_tags);
+    TEST_ASSERT_EQUAL(1, filter.generic_tags_count);
+    TEST_ASSERT_TRUE(nostr_filter_matches(&filter, event));
+    nostr_filter_free(&filter);
+
+    nostr_event_destroy(event);
+}
+
 void test_filters_match_or_logic(void)
 {
     nostr_filter_t filters[2];
@@ -833,6 +967,9 @@ int run_relay_protocol_json_tests(void)
     RUN_TEST(test_filter_matches_kind);
     RUN_TEST(test_filter_matches_since_until);
     RUN_TEST(test_filter_matches_e_tags);
+    RUN_TEST(test_filter_empty_lists_match_nothing);
+    RUN_TEST(test_filter_rejects_malformed_lists);
+    RUN_TEST(test_filter_keys_are_case_sensitive);
     RUN_TEST(test_filters_match_or_logic);
     RUN_TEST(test_client_msg_parse_close);
     RUN_TEST(test_client_msg_parse_req);
@@ -878,6 +1015,9 @@ int run_relay_protocol_json_tests(void)
     RUN_TEST(test_filter_matches_kind, "filter_matches_kind");
     RUN_TEST(test_filter_matches_since_until, "filter_matches_since_until");
     RUN_TEST(test_filter_matches_e_tags, "filter_matches_e_tags");
+    RUN_TEST(test_filter_empty_lists_match_nothing, "filter_empty_lists_match_nothing");
+    RUN_TEST(test_filter_rejects_malformed_lists, "filter_rejects_malformed_lists");
+    RUN_TEST(test_filter_keys_are_case_sensitive, "filter_keys_are_case_sensitive");
     RUN_TEST(test_filters_match_or_logic, "filters_match_or_logic");
     RUN_TEST(test_client_msg_parse_close, "client_msg_parse_close");
     RUN_TEST(test_client_msg_parse_req, "client_msg_parse_req");
