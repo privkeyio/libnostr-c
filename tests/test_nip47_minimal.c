@@ -145,7 +145,14 @@ static void test_session_management()
     
     err = nostr_nip47_session_check_permission(session_id, "pay_invoice", 150000);
     assert(err != NOSTR_OK); // Should fail - exceeds limit
-    
+
+    /* 50000 already used of 100000. UINT64_MAX - 10000 would wrap
+     * used + amount to 39999, below the limit. */
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", UINT64_MAX - 10000) == NOSTR_OK) abort();
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", 50001) == NOSTR_OK) abort();
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", 50000) != NOSTR_OK) abort();
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", 1) == NOSTR_OK) abort();
+
     // Extend session
     err = nostr_nip47_session_extend(session_id, 3600);
     assert(err == NOSTR_OK);

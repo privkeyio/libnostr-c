@@ -4,6 +4,7 @@
 
 ### Security
 - NIP-47 session lookups read 64 bytes of the caller's session ID whatever its length, so a shorter string passed to `nostr_nip47_session_add_permission`, `_check_permission`, `_get_connection`, `_extend` or `_destroy` was read past its end. An ID that is not exactly 64 characters now matches no session
+- `nostr_nip47_session_check_permission` checked a spending limit with `used + amount > limit` in 64-bit unsigned arithmetic, so an amount near 2^64 msats wrapped the sum below the limit and was approved, and the used total wrapped back to a small value. The amount is now compared with the remaining allowance
 
 ## [0.3.0] - 2026-11-22
 

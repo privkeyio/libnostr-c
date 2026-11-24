@@ -279,7 +279,9 @@ nostr_error_t nostr_nip47_session_check_permission(const char* session_id, const
         perm->reset_time = now + perm->reset_interval_secs;
     }
     
-    if (perm->limit_msats > 0 && perm->used_msats + amount_msats > perm->limit_msats) {
+    /* Compare against the remaining allowance so a huge amount cannot wrap the sum. */
+    if (perm->limit_msats > 0 &&
+        (perm->used_msats > perm->limit_msats || amount_msats > perm->limit_msats - perm->used_msats)) {
         pthread_mutex_unlock(&session->lock);
         return NOSTR_ERR_INVALID_PARAM;
     }
