@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Security
+- NIP-47 session lookups read 64 bytes of the caller's session ID whatever its length, so a shorter string passed to `nostr_nip47_session_add_permission`, `_check_permission`, `_get_connection`, `_extend` or `_destroy` was read past its end. An ID that is not exactly 64 characters now matches no session
+
 ## [0.3.0] - 2026-11-22
 
 ### Security

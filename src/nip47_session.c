@@ -38,6 +38,9 @@ static int rate_limit_count = 0;
 
 static nwc_session_t* find_session(const char* session_id)
 {
+    if (strnlen(session_id, 65) != 64) {
+        return NULL;
+    }
     for (size_t i = 0; i < max_sessions; i++) {
         if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             return &sessions[i];
