@@ -38,6 +38,9 @@ static int rate_limit_count = 0;
 
 static nwc_session_t* find_session(const char* session_id)
 {
+    if (strnlen(session_id, 65) != 64) {
+        return NULL;
+    }
     for (size_t i = 0; i < max_sessions; i++) {
         if (sessions[i].active && nostr_constant_time_memcmp(sessions[i].session_id, session_id, 64) == 0) {
             return &sessions[i];
@@ -276,7 +279,9 @@ nostr_error_t nostr_nip47_session_check_permission(const char* session_id, const
         perm->reset_time = now + perm->reset_interval_secs;
     }
     
-    if (perm->limit_msats > 0 && perm->used_msats + amount_msats > perm->limit_msats) {
+    /* Compare against the remaining allowance so a huge amount cannot wrap the sum. */
+    if (perm->limit_msats > 0 &&
+        (perm->used_msats > perm->limit_msats || amount_msats > perm->limit_msats - perm->used_msats)) {
         pthread_mutex_unlock(&session->lock);
         return NOSTR_ERR_INVALID_PARAM;
     }

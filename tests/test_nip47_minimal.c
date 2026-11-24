@@ -145,11 +145,35 @@ static void test_session_management()
     
     err = nostr_nip47_session_check_permission(session_id, "pay_invoice", 150000);
     assert(err != NOSTR_OK); // Should fail - exceeds limit
-    
+
+    /* 50000 already used of 100000. UINT64_MAX - 10000 would wrap
+     * used + amount to 39999, below the limit. */
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", UINT64_MAX - 10000) == NOSTR_OK) abort();
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", 50001) == NOSTR_OK) abort();
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", 50000) != NOSTR_OK) abort();
+    if (nostr_nip47_session_check_permission(session_id, "pay_invoice", 1) == NOSTR_OK) abort();
+
     // Extend session
     err = nostr_nip47_session_extend(session_id, 3600);
     assert(err == NOSTR_OK);
-    
+
+    /* Explicit checks rather than assert() so they also run in Release builds.
+     * The short ID is heap-allocated so AddressSanitizer sees any read past it. */
+    char* short_id = strdup("x");
+    if (!short_id) abort();
+    if (nostr_nip47_session_check_permission(short_id, "get_balance", 0) == NOSTR_OK) abort();
+    if (nostr_nip47_session_extend(short_id, 60) == NOSTR_OK) abort();
+    if (nostr_nip47_session_destroy(short_id) == NOSTR_OK) abort();
+    free(short_id);
+
+    char long_id[66];
+    memcpy(long_id, session_id, 64);
+    long_id[64] = '0';
+    long_id[65] = '\0';
+    if (nostr_nip47_session_check_permission(long_id, "get_balance", 0) == NOSTR_OK) abort();
+
+    if (nostr_nip47_session_check_permission(session_id, "get_balance", 0) != NOSTR_OK) abort();
+
     // Destroy session
     err = nostr_nip47_session_destroy(session_id);
     assert(err == NOSTR_OK);
