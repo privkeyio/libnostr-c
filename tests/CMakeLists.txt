@@ -19,8 +19,14 @@ if(NOT TARGET unity::framework)
             PATH_SUFFIXES unity
             NO_DEFAULT_PATH
         )
-        if(NOT NOSTR_UNITY_PC_HEADER_DIR)
-            message(STATUS "Unity: pkg-config found unity ${NOSTR_UNITY_PC_VERSION} but not its unity.h, so it is not used")
+        if(NOSTR_UNITY_PC_HEADER_DIR)
+            # libunity-dev, a desktop library, also ships a unity.pc and a
+            # unity.h; only ThrowTheSwitch Unity's defines UNITY_VERSION_MAJOR.
+            file(STRINGS "${NOSTR_UNITY_PC_HEADER_DIR}/unity.h" NOSTR_UNITY_PC_MAJOR
+                REGEX "^#define[ \t]+UNITY_VERSION_MAJOR")
+        endif()
+        if(NOT NOSTR_UNITY_PC_MAJOR)
+            message(STATUS "Unity: pkg-config found unity ${NOSTR_UNITY_PC_VERSION} but not ThrowTheSwitch Unity's unity.h, so it is not used")
             set(NOSTR_UNITY_PC_FOUND FALSE)
         endif()
     endif()
