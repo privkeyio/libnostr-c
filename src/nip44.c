@@ -41,15 +41,16 @@ static uint32_t calc_padded_len(uint32_t unpadded_len)
         return 32;
     }
     
+    /* The smallest power of two >= unpadded_len, which is NIP-44's
+     * 1 << (floor(log2(unpadded_len - 1)) + 1). */
     next_power = 1;
-    while (next_power <= unpadded_len) {
+    while (next_power < unpadded_len) {
         if (next_power > (UINT32_MAX >> 1)) {
             return 0;
         }
         next_power <<= 1;
     }
-    next_power >>= 1;
-    
+
     if (next_power <= 256) {
         chunk = 32;
     } else {

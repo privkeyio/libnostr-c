@@ -7,6 +7,9 @@
 - `nostr_nip47_session_check_permission` checked a spending limit with `used + amount > limit` in 64-bit unsigned arithmetic, so an amount near 2^64 msats wrapped the sum below the limit and was approved, and the used total wrapped back to a small value. The amount is now compared with the remaining allowance
 - `nostr_event_parse` ignored `json_len` and read `json` up to a NUL, so a length-delimited buffer without a terminator was read past its end. It now reads exactly `json_len` bytes, and 0 still means a NUL-terminated string, as in `nostr_filter_parse` and `nostr_client_msg_parse`
 
+### Fixed
+- NIP-44 padding rounded to a chunk based on the largest power of two at or below the message length instead of the smallest at or above it, as the spec does. For half of all lengths from 257 to 65535 bytes (400, 515 and 700 among them), messages were padded to the wrong size, so other NIP-44 implementations rejected them and libnostr-c rejected theirs. This affects NIP-17, NIP-46, NIP-47 and NIP-59 payloads over 256 bytes. Plaintexts over 57344 bytes pad to 65536, which noscrypt does not accept, so `nostr_nip44_encrypt` now returns `NOSTR_ERR_INVALID_PARAM` for them instead of producing a payload no other implementation reads
+
 ## [0.3.0] - 2026-11-22
 
 ### Security

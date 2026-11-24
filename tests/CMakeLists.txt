@@ -161,7 +161,7 @@ endif()
 
 if(NOSTR_FEATURE_NIP44)
     add_executable(test_nip44 test_nip44.c)
-    target_link_libraries(test_nip44 nostr_static)
+    target_link_libraries(test_nip44 nostr_static nostr_unity)
     add_test(NAME nip44_tests COMMAND test_nip44)
 
     add_executable(test_nip44_comprehensive test_nip44_comprehensive.c)
