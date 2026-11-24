@@ -3,9 +3,7 @@
  * @brief Core unit tests for relay protocol: validation, kinds, event helpers
  */
 
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,81 +11,6 @@
 #include "../include/nostr.h"
 #include "../include/nostr_relay_protocol.h"
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_FALSE(condition) \
-    do { \
-        if ((condition)) { \
-            printf("Condition should be false: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", expected, actual); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("  FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("  Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 void test_validate_hex64_valid(void)
 {
@@ -546,15 +469,10 @@ void test_tag_is_indexable(void)
     TEST_ASSERT_FALSE(nostr_tag_is_indexable(NULL));
 }
 
-int run_relay_protocol_core_tests(void)
+void run_relay_protocol_core_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("Running relay protocol core tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_validate_hex64_valid);
     RUN_TEST(test_validate_hex64_invalid);
     RUN_TEST(test_validate_hex_prefix_valid);
@@ -588,58 +506,18 @@ int run_relay_protocol_core_tests(void)
     RUN_TEST(test_tag_iterator_next_info);
     RUN_TEST(test_tag_iterator_empty_event);
     RUN_TEST(test_tag_is_indexable);
-#else
-    RUN_TEST(test_validate_hex64_valid, "validate_hex64_valid");
-    RUN_TEST(test_validate_hex64_invalid, "validate_hex64_invalid");
-    RUN_TEST(test_validate_hex_prefix_valid, "validate_hex_prefix_valid");
-    RUN_TEST(test_validate_hex_prefix_invalid, "validate_hex_prefix_invalid");
-    RUN_TEST(test_validate_subscription_id_valid, "validate_subscription_id_valid");
-    RUN_TEST(test_validate_subscription_id_invalid, "validate_subscription_id_invalid");
-    RUN_TEST(test_validate_timestamp, "validate_timestamp");
-    RUN_TEST(test_kind_classification_regular, "kind_classification_regular");
-    RUN_TEST(test_kind_classification_replaceable, "kind_classification_replaceable");
-    RUN_TEST(test_kind_classification_ephemeral, "kind_classification_ephemeral");
-    RUN_TEST(test_kind_classification_addressable, "kind_classification_addressable");
-    RUN_TEST(test_event_get_tag_value, "event_get_tag_value");
-    RUN_TEST(test_event_has_tag, "event_has_tag");
-    RUN_TEST(test_event_get_tag_values, "event_get_tag_values");
-    RUN_TEST(test_event_get_tag_at, "event_get_tag_at");
-    RUN_TEST(test_event_expiration, "event_expiration");
-    RUN_TEST(test_event_not_expired, "event_not_expired");
-    RUN_TEST(test_event_compare_replaceable, "event_compare_replaceable");
-    RUN_TEST(test_relay_msg_ok, "relay_msg_ok");
-    RUN_TEST(test_relay_msg_ok_with_message, "relay_msg_ok_with_message");
-    RUN_TEST(test_relay_msg_eose, "relay_msg_eose");
-    RUN_TEST(test_relay_msg_closed, "relay_msg_closed");
-    RUN_TEST(test_relay_msg_notice, "relay_msg_notice");
-    RUN_TEST(test_relay_msg_auth, "relay_msg_auth");
-    RUN_TEST(test_relay_msg_count, "relay_msg_count");
-    RUN_TEST(test_relay_msg_count_approximate, "relay_msg_count_approximate");
-    RUN_TEST(test_relay_msg_count_negative, "relay_msg_count_negative");
-    RUN_TEST(test_relay_error_string, "relay_error_string");
-    RUN_TEST(test_validation_error_format, "validation_error_format");
-    RUN_TEST(test_tag_iterator_basic, "tag_iterator_basic");
-    RUN_TEST(test_tag_iterator_next_info, "tag_iterator_next_info");
-    RUN_TEST(test_tag_iterator_empty_event, "tag_iterator_empty_event");
-    RUN_TEST(test_tag_is_indexable, "tag_is_indexable");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("All relay protocol core tests passed!\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     nostr_init();
-    int result = run_relay_protocol_core_tests();
+    run_relay_protocol_core_tests();
     nostr_cleanup();
-    return result;
+    return UNITY_END();
 }
 #endif

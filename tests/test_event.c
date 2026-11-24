@@ -1,67 +1,10 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "../include/nostr.h"
-
-#ifndef HAVE_UNITY
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: %s != %s\n", expected, actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) == (actual)) { \
-            printf("Values should not be equal: %s == %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 void test_event_create_destroy(void)
 {
@@ -134,8 +77,9 @@ static void require_aligned_values(const nostr_event* event)
 {
     for (size_t i = 0; i < event->tags_count; i++) {
         if ((uintptr_t)event->tags[i].values % sizeof(char*) != 0) {
-            printf("FAIL: tag %zu values array is misaligned\n", i);
-            abort();
+            char msg[64];
+            snprintf(msg, sizeof(msg), "tag %zu values array is misaligned", i);
+            TEST_FAIL_MESSAGE(msg);
         }
     }
 }
@@ -215,21 +159,17 @@ void test_event_compute_id_many_tags(void)
 
     const char* empty[1] = {""};
     for (int i = 0; i < 600; i++) {
-        if (nostr_event_add_tag(event, empty, 1) != NOSTR_OK) abort();
+        TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, empty, 1));
     }
     const char* escaped[2] = {"e", "a\"b\\\n"};
-    if (nostr_event_add_tag(event, escaped, 2) != NOSTR_OK) abort();
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, escaped, 2));
 
-    if (nostr_event_compute_id(event) != NOSTR_OK) abort();
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_compute_id(event));
 
     const uint8_t expected[32] = {
         0x4a, 0x56, 0x0c, 0xd0, 0xb3, 0xf6, 0xe5, 0x68, 0xe1, 0x46, 0x47, 0xc0, 0x8a, 0x86, 0xf4, 0xf8,
         0xcf, 0x9e, 0x21, 0x53, 0x4a, 0x75, 0x4f, 0x96, 0x41, 0x75, 0x9d, 0xd1, 0x79, 0x10, 0x0f, 0x89};
-    /* abort, not TEST_ASSERT, because the fallback assert macros do not fail ctest */
-    if (memcmp(event->id, expected, 32) != 0) {
-        fprintf(stderr, "event ID mismatch for many-tags event\n");
-        abort();
-    }
+    TEST_ASSERT_EQUAL_HEX8_ARRAY_MESSAGE(expected, event->id, 32, "event ID mismatch for many-tags event");
 
     nostr_event_destroy(event);
 }
@@ -263,7 +203,7 @@ void test_event_to_json(void)
     TEST_ASSERT_TRUE(strstr(json, "\"kind\"") != NULL);
     free(json);
     #else
-    TEST_ASSERT_EQUAL(NOSTR_ERR_ENCODING, result);
+    TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_SUPPORTED, result);
     #endif
     
     nostr_event_destroy(event);
@@ -294,7 +234,7 @@ void test_event_from_json(void)
     TEST_ASSERT_EQUAL_STRING("e", event->tags[0].values[0]);
     nostr_event_destroy(event);
     #else
-    TEST_ASSERT_EQUAL(NOSTR_ERR_ENCODING, result);
+    TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_SUPPORTED, result);
     #endif
 }
 
@@ -308,45 +248,22 @@ void test_event_from_json_invalid(void)
     #ifdef HAVE_CJSON
     TEST_ASSERT_EQUAL(NOSTR_ERR_JSON_PARSE, nostr_event_from_json("invalid json", &event));
     #else
-    TEST_ASSERT_EQUAL(NOSTR_ERR_ENCODING, nostr_event_from_json("invalid json", &event));
+    TEST_ASSERT_EQUAL(NOSTR_ERR_NOT_SUPPORTED, nostr_event_from_json("invalid json", &event));
     #endif
 }
 
 void run_event_tests(void)
 {
-    test_event_create_destroy();
-    printf("  Success: Event create/destroy\n");
-    
-    test_event_create_invalid_param();
-    printf("  Success: Event create invalid params\n");
-    
-    test_event_set_content();
-    printf("  Success: Event set content\n");
-    
-    test_event_set_content_invalid_params();
-    printf("  Success: Event set content invalid params\n");
-    
-    test_event_add_tag();
-    printf("  Success: Event add tag\n");
-    
-    test_event_add_tag_invalid_params();
-    printf("  Success: Event add tag invalid params\n");
-
-    test_event_tag_values_aligned();
-    printf("  Success: Event tag values aligned\n");
-    
-    test_event_compute_id();
-    printf("  Success: Event compute ID\n");
-
-    test_event_compute_id_many_tags();
-    printf("  Success: Event compute ID with many tags\n");
-    
-    test_event_to_json();
-    printf("  Success: Event to JSON\n");
-    
-    test_event_from_json();
-    printf("  Success: Event from JSON\n");
-    
-    test_event_from_json_invalid();
-    printf("  Success: Event from JSON invalid\n");
+    RUN_TEST(test_event_create_destroy);
+    RUN_TEST(test_event_create_invalid_param);
+    RUN_TEST(test_event_set_content);
+    RUN_TEST(test_event_set_content_invalid_params);
+    RUN_TEST(test_event_add_tag);
+    RUN_TEST(test_event_add_tag_invalid_params);
+    RUN_TEST(test_event_tag_values_aligned);
+    RUN_TEST(test_event_compute_id);
+    RUN_TEST(test_event_compute_id_many_tags);
+    RUN_TEST(test_event_to_json);
+    RUN_TEST(test_event_from_json);
+    RUN_TEST(test_event_from_json_invalid);
 }

@@ -1,6 +1,4 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,74 +10,6 @@
 #define TEST_EVENT_ID "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"
 #define TEST_PUBKEY   "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"
 #define TEST_RELAY    "wss://relay.example.com"
-
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        const char* _exp = (expected); \
-        const char* _act = (actual); \
-        if (_exp == NULL && _act == NULL) { \
-            break; \
-        } \
-        if (_exp == NULL) { \
-            printf("String comparison failed: expected is NULL, actual='%s'\n", _act); \
-            g_test_failed = 1; \
-            return; \
-        } \
-        if (_act == NULL) { \
-            printf("String comparison failed: expected='%s', actual is NULL\n", _exp); \
-            g_test_failed = 1; \
-            return; \
-        } \
-        if (strcmp(_exp, _act) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", _exp, _act); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("     FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("     Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
 
 static void test_repost_create_kind1(void)
 {
@@ -406,15 +336,10 @@ static void test_quote_tags_nevent_with_relay_and_author(void)
     nostr_event_destroy(event);
 }
 
-int run_nip18_tests(void)
+void run_nip18_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("   Running NIP-18 tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_repost_create_kind1);
     RUN_TEST(test_repost_create_generic);
     RUN_TEST(test_repost_create_with_embedded_json);
@@ -430,49 +355,25 @@ int run_nip18_tests(void)
     RUN_TEST(test_quote_tags_empty_content);
     RUN_TEST(test_quote_tags_null_event);
     RUN_TEST(test_quote_tags_nevent_with_relay_and_author);
-#else
-    RUN_TEST(test_repost_create_kind1, "test_repost_create_kind1");
-    RUN_TEST(test_repost_create_generic, "test_repost_create_generic");
-    RUN_TEST(test_repost_create_with_embedded_json, "test_repost_create_with_embedded_json");
-    RUN_TEST(test_repost_create_with_a_tag, "test_repost_create_with_a_tag");
-    RUN_TEST(test_repost_parse_kind6, "test_repost_parse_kind6");
-    RUN_TEST(test_repost_parse_kind16, "test_repost_parse_kind16");
-    RUN_TEST(test_repost_parse_invalid_kind, "test_repost_parse_invalid_kind");
-    RUN_TEST(test_invalid_params, "test_invalid_params");
-    RUN_TEST(test_quote_tags_note, "test_quote_tags_note");
-    RUN_TEST(test_quote_tags_nevent, "test_quote_tags_nevent");
-    RUN_TEST(test_quote_tags_multiple_mentions, "test_quote_tags_multiple_mentions");
-    RUN_TEST(test_quote_tags_no_mentions, "test_quote_tags_no_mentions");
-    RUN_TEST(test_quote_tags_empty_content, "test_quote_tags_empty_content");
-    RUN_TEST(test_quote_tags_null_event, "test_quote_tags_null_event");
-    RUN_TEST(test_quote_tags_nevent_with_relay_and_author, "test_quote_tags_nevent_with_relay_and_author");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("   FAILED: %d NIP-18 test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("   All NIP-18 tests passed!\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
-    printf("Running NIP-18 tests...\n\n");
-    int result = run_nip18_tests();
-    return result;
+    UNITY_BEGIN();
+    run_nip18_tests();
+    return UNITY_END();
 }
 #endif
 
 #else
 
-int run_nip18_tests(void)
+void run_nip18_tests(void)
 {
     printf("   NIP-18 tests skipped (NIP-18 not enabled)\n");
-    return 0;
 }
 
 #ifndef TEST_RUNNER_INCLUDED

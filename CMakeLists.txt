@@ -991,7 +991,9 @@ set_target_properties(nostr_static PROPERTIES
 
 # The tests build only when libnostr-c is the top-level project. A project that
 # adds it with add_subdirectory() gets none, whatever its own BUILD_TESTING says,
-# and its BUILD_TESTING is left alone.
+# and its BUILD_TESTING is left alone. The tests use Unity: an installed copy if
+# found, otherwise tests/CMakeLists.txt downloads it on first configure. Turn
+# BUILD_TESTING off to build only the library, with no download.
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     option(BUILD_TESTING "Build the test suite" ON)
     if(BUILD_TESTING)

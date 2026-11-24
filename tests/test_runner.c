@@ -26,14 +26,20 @@ void run_nip21_tests(void);
 void run_relay_tests(void);
 void run_zap_tests(void);
 void run_nip10_tests(void);
-int run_nip18_tests(void);
+void run_nip18_tests(void);
 void run_nip25_tests(void);
 void run_utils_tests(void);
 void run_coverage_tests(void);
 
+/* One Unity tally for the whole program: each run_*_tests() only calls
+ * RUN_TEST, and main() returns the failure count to ctest. */
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
     printf("Running libnostr-c tests...\n\n");
+    UNITY_BEGIN();
     
     // Run event tests
     printf("Event tests:\n");
@@ -97,15 +103,12 @@ int main(void)
     run_coverage_tests();
     printf("\n");
     
-    printf("All tests completed!\n");
-    return 0;
+    return UNITY_END();
 }
 
-void run_coverage_tests(void)
+static void test_error_strings(void)
 {
     const char* error_msg;
-    
-    UNITY_BEGIN();
     
     error_msg = nostr_error_string(NOSTR_OK);
     TEST_ASSERT_NOT_NULL(error_msg);
@@ -115,10 +118,11 @@ void run_coverage_tests(void)
     
     error_msg = nostr_error_string(NOSTR_ERR_MEMORY);
     TEST_ASSERT_NOT_NULL(error_msg);
-    
-    printf("  Success: Error string functions\n");
-    
-    UNITY_END();
+}
+
+void run_coverage_tests(void)
+{
+    RUN_TEST(test_error_strings);
 }
 
 void run_utils_tests(void)
@@ -130,16 +134,10 @@ void run_utils_tests(void)
     extern void test_constant_time_memcmp_first_byte_difference(void);
     extern void test_constant_time_memcmp_last_byte_difference(void);
     
-    UNITY_BEGIN();
-    
     RUN_TEST(test_constant_time_memcmp_equal);
     RUN_TEST(test_constant_time_memcmp_different);
     RUN_TEST(test_constant_time_memcmp_zero_length);
     RUN_TEST(test_constant_time_memcmp_single_bit_difference);
     RUN_TEST(test_constant_time_memcmp_first_byte_difference);
     RUN_TEST(test_constant_time_memcmp_last_byte_difference);
-    
-    printf("  Success: Constant-time memory comparison functions\n");
-    
-    UNITY_END();
 }

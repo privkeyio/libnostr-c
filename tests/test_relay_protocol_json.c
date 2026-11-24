@@ -3,9 +3,7 @@
  * @brief JSON-dependent tests: filters, client messages, event serialization
  */
 
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,81 +11,6 @@
 #include "../include/nostr.h"
 #include "../include/nostr_relay_protocol.h"
 
-#ifndef HAVE_UNITY
-static int g_test_failed = 0;
-static int g_tests_failed_count = 0;
-
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s (expected %d, got %d)\n", #expected, #actual, (int)(expected), (int)(actual)); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_FALSE(condition) \
-    do { \
-        if ((condition)) { \
-            printf("Condition should be false: %s\n", #condition); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: '%s' != '%s'\n", expected, actual); \
-            g_test_failed = 1; \
-            return; \
-        } \
-    } while(0)
-
-#define RUN_TEST(test_func, test_name) \
-    do { \
-        g_test_failed = 0; \
-        test_func(); \
-        if (g_test_failed) { \
-            printf("  FAILED: %s\n", test_name); \
-            g_tests_failed_count++; \
-        } else { \
-            printf("  Success: %s\n", test_name); \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 #ifdef NOSTR_FEATURE_JSON_ENHANCED
 
@@ -948,15 +871,10 @@ void test_req_too_many_filters(void)
     TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_TOO_MANY_FILTERS, err);
 }
 
-int run_relay_protocol_json_tests(void)
+void run_relay_protocol_json_tests(void)
 {
-#ifndef HAVE_UNITY
-    g_tests_failed_count = 0;
-#endif
-
     printf("Running relay protocol JSON tests...\n");
 
-#ifdef HAVE_UNITY
     RUN_TEST(test_filter_parse_empty);
     RUN_TEST(test_filter_parse_kinds);
     RUN_TEST(test_filter_parse_authors);
@@ -1004,82 +922,27 @@ int run_relay_protocol_json_tests(void)
     RUN_TEST(test_count_msg_get_filters);
     RUN_TEST(test_count_too_many_filters);
     RUN_TEST(test_req_too_many_filters);
-#else
-    RUN_TEST(test_filter_parse_empty, "filter_parse_empty");
-    RUN_TEST(test_filter_parse_kinds, "filter_parse_kinds");
-    RUN_TEST(test_filter_parse_authors, "filter_parse_authors");
-    RUN_TEST(test_filter_parse_since_until_limit, "filter_parse_since_until_limit");
-    RUN_TEST(test_filter_parse_tags, "filter_parse_tags");
-    RUN_TEST(test_filter_parse_invalid_json, "filter_parse_invalid_json");
-    RUN_TEST(test_filter_matches_empty_filter, "filter_matches_empty_filter");
-    RUN_TEST(test_filter_matches_kind, "filter_matches_kind");
-    RUN_TEST(test_filter_matches_since_until, "filter_matches_since_until");
-    RUN_TEST(test_filter_matches_e_tags, "filter_matches_e_tags");
-    RUN_TEST(test_filter_empty_lists_match_nothing, "filter_empty_lists_match_nothing");
-    RUN_TEST(test_filter_rejects_malformed_lists, "filter_rejects_malformed_lists");
-    RUN_TEST(test_filter_keys_are_case_sensitive, "filter_keys_are_case_sensitive");
-    RUN_TEST(test_filters_match_or_logic, "filters_match_or_logic");
-    RUN_TEST(test_client_msg_parse_close, "client_msg_parse_close");
-    RUN_TEST(test_client_msg_parse_req, "client_msg_parse_req");
-    RUN_TEST(test_client_msg_parse_req_multiple_filters, "client_msg_parse_req_multiple_filters");
-    RUN_TEST(test_client_msg_parse_invalid_json, "client_msg_parse_invalid_json");
-    RUN_TEST(test_client_msg_parse_unknown_type, "client_msg_parse_unknown_type");
-    RUN_TEST(test_relay_msg_serialize_ok, "relay_msg_serialize_ok");
-    RUN_TEST(test_relay_msg_serialize_eose, "relay_msg_serialize_eose");
-    RUN_TEST(test_relay_msg_serialize_notice, "relay_msg_serialize_notice");
-    RUN_TEST(test_relay_msg_serialize_buffer_too_small, "relay_msg_serialize_buffer_too_small");
-    RUN_TEST(test_event_parse_valid, "event_parse_valid");
-    RUN_TEST(test_event_parse_invalid_json, "event_parse_invalid_json");
-    RUN_TEST(test_event_parse_null_params, "event_parse_null_params");
-    RUN_TEST(test_event_serialize_valid, "event_serialize_valid");
-    RUN_TEST(test_event_serialize_buffer_too_small, "event_serialize_buffer_too_small");
-    RUN_TEST(test_event_serialize_canonical_format, "event_serialize_canonical_format");
-    RUN_TEST(test_event_serialize_canonical_with_tags, "event_serialize_canonical_with_tags");
-    RUN_TEST(test_event_serialize_canonical_escaping, "event_serialize_canonical_escaping");
-    RUN_TEST(test_event_serialize_canonical_buffer_too_small, "event_serialize_canonical_buffer_too_small");
-    RUN_TEST(test_filter_get_e_tags, "filter_get_e_tags");
-    RUN_TEST(test_filter_get_p_tags, "filter_get_p_tags");
-    RUN_TEST(test_filter_get_tag_values_generic, "filter_get_tag_values_generic");
-    RUN_TEST(test_filter_get_tag_values_not_found, "filter_get_tag_values_not_found");
-    RUN_TEST(test_filter_has_tag_filters, "filter_has_tag_filters");
-    RUN_TEST(test_filter_has_tag_filters_null, "filter_has_tag_filters_null");
-    RUN_TEST(test_client_msg_parse_count, "client_msg_parse_count");
-    RUN_TEST(test_client_msg_parse_count_multiple_filters, "client_msg_parse_count_multiple_filters");
-    RUN_TEST(test_client_msg_parse_count_empty_filters, "client_msg_parse_count_empty_filters");
-    RUN_TEST(test_relay_msg_serialize_count_exact, "relay_msg_serialize_count_exact");
-    RUN_TEST(test_relay_msg_serialize_count_approximate, "relay_msg_serialize_count_approximate");
-    RUN_TEST(test_count_msg_get_subscription_id, "count_msg_get_subscription_id");
-    RUN_TEST(test_count_msg_get_filters, "count_msg_get_filters");
-    RUN_TEST(test_count_too_many_filters, "count_too_many_filters");
-    RUN_TEST(test_req_too_many_filters, "req_too_many_filters");
-#endif
-
-#ifndef HAVE_UNITY
-    if (g_tests_failed_count > 0) {
-        printf("FAILED: %d test(s) failed!\n", g_tests_failed_count);
-        return g_tests_failed_count;
-    }
-#endif
-    printf("All relay protocol JSON tests passed!\n");
-    return 0;
 }
 
 #else
 
-int run_relay_protocol_json_tests(void)
+void run_relay_protocol_json_tests(void)
 {
     printf("Relay protocol JSON tests skipped (NOSTR_FEATURE_JSON_ENHANCED not enabled)\n");
-    return 0;
 }
 
 #endif
 
 #ifndef TEST_RUNNER_INCLUDED
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void)
 {
+    UNITY_BEGIN();
     nostr_init();
-    int result = run_relay_protocol_json_tests();
+    run_relay_protocol_json_tests();
     nostr_cleanup();
-    return result;
+    return UNITY_END();
 }
 #endif

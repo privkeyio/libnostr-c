@@ -167,6 +167,9 @@ void test_config_callback_thread_safety(void) {
     TEST_ASSERT_EQUAL(num_updates, callback_count);
 }
 
+void setUp(void) {}
+void tearDown(void) {}
+
 int main(void) {
     UNITY_BEGIN();
     

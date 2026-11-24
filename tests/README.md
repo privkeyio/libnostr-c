@@ -17,6 +17,8 @@ make
 ./tests/test_runner
 ```
 
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) 2.6 or later (MIT). CMake uses an installed copy if it finds one (a CMake package, or pkg-config); otherwise it downloads v2.6.0, pinned by commit, and only when the tests are being built (`BUILD_TESTING`, on by default when libnostr-c is the top-level project). That first configure needs internet access; later builds reuse the copy in the build folder. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+
 ### Memory Leak Testing
 ```bash
 # Install valgrind first
@@ -34,7 +36,6 @@ valgrind --tool=memcheck --leak-check=full ./tests/test_runner
 - `test_bech32.c` - Bech32 encoding/decoding tests
 - `test_relay.c` - WebSocket relay communication tests
 - `test_zap.c` - Lightning zap functionality tests
-- `unity.h` - Minimal Unity test framework
 
 ## Coverage
 
