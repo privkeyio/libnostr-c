@@ -69,6 +69,14 @@ else()
     target_include_directories(nostr_unity PUBLIC ${unity_SOURCE_DIR}/src)
 endif()
 
+# Several tests check with assert(), which NDEBUG removes in Release builds,
+# so keep it undefined for everything built here.
+if(MSVC)
+    add_compile_options(/UNDEBUG)
+else()
+    add_compile_options(-UNDEBUG)
+endif()
+
 add_executable(test_runner
     test_event.c
     test_key.c
