@@ -397,8 +397,8 @@ void nostr_relay_msg_count(nostr_relay_msg_t* msg, const char* query_id, int64_t
 
 /**
  * @brief Parse an event from JSON
- * @param json JSON string containing the event object
- * @param json_len Length of JSON string
+ * @param json JSON containing the event object
+ * @param json_len Length of json in bytes, or 0 if json is NUL-terminated
  * @param event Output event pointer (caller must free with nostr_event_destroy)
  * @return NOSTR_RELAY_OK on success, error code otherwise
  */

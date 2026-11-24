@@ -496,6 +496,39 @@ void test_event_parse_valid(void)
     nostr_event_destroy(event);
 }
 
+void test_event_parse_unterminated_buffer(void)
+{
+    const char* json = "{"
+        "\"id\":\"0000000000000000000000000000000000000000000000000000000000000001\","
+        "\"pubkey\":\"0000000000000000000000000000000000000000000000000000000000000002\","
+        "\"created_at\":1700000000,"
+        "\"kind\":1,"
+        "\"tags\":[],"
+        "\"content\":\"bounded\","
+        "\"sig\":\"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\""
+    "}";
+    size_t len = strlen(json);
+
+    /* Exactly len bytes on the heap with no terminator, so AddressSanitizer
+     * reports any read past json_len. */
+    char* buf = malloc(len);
+    TEST_ASSERT_NOT_NULL(buf);
+    memcpy(buf, json, len);
+
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_OK, nostr_event_parse(buf, len, &event));
+    TEST_ASSERT_NOT_NULL(event);
+    TEST_ASSERT_EQUAL_STRING("bounded", event->content);
+    nostr_event_destroy(event);
+
+    /* A json_len that stops before the closing brace is not a complete event. */
+    event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_RELAY_ERR_INVALID_JSON, nostr_event_parse(buf, len - 1, &event));
+    TEST_ASSERT_NULL(event);
+
+    free(buf);
+}
+
 void test_event_parse_invalid_json(void)
 {
     nostr_event* event = NULL;
@@ -899,6 +932,7 @@ void run_relay_protocol_json_tests(void)
     RUN_TEST(test_relay_msg_serialize_notice);
     RUN_TEST(test_relay_msg_serialize_buffer_too_small);
     RUN_TEST(test_event_parse_valid);
+    RUN_TEST(test_event_parse_unterminated_buffer);
     RUN_TEST(test_event_parse_invalid_json);
     RUN_TEST(test_event_parse_null_params);
     RUN_TEST(test_event_serialize_valid);

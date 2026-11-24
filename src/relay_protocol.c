@@ -288,13 +288,29 @@ bool nostr_event_is_expired_now(const nostr_event* event)
 
 nostr_relay_error_t nostr_event_parse(const char* json, size_t json_len, nostr_event** event)
 {
-    (void)json_len;
-
     if (!json || !event) {
         return NOSTR_RELAY_ERR_INVALID_JSON;
     }
 
+    /* nostr_event_from_json needs a NUL-terminated string, and json may be a
+     * length-delimited buffer with no terminator. json_len 0 means terminated,
+     * as in nostr_filter_parse and nostr_client_msg_parse. */
+    char* copy = NULL;
+    if (json_len > 0) {
+        if (json_len == SIZE_MAX) {
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+        copy = malloc(json_len + 1);
+        if (!copy) {
+            return NOSTR_RELAY_ERR_MEMORY;
+        }
+        memcpy(copy, json, json_len);
+        copy[json_len] = '\0';
+        json = copy;
+    }
+
     nostr_error_t err = nostr_event_from_json(json, event);
+    free(copy);
 
     switch (err) {
         case NOSTR_OK:
