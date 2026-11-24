@@ -7,6 +7,7 @@
 - `nostr_nip47_session_check_permission` checked a spending limit with `used + amount > limit` in 64-bit unsigned arithmetic, so an amount near 2^64 msats wrapped the sum below the limit and was approved, and the used total wrapped back to a small value. The amount is now compared with the remaining allowance
 - `nostr_event_parse` ignored `json_len` and read `json` up to a NUL, so a length-delimited buffer without a terminator was read past its end. It now reads exactly `json_len` bytes, and 0 still means a NUL-terminated string, as in `nostr_filter_parse` and `nostr_client_msg_parse`
 - Events built or parsed after `nostr_init()` alone had no tag limit, because `max_tags` was checked only when `nostr_init_with_config()` had set a config. Without a config, `nostr_event_add_tag` and `nostr_event_from_json` now stop at `NOSTR_MAX_TAGS_LIMIT` (10000) tags
+- `nostr_event_from_json` looked up each tag and each tag value by index, which cJSON resolves by walking its list from the start, so parse time grew with the square of the tag and value counts. A 600 KB event with one 200000-value tag took 25 seconds to parse and now takes about 10 ms
 
 ### Changed
 - The default `max_tags` is now 2000 and `nostr_config_validate` accepts up to `NOSTR_MAX_TAGS_LIMIT` (10000), up from 100 and 1000, so kind 3 contact lists with more than 100 entries parse under the default config

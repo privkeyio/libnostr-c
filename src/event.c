@@ -555,8 +555,10 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
             }
 
             (*event)->tags_count = 0;
-            for (int i = 0; i < tags_count; i++) {
-                cJSON* tag_json = cJSON_GetArrayItem(tags_json, i);
+            /* cJSON_GetArrayItem walks the list from the head, so index loops
+             * are quadratic in the tag and value counts. */
+            cJSON* tag_json = NULL;
+            cJSON_ArrayForEach(tag_json, tags_json) {
                 if (cJSON_IsArray(tag_json)) {
                     int tag_size = cJSON_GetArraySize(tag_json);
                     if (tag_size > 0) {
@@ -567,20 +569,18 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
                             return NOSTR_ERR_MEMORY;
                         }
                         
-                        for (int j = 0; j < tag_size; j++) {
-                            cJSON* value_json = cJSON_GetArrayItem(tag_json, j);
-                            if (cJSON_IsString(value_json)) {
-                                temp_values[j] = value_json->valuestring;
-                            } else {
-                                temp_values[j] = "";
-                            }
+                        int j = 0;
+                        cJSON* value_json = NULL;
+                        cJSON_ArrayForEach(value_json, tag_json) {
+                            temp_values[j++] = cJSON_IsString(value_json) ? value_json->valuestring : "";
                         }
                         
-                        if (nostr_event_add_tag(*event, temp_values, tag_size) != NOSTR_OK) {
+                        nostr_error_t tag_err = nostr_event_add_tag(*event, temp_values, tag_size);
+                        if (tag_err != NOSTR_OK) {
                             free(temp_values);
                             nostr_event_destroy(*event);
                             cJSON_Delete(root);
-                            return NOSTR_ERR_MEMORY;
+                            return tag_err;
                         }
                         
                         free(temp_values);
