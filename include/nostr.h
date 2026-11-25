@@ -80,6 +80,12 @@ typedef enum {
 } nostr_error_t;
 
 /**
+ * @brief Largest accepted nostr_config.max_tags, and the tag limit applied
+ * when nostr_init_with_config() has not been called
+ */
+#define NOSTR_MAX_TAGS_LIMIT 10000
+
+/**
  * @brief Configuration structure for library behavior
  */
 typedef struct nostr_config {
@@ -89,7 +95,7 @@ typedef struct nostr_config {
     uint32_t session_timeout_secs;         /**< NIP-47 session timeout */
     uint32_t max_permissions;              /**< Maximum NIP-47 permissions */
     uint32_t max_content_size;             /**< Maximum event content size */
-    uint32_t max_tags;                     /**< Maximum tags per event */
+    uint32_t max_tags;                     /**< Maximum tags per event, 1 to NOSTR_MAX_TAGS_LIMIT */
     uint32_t max_tag_values;               /**< Maximum values per tag */
     uint32_t relay_connect_timeout_ms;     /**< Relay connection timeout */
     uint32_t relay_response_timeout_ms;    /**< Relay response timeout */

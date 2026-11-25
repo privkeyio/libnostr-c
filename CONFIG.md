@@ -17,7 +17,7 @@ The `nostr_config` structure contains the following configurable parameters:
 
 ### Event Processing Limits
 - `max_content_size` (default: 65536): Maximum event content size in bytes
-- `max_tags` (default: 100): Maximum number of tags per event
+- `max_tags` (default: 2000): Maximum number of tags per event. Without `nostr_init_with_config()` the limit is `NOSTR_MAX_TAGS_LIMIT` (10000)
 - `max_tag_values` (default: 50): Maximum values per tag
 
 ### Network Configuration
@@ -40,7 +40,7 @@ export NOSTR_MAX_SESSIONS=100
 export NOSTR_SESSION_TIMEOUT=3600
 export NOSTR_MAX_PERMISSIONS=32
 export NOSTR_MAX_CONTENT_SIZE=65536
-export NOSTR_MAX_TAGS=100
+export NOSTR_MAX_TAGS=2000
 export NOSTR_MAX_TAG_VALUES=50
 export NOSTR_RELAY_CONNECT_TIMEOUT=30000
 export NOSTR_RELAY_RESPONSE_TIMEOUT=10000
@@ -97,7 +97,7 @@ All configuration values are validated with reasonable limits:
 - Session timeout: 60-86400 seconds (1 minute to 1 day)
 - Permissions: 1-1000 per session
 - Content size: 1KB-1MB
-- Tags: 1-1000 per event
+- Tags: 1-10000 per event (`NOSTR_MAX_TAGS_LIMIT`)
 - Tag values: 1-1000 per tag
 - Timeouts: 1000-300000ms (1 second to 5 minutes)
 - Encryption NIP: 4 or 44 only
