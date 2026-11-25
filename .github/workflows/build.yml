@@ -358,7 +358,7 @@ jobs:
       - name: Test using CMake Preset
         run: |
           $env:PATH = "C:\Program Files\secp256k1\bin;C:\Program Files\secp256k1\lib;$env:PATH"
-          ctest --preset win-release || echo "Tests completed with warnings"
+          ctest --preset win-release
         
   build-macos:
     # Builds third-party sources; no reason to hold a writable job token.
