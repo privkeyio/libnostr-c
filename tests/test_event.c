@@ -252,6 +252,72 @@ void test_event_from_json_invalid(void)
     #endif
 }
 
+/* test_runner calls nostr_init() only, so these run with no config set. */
+void test_event_add_tag_default_limit(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+    const char* tag[2] = {"p", "0000000000000000000000000000000000000000000000000000000000000000"};
+    for (int i = 0; i < NOSTR_MAX_TAGS_LIMIT; i++) {
+        TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, tag, 2));
+    }
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_event_add_tag(event, tag, 2));
+    TEST_ASSERT_EQUAL(NOSTR_MAX_TAGS_LIMIT, event->tags_count);
+    nostr_event_destroy(event);
+}
+
+static char* json_with_tags(size_t count)
+{
+    const char* head = "{\"id\":\"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\","
+        "\"pubkey\":\"123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0\","
+        "\"created_at\":1234567890,\"kind\":3,\"tags\":[";
+    const char* tail = "],\"content\":\"\",\"sig\":\"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890\"}";
+    const char* tag = "[\"p\",\"x\"]";
+    size_t len = strlen(head) + count * (strlen(tag) + 1) + strlen(tail) + 1;
+    char* json = malloc(len);
+    TEST_ASSERT_NOT_NULL(json);
+    char* p = json;
+    p += sprintf(p, "%s", head);
+    for (size_t i = 0; i < count; i++) {
+        p += sprintf(p, "%s%s", i ? "," : "", tag);
+    }
+    sprintf(p, "%s", tail);
+    return json;
+}
+
+void test_event_from_json_default_limit(void)
+{
+#ifdef HAVE_CJSON
+    char* json = json_with_tags(NOSTR_MAX_TAGS_LIMIT);
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_from_json(json, &event));
+    TEST_ASSERT_EQUAL(NOSTR_MAX_TAGS_LIMIT, event->tags_count);
+    nostr_event_destroy(event);
+    free(json);
+
+    json = json_with_tags(NOSTR_MAX_TAGS_LIMIT + 1);
+    event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_event_from_json(json, &event));
+    free(json);
+#else
+    TEST_IGNORE_MESSAGE("needs cJSON");
+#endif
+}
+
+void test_config_max_tags_bounds(void)
+{
+    nostr_config config;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_config_get_defaults(&config));
+    TEST_ASSERT_EQUAL_UINT32(2000, config.max_tags);
+    config.max_tags = NOSTR_MAX_TAGS_LIMIT;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_config_validate(&config));
+    config.max_tags = NOSTR_MAX_TAGS_LIMIT + 1;
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_config_validate(&config));
+    config.max_tags = 0;
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_config_validate(&config));
+}
+
 void run_event_tests(void)
 {
     RUN_TEST(test_event_create_destroy);
@@ -266,4 +332,7 @@ void run_event_tests(void)
     RUN_TEST(test_event_to_json);
     RUN_TEST(test_event_from_json);
     RUN_TEST(test_event_from_json_invalid);
+    RUN_TEST(test_event_add_tag_default_limit);
+    RUN_TEST(test_event_from_json_default_limit);
+    RUN_TEST(test_config_max_tags_bounds);
 }

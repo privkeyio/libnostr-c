@@ -6,6 +6,10 @@
 - NIP-47 session lookups read 64 bytes of the caller's session ID whatever its length, so a shorter string passed to `nostr_nip47_session_add_permission`, `_check_permission`, `_get_connection`, `_extend` or `_destroy` was read past its end. An ID that is not exactly 64 characters now matches no session
 - `nostr_nip47_session_check_permission` checked a spending limit with `used + amount > limit` in 64-bit unsigned arithmetic, so an amount near 2^64 msats wrapped the sum below the limit and was approved, and the used total wrapped back to a small value. The amount is now compared with the remaining allowance
 - `nostr_event_parse` ignored `json_len` and read `json` up to a NUL, so a length-delimited buffer without a terminator was read past its end. It now reads exactly `json_len` bytes, and 0 still means a NUL-terminated string, as in `nostr_filter_parse` and `nostr_client_msg_parse`
+- Events built or parsed after `nostr_init()` alone had no tag limit, because `max_tags` was checked only when `nostr_init_with_config()` had set a config. Without a config, `nostr_event_add_tag` and `nostr_event_from_json` now stop at `NOSTR_MAX_TAGS_LIMIT` (10000) tags
+
+### Changed
+- The default `max_tags` is now 2000 and `nostr_config_validate` accepts up to `NOSTR_MAX_TAGS_LIMIT` (10000), up from 100 and 1000, so kind 3 contact lists with more than 100 entries parse under the default config
 
 ### Fixed
 - NIP-44 padding rounded to a chunk based on the largest power of two at or below the message length instead of the smallest at or above it, as the spec does. For half of all lengths from 257 to 65535 bytes (400, 515 and 700 among them), messages were padded to the wrong size, so other NIP-44 implementations rejected them and libnostr-c rejected theirs. This affects NIP-17, NIP-46, NIP-47 and NIP-59 payloads over 256 bytes. Plaintexts over 57344 bytes pad to 65536, which noscrypt does not accept, so `nostr_nip44_encrypt` now returns `NOSTR_ERR_INVALID_PARAM` for them instead of producing a payload no other implementation reads

@@ -131,14 +131,19 @@ nostr_error_t nostr_event_set_content(nostr_event* event, const char* content)
     return NOSTR_OK;
 }
 
+static size_t max_tags_limit(void)
+{
+    const nostr_config* config = nostr_config_get_current();
+    return config ? config->max_tags : NOSTR_MAX_TAGS_LIMIT;
+}
+
 nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_t count)
 {
     if (!event || !values || count == 0) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    const nostr_config* config = nostr_config_get_current();
-    if (config && event->tags_count >= config->max_tags) {
+    if (event->tags_count >= max_tags_limit()) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
@@ -536,8 +541,7 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
     cJSON* tags_json = cJSON_GetObjectItem(root, "tags");
     if (tags_json && cJSON_IsArray(tags_json)) {
         int tags_count = cJSON_GetArraySize(tags_json);
-        const nostr_config* config = nostr_config_get_current();
-        if (config && tags_count > (int)config->max_tags) {
+        if ((size_t)tags_count > max_tags_limit()) {
             nostr_event_destroy(*event);
             cJSON_Delete(root);
             return NOSTR_ERR_INVALID_PARAM;

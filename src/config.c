@@ -62,7 +62,7 @@ nostr_error_t nostr_config_get_defaults(nostr_config* config) {
     config->session_timeout_secs = 3600;
     config->max_permissions = 32;
     config->max_content_size = 65536;
-    config->max_tags = 100;
+    config->max_tags = 2000;
     config->max_tag_values = 50;
     config->relay_connect_timeout_ms = 30000;
     config->relay_response_timeout_ms = 10000;
@@ -143,7 +143,7 @@ nostr_error_t nostr_config_validate(const nostr_config* config) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     
-    if (config->max_tags == 0 || config->max_tags > 1000) {
+    if (config->max_tags == 0 || config->max_tags > NOSTR_MAX_TAGS_LIMIT) {
         return NOSTR_ERR_INVALID_PARAM;
     }
     
